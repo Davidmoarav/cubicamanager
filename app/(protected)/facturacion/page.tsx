@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
 
-const EMPTY: any = { numero:'', cliente:'', proyecto:'', tipo:'venta', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
+const EMPTY: any = { numero:'', cliente:'', proyecto:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
 
 export default function FacturacionPage() {
   const [items, setItems]   = useState<any[]>([])
@@ -44,8 +44,26 @@ export default function FacturacionPage() {
     setForm((f: any) => ({ ...f, neto, iva, monto: neto + iva }))
   }
 
+  // Al elegir la factura que la nota modifica, hereda tipo y cliente
+  const onSelectFacturaRef = (facturaId: string) => {
+    const fac = items.find(f => f.id === facturaId)
+    if (!fac) { setForm((f: any) => ({ ...f, factura_ref: '' })); return }
+    setForm((f: any) => ({
+      ...f,
+      factura_ref: facturaId,
+      tipo: fac.tipo || 'venta',
+      cliente: fac.cliente,
+      proyecto: fac.proyecto || '',
+    }))
+  }
+
   const save = async () => {
     if (!form.cliente || form.cliente === '__otro__') { alert('Selecciona o escribe el nombre'); return }
+    // Si es nota, la factura asociada es obligatoria
+    if (form.doc_tipo !== 'factura' && !form.factura_ref) {
+      alert('Debes seleccionar la factura que esta nota modifica')
+      return
+    }
     setSaving(true)
     const periodo = form.emision ? form.emision.slice(0, 7) : new Date().toISOString().slice(0, 7)
     // Las fechas vacías deben ir como null (Postgres rechaza '' en columnas date)
@@ -58,6 +76,7 @@ export default function FacturacionPage() {
       vencimiento: form.vencimiento || null,
       proyecto: form.proyecto || null,
       numero: form.numero || null,
+      factura_ref: form.factura_ref || null,
       periodo,
     }
     const res = await fetch('/api/facturas', {
@@ -67,7 +86,8 @@ export default function FacturacionPage() {
     setSaving(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo guardar la factura: ' + (err.error || 'error desconocido'))
+      alert('No se pudo guardar: ' + (err.error || 'error desconocido') +
+        '\n\nSi menciona "doc_tipo" o "factura_ref", ejecuta el SQL 14_notas_credito_debito.sql en Supabase.')
       return
     }
     await load(); setModal(false)
@@ -101,7 +121,11 @@ export default function FacturacionPage() {
           <SectionTitle>Facturación</SectionTitle>
           <p className="text-sm text-muted mt-1">Ventas, compras e IVA</p>
         </div>
-        <Btn variant="primary" onClick={() => { setForm({ ...EMPTY, emision: new Date().toISOString().split('T')[0] }); setModal(true) }}>+ Nueva factura</Btn>
+        <div className="flex gap-2">
+          <Btn onClick={() => { setForm({ ...EMPTY, doc_tipo:'nota_credito', emision: new Date().toISOString().split('T')[0] }); setModal(true) }}
+            style={{ background:'#fdecea', borderColor:'#f5c6c2', color:'#b0401a', fontWeight:700 }}>+ Nota crédito/débito</Btn>
+          <Btn variant="primary" onClick={() => { setForm({ ...EMPTY, emision: new Date().toISOString().split('T')[0] }); setModal(true) }}>+ Nueva factura</Btn>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -146,11 +170,20 @@ export default function FacturacionPage() {
               {filtered.map(f => (
                 <tr key={f.id}>
                   <Td>
-                    <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:4,
-                      background: f.tipo === 'compra' ? '#eeedfe' : '#e6f4ed',
-                      color: f.tipo === 'compra' ? '#534ab7' : '#1a7a4a' }}>
-                      {f.tipo === 'compra' ? 'COMPRA' : 'VENTA'}
-                    </span>
+                    <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                      <span style={{ fontSize:10, fontWeight:700, padding:'2px 8px', borderRadius:4, textAlign:'center',
+                        background: f.tipo === 'compra' ? '#eeedfe' : '#e6f4ed',
+                        color: f.tipo === 'compra' ? '#534ab7' : '#1a7a4a' }}>
+                        {f.tipo === 'compra' ? 'COMPRA' : 'VENTA'}
+                      </span>
+                      {(f.doc_tipo === 'nota_credito' || f.doc_tipo === 'nota_debito') && (
+                        <span style={{ fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:4, textAlign:'center',
+                          background: f.doc_tipo === 'nota_credito' ? '#fdecea' : '#fef3d7',
+                          color: f.doc_tipo === 'nota_credito' ? '#b0401a' : '#b07d1a' }}>
+                          {f.doc_tipo === 'nota_credito' ? '➖ N.CRÉDITO' : '➕ N.DÉBITO'}
+                        </span>
+                      )}
+                    </div>
                   </Td>
                   <Td><span style={{ fontFamily:'monospace', fontWeight:700, color:'#1e6bb8', fontSize:12 }}>{f.numero||'—'}</span></Td>
                   <Td style={{ fontWeight:600 }}>{f.cliente}{f.proyecto && <div style={{ fontSize:10, color:'#6b7a8d' }}>{f.proyecto}</div>}</Td>
@@ -178,9 +211,47 @@ export default function FacturacionPage() {
       </div>
 
       {modal && (
-        <Modal title="Nueva factura" onClose={() => setModal(false)}>
+        <Modal title={form.doc_tipo === 'nota_credito' ? 'Nueva nota de crédito' : form.doc_tipo === 'nota_debito' ? 'Nueva nota de débito' : 'Nueva factura'} onClose={() => setModal(false)}>
+          {/* Tipo de documento: factura / NC / ND */}
           <div style={{ marginBottom:14 }}>
-            <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#6b7a8d', marginBottom:6 }}>Tipo de documento</label>
+            <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#6b7a8d', marginBottom:6 }}>Documento</label>
+            <div style={{ display:'flex', gap:8 }}>
+              {[
+                { k:'factura',      label:'🧾 Factura',     c:'#1e6bb8', bg:'#e8f1fb' },
+                { k:'nota_credito', label:'➖ Nota crédito', c:'#b0401a', bg:'#fdecea' },
+                { k:'nota_debito',  label:'➕ Nota débito',  c:'#1a7a4a', bg:'#e6f4ed' },
+              ].map(d => (
+                <button key={d.k} onClick={() => upd('doc_tipo', d.k)}
+                  style={{ flex:1, padding:'9px', borderRadius:8, border:'1.5px solid', cursor:'pointer', fontSize:12, fontWeight:700,
+                    borderColor: form.doc_tipo===d.k?d.c:'#d1d9e6', background: form.doc_tipo===d.k?d.bg:'#fff', color: form.doc_tipo===d.k?d.c:'#6b7a8d' }}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Si es nota, elegir la factura que modifica (OBLIGATORIO) */}
+          {form.doc_tipo !== 'factura' && (
+            <div style={{ marginBottom:14, background:'#fafbfc', border:'1px solid #e4e9f0', borderRadius:8, padding:12 }}>
+              <label className="label-base">Factura que modifica esta nota *</label>
+              <select value={form.factura_ref || ''} onChange={e => onSelectFacturaRef(e.target.value)} className="input-base cursor-pointer">
+                <option value="">— Selecciona la factura —</option>
+                {items.filter(f => (f.doc_tipo || 'factura') === 'factura').map(f => (
+                  <option key={f.id} value={f.id}>
+                    {f.numero || 's/n'} · {f.cliente} · {fmt(f.monto)} ({f.tipo === 'compra' ? 'compra' : 'venta'})
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize:11, color:'#6b7a8d', marginTop:6 }}>
+                {form.doc_tipo === 'nota_credito'
+                  ? 'La nota de crédito REBAJA el IVA de esta factura.'
+                  : 'La nota de débito AUMENTA el IVA de esta factura.'}
+              </p>
+            </div>
+          )}
+
+          <div style={{ marginBottom:14 }}>
+            <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#6b7a8d', marginBottom:6 }}>Tipo</label>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={() => upd('tipo', 'venta')}
                 style={{ flex:1, padding:'10px', borderRadius:8, border:'1.5px solid', cursor:'pointer', fontSize:13, fontWeight:700,

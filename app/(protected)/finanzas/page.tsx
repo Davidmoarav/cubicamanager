@@ -14,6 +14,7 @@ function labelPeriodo(p: string) {
 
 export default function FinanzasPage() {
   const [tab, setTab] = useState<'resumen' | 'iva' | 'presupuesto'>('resumen')
+  const [periodoSel, setPeriodoSel] = useState<string>(new Date().toISOString().slice(0, 7))
 
   const [facturas, setFacturas]     = useState<any[]>([])
   const [empleados, setEmpleados]   = useState<any[]>([])
@@ -48,14 +49,25 @@ export default function FinanzasPage() {
     return { cobrado, pendiente, vencido, nomina }
   }, [facturas, empleados])
 
-  // ─── IVA totales ─────────────────────────────────────────
-  const ivaTotales = useMemo(() => {
-    return iva.reduce((acc, p) => ({
-      debito: acc.debito + p.iva_debito,
-      credito: acc.credito + p.iva_credito,
-      pagar: acc.pagar + p.iva_a_pagar,
-    }), { debito: 0, credito: 0, pagar: 0 })
+  // ─── IVA del período seleccionado ───────────────────────
+  const periodosDisponibles = useMemo(() => {
+    const set = new Set<string>(iva.map((p: any) => p.periodo).filter(Boolean))
+    set.add(new Date().toISOString().slice(0, 7))  // siempre incluir el mes actual
+    return Array.from(set).sort((a, b) => b.localeCompare(a))
   }, [iva])
+
+  const ivaPeriodo = useMemo(() => {
+    return iva.find((p: any) => p.periodo === periodoSel) || null
+  }, [iva, periodoSel])
+
+  const ivaTotales = useMemo(() => {
+    if (!ivaPeriodo) return { debito: 0, credito: 0, pagar: 0 }
+    return {
+      debito: ivaPeriodo.iva_debito,
+      credito: ivaPeriodo.iva_credito,
+      pagar: ivaPeriodo.iva_a_pagar,
+    }
+  }, [ivaPeriodo])
 
   if (loading) return <p style={{ color: '#6b7a8d', padding: 20 }}>Cargando...</p>
 
@@ -99,14 +111,41 @@ export default function FinanzasPage() {
       {/* ══════ CONTROL IVA ══════ */}
       {tab === 'iva' && (
         <div>
+          {/* Selector de período */}
+          <div className="flex items-center justify-between mb-4 bg-white border border-line rounded-xl p-3 shadow-card">
+            <div className="flex items-center gap-3">
+              <span className="text-[13px] font-semibold text-ink">Período:</span>
+              <select value={periodoSel} onChange={e => setPeriodoSel(e.target.value)}
+                className="input-base cursor-pointer" style={{ width: 'auto', minWidth: 160 }}>
+                {periodosDisponibles.map(per => (
+                  <option key={per} value={per}>{labelPeriodo(per)}</option>
+                ))}
+              </select>
+            </div>
+            <span className="text-[11px] text-muted">El conteo se reinicia cada mes</span>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <MetricCard label="IVA Débito (ventas)"  value={fmt(ivaTotales.debito)}  sub="IVA que cobraste"   subColor="#1e6bb8" />
             <MetricCard label="IVA Crédito (compras)" value={fmt(ivaTotales.credito)} sub="IVA que pagaste"    subColor="#1a7a4a" />
             <MetricCard label="IVA a pagar al SII"   value={fmt(ivaTotales.pagar)}   sub={ivaTotales.pagar >= 0 ? 'Por pagar' : 'A favor'} subColor={ivaTotales.pagar >= 0 ? '#b0401a' : '#1a7a4a'} />
           </div>
 
+          {/* Desglose de notas del período */}
+          {ivaPeriodo && (ivaPeriodo.iva_nc_venta > 0 || ivaPeriodo.iva_nd_venta > 0 || ivaPeriodo.iva_nc_compra > 0 || ivaPeriodo.iva_nd_compra > 0) && (
+            <div className="bg-canvas border border-line rounded-xl p-4 mb-6">
+              <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-3">Ajustes por notas en {labelPeriodo(periodoSel)}</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-[13px]">
+                <div><div className="text-[11px] text-muted">NC venta (resta débito)</div><div className="font-bold text-danger">− {fmt(ivaPeriodo.iva_nc_venta)}</div></div>
+                <div><div className="text-[11px] text-muted">ND venta (suma débito)</div><div className="font-bold text-success">+ {fmt(ivaPeriodo.iva_nd_venta)}</div></div>
+                <div><div className="text-[11px] text-muted">NC compra (resta crédito)</div><div className="font-bold text-danger">− {fmt(ivaPeriodo.iva_nc_compra)}</div></div>
+                <div><div className="text-[11px] text-muted">ND compra (suma crédito)</div><div className="font-bold text-success">+ {fmt(ivaPeriodo.iva_nd_compra)}</div></div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white border border-line rounded-2xl p-6 shadow-card">
-            <div className="text-sm font-bold text-ink mb-4">Detalle por período (F29)</div>
+            <div className="text-sm font-bold text-ink mb-4">Historial por período (F29)</div>
             {iva.length === 0
               ? <p style={{ color: '#6b7a8d', textAlign: 'center', padding: 20, fontSize: 13 }}>
                   No hay facturas registradas. Agrega facturas de venta y compra para calcular el IVA.
@@ -125,7 +164,9 @@ export default function FinanzasPage() {
                   </thead>
                   <tbody>
                     {iva.map(p => (
-                      <tr key={p.periodo} style={{ borderBottom: '1px solid #f0f4f8' }}>
+                      <tr key={p.periodo} onClick={() => setPeriodoSel(p.periodo)}
+                        style={{ borderBottom: '1px solid #f0f4f8', cursor: 'pointer',
+                          background: p.periodo === periodoSel ? '#e8f1fb' : 'transparent' }}>
                         <td style={{ ...tdS, fontWeight: 700 }}>{labelPeriodo(p.periodo)}</td>
                         <td style={tdNum}>{fmt(p.neto_ventas)}</td>
                         <td style={{ ...tdNum, color: '#1e6bb8' }}>{fmt(p.iva_debito)}</td>

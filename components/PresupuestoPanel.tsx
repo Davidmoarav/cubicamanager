@@ -20,7 +20,14 @@ const IVA = 0.19
 export default function PresupuestoPanel({ proyectoId, valorContrato }: Props) {
   const [eps, setEps]         = useState<EstadoPago[]>([])
   const [loading, setLoading] = useState(true)
-  const [resumen, setResumen] = useState({ presupuesto: 0, ejecutado: 0, cobrado: 0, costo: 0, ganancia: 0, markup_real: 0, margen_venta: 0, costo_ejecutado: 0, ganancia_ejecutada: 0 })
+  const [resumen, setResumen] = useState({ presupuesto: 0, ejecutado: 0, cobrado: 0, costo: 0, ganancia: 0, markup_real: 0, margen_venta: 0, costo_ejecutado: 0, ganancia_ejecutada: 0, gasto_real: 0, gasto_manual: 0, gasto_facturas: 0, desviacion: 0, ganancia_real: 0, pct_gastado: 0, gasto_por_partida: {} as Record<string, number> })
+
+  // Gastos reales de la obra
+  const [gastos, setGastos]     = useState<any[]>([])
+  const [partidas, setPartidas] = useState<any[]>([])
+  const [modalGasto, setModalGasto] = useState(false)
+  const [gastoForm, setGastoForm]   = useState<any>({})
+  const [savingGasto, setSavingGasto] = useState(false)
 
   // Modal nuevo EP
   const [modal, setModal]       = useState(false)
@@ -33,12 +40,16 @@ export default function PresupuestoPanel({ proyectoId, valorContrato }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [epData, presData] = await Promise.all([
+    const [epData, presData, gastosData, partData] = await Promise.all([
       fetch(`/api/estados-pago?proyecto_id=${proyectoId}`).then(r => r.json()),
       fetch('/api/presupuesto').then(r => r.json()).catch(() => []),
+      fetch(`/api/gastos-obra?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/partidas-proyecto?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
     ])
     const epList = Array.isArray(epData) ? epData : []
     setEps(epList)
+    setGastos(Array.isArray(gastosData) ? gastosData : [])
+    setPartidas(Array.isArray(partData) ? partData.filter((x: any) => !x.parent_id) : [])
 
     // Resumen presupuestario de este proyecto
     const p = Array.isArray(presData) ? presData.find((x: any) => x.proyecto_id === proyectoId) : null
@@ -55,11 +66,52 @@ export default function PresupuestoPanel({ proyectoId, valorContrato }: Props) {
       margen_venta: p?.margen_venta_pct || 0,
       costo_ejecutado: p?.costo_ejecutado || 0,
       ganancia_ejecutada: p?.ganancia_ejecutada || 0,
+      gasto_real: p?.gasto_real || 0,
+      gasto_manual: p?.gasto_manual || 0,
+      gasto_facturas: p?.gasto_facturas || 0,
+      desviacion: p?.desviacion || 0,
+      ganancia_real: p?.ganancia_real || 0,
+      pct_gastado: p?.pct_gastado || 0,
+      gasto_por_partida: p?.gasto_por_partida || {},
     })
     setLoading(false)
   }, [proyectoId])
 
   useEffect(() => { load() }, [load])
+
+  // ─── Gastos reales ───────────────────────────────────────
+  const openNuevoGasto = () => {
+    setGastoForm({ categoria: 'materiales', fecha: new Date().toISOString().split('T')[0], partida_id: '', descripcion: '', monto: 0, proveedor: '', documento: '' })
+    setModalGasto(true)
+  }
+  const updGasto = (k: string, v: any) => setGastoForm((f: any) => ({ ...f, [k]: v }))
+  const guardarGasto = async () => {
+    if (!gastoForm.descripcion) { alert('Describe el gasto'); return }
+    if (!gastoForm.monto || Number(gastoForm.monto) <= 0) { alert('El monto debe ser mayor a cero'); return }
+    setSavingGasto(true)
+    const res = await fetch('/api/gastos-obra', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...gastoForm, proyecto_id: proyectoId, monto: Number(gastoForm.monto), partida_id: gastoForm.partida_id || null }),
+    })
+    setSavingGasto(false)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert('No se pudo guardar el gasto: ' + (err.error || 'error') +
+        '\n\nSi menciona "gastos_obra", ejecuta el SQL 15_gastos_obra.sql en Supabase.')
+      return
+    }
+    await load(); setModalGasto(false)
+  }
+  const delGasto = async (id: string) => {
+    if (!confirm('¿Eliminar este gasto?')) return
+    await fetch('/api/gastos-obra', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    await load()
+  }
+
+  const CAT_LABEL: Record<string, string> = {
+    mano_obra: '👷 Mano de obra', materiales: '🧱 Materiales', equipos: '🚜 Equipos',
+    subcontrato: '🔧 Subcontrato', fletes: '🚚 Fletes', otros: '📦 Otros',
+  }
 
   // ─── Abrir modal: pedir sugerencia de EP ─────────────────
   const openNuevoEP = async () => {
@@ -133,31 +185,85 @@ export default function PresupuestoPanel({ proyectoId, valorContrato }: Props) {
 
   return (
     <div>
-      {/* ─── RESUMEN: COSTO → VENTA → GANANCIA ─── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <ResumenCard label="Presupuesto costo" valor={fmtM(resumen.costo)} color="#b07d1a" sub="Lo que te cuesta" />
-        <ResumenCard label="Precio venta" valor={fmtM(resumen.presupuesto)} color="#1e6bb8" sub="Lo que cobras (neto)" />
-        <ResumenCard label="Ganancia esperada" valor={fmtM(resumen.ganancia)} color="#1a7a4a" sub={`Markup ${resumen.markup_real}% · Margen ${resumen.margen_venta}%`} />
-        <ResumenCard label="Cobrado" valor={fmtM(totalCobradoConIva)} color="#534ab7" sub={`${pctCobrado}% del contrato`} />
-      </div>
-
-      {/* Ejecutado a la fecha: costo vs venta vs ganancia */}
+      {/* Presupuesto vs Gasto REAL */}
       <div className="bg-canvas border border-line rounded-xl p-4 mb-5">
-        <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-3">Ejecutado a la fecha (según avance físico)</div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[11px] font-bold text-muted uppercase tracking-wide">Presupuesto vs gasto real</div>
+          <button onClick={openNuevoGasto} className="text-[12px] font-bold text-brand bg-brand-bg px-3 py-1 rounded-lg hover:bg-brand hover:text-white transition">
+            + Registrar gasto
+          </button>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
-            <div className="text-[11px] text-muted">Costo ejecutado</div>
-            <div className="text-base font-bold text-[#b07d1a]">{fmt(resumen.costo_ejecutado)}</div>
+            <div className="text-[11px] text-muted">Presupuestado (costo)</div>
+            <div className="text-base font-bold text-[#b07d1a]">{fmt(resumen.costo)}</div>
           </div>
           <div>
-            <div className="text-[11px] text-muted">Venta ejecutada</div>
-            <div className="text-base font-bold text-brand">{fmt(resumen.ejecutado)}</div>
+            <div className="text-[11px] text-muted">Gasto real</div>
+            <div className="text-base font-bold text-danger">{fmt(resumen.gasto_real)}</div>
+            <div className="text-[10px] text-muted">{resumen.pct_gastado}% del presupuesto</div>
           </div>
           <div>
-            <div className="text-[11px] text-muted">Ganancia ejecutada</div>
-            <div className="text-base font-bold text-success">{fmt(resumen.ganancia_ejecutada)}</div>
+            <div className="text-[11px] text-muted">Desviación</div>
+            <div className={`text-base font-bold ${resumen.desviacion >= 0 ? 'text-success' : 'text-danger'}`}>
+              {resumen.desviacion >= 0 ? '+' : ''}{fmt(resumen.desviacion)}
+            </div>
+            <div className="text-[10px] text-muted">{resumen.desviacion >= 0 ? 'Bajo presupuesto ✓' : '⚠ Te pasaste'}</div>
+          </div>
+          <div>
+            <div className="text-[11px] text-muted">Ganancia real a la fecha</div>
+            <div className={`text-base font-bold ${resumen.ganancia_real >= 0 ? 'text-success' : 'text-danger'}`}>{fmt(resumen.ganancia_real)}</div>
+            <div className="text-[10px] text-muted">venta ejec. − gasto real</div>
           </div>
         </div>
+        {/* Barra presupuesto vs gasto */}
+        <div className="mt-3">
+          <div className="h-2.5 bg-[#e8edf2] rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${resumen.pct_gastado > 100 ? 'bg-danger' : 'bg-warning'}`}
+              style={{ width: `${Math.min(100, resumen.pct_gastado)}%` }} />
+          </div>
+        </div>
+        {/* Desglose del gasto real */}
+        {resumen.gasto_real > 0 && (
+          <div className="flex gap-4 mt-3 text-[11px] text-muted">
+            <span>🧾 Facturas proveedores: {fmt(resumen.gasto_facturas)}</span>
+            <span>✍️ Gastos manuales: {fmt(resumen.gasto_manual)}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Lista de gastos registrados */}
+      {gastos.length > 0 && (
+        <div className="bg-white border border-line rounded-xl p-4 mb-5">
+          <div className="text-[12px] font-bold text-ink mb-3">Gastos registrados ({gastos.length})</div>
+          <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto">
+            {gastos.map(g => {
+              const partida = partidas.find(p => p.id === g.partida_id)
+              return (
+                <div key={g.id} className="flex items-center justify-between py-2 px-3 bg-canvas rounded-lg text-[12px]">
+                  <div className="flex-1">
+                    <span className="font-semibold text-ink">{g.descripcion}</span>
+                    <div className="text-[10px] text-muted">
+                      {CAT_LABEL[g.categoria] || g.categoria} · {g.fecha}
+                      {partida && ` · ${partida.descripcion}`}
+                      {g.proveedor && ` · ${g.proveedor}`}
+                    </div>
+                  </div>
+                  <div className="font-bold text-danger tabular-nums mr-3">{fmt(g.monto)}</div>
+                  <button onClick={() => delGasto(g.id)} className="text-danger text-[14px] hover:opacity-70">✕</button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Resumen de ganancia esperada (planificación) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <ResumenCard label="Presupuesto costo" valor={fmtM(resumen.costo)} color="#b07d1a" sub="Lo planificado" />
+        <ResumenCard label="Precio venta" valor={fmtM(resumen.presupuesto)} color="#1e6bb8" sub="Lo que cobras (neto)" />
+        <ResumenCard label="Ganancia esperada" valor={fmtM(resumen.ganancia)} color="#1a7a4a" sub={`Margen ${resumen.margen_venta}%`} />
+        <ResumenCard label="Cobrado" valor={fmtM(totalCobradoConIva)} color="#534ab7" sub={`${pctCobrado}% del contrato`} />
       </div>
 
       {/* Barra cobrado vs contrato */}
@@ -307,6 +413,56 @@ export default function PresupuestoPanel({ proyectoId, valorContrato }: Props) {
                 </div>
               </>
             )}
+        </Modal>
+      )}
+
+      {/* ═══ MODAL NUEVO GASTO ═══ */}
+      {modalGasto && (
+        <Modal title="Registrar gasto de obra" onClose={() => setModalGasto(false)}>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="label-base">Descripción *</label>
+              <input className="input-base" value={gastoForm.descripcion || ''} onChange={e => updGasto('descripcion', e.target.value)} placeholder="Ej: Compra de cemento, jornales semana 3" />
+            </div>
+            <div>
+              <label className="label-base">Categoría</label>
+              <select className="input-base cursor-pointer" value={gastoForm.categoria || 'materiales'} onChange={e => updGasto('categoria', e.target.value)}>
+                <option value="mano_obra">👷 Mano de obra</option>
+                <option value="materiales">🧱 Materiales</option>
+                <option value="equipos">🚜 Equipos</option>
+                <option value="subcontrato">🔧 Subcontrato</option>
+                <option value="fletes">🚚 Fletes</option>
+                <option value="otros">📦 Otros</option>
+              </select>
+            </div>
+            <div>
+              <label className="label-base">Monto ($) *</label>
+              <input type="number" className="input-base" value={gastoForm.monto || ''} onChange={e => updGasto('monto', e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <label className="label-base">Partida (a qué se imputa)</label>
+              <select className="input-base cursor-pointer" value={gastoForm.partida_id || ''} onChange={e => updGasto('partida_id', e.target.value)}>
+                <option value="">— Sin asignar —</option>
+                {partidas.map(p => <option key={p.id} value={p.id}>{p.descripcion}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label-base">Fecha</label>
+              <input type="date" className="input-base" value={gastoForm.fecha || ''} onChange={e => updGasto('fecha', e.target.value)} />
+            </div>
+            <div>
+              <label className="label-base">Proveedor (opcional)</label>
+              <input className="input-base" value={gastoForm.proveedor || ''} onChange={e => updGasto('proveedor', e.target.value)} />
+            </div>
+            <div>
+              <label className="label-base">N° documento (opcional)</label>
+              <input className="input-base" value={gastoForm.documento || ''} onChange={e => updGasto('documento', e.target.value)} placeholder="Boleta/factura/vale" />
+            </div>
+          </div>
+          <div className="flex gap-2 justify-end mt-4">
+            <Btn onClick={() => setModalGasto(false)}>Cancelar</Btn>
+            <Btn variant="primary" onClick={guardarGasto} disabled={savingGasto}>{savingGasto ? 'Guardando...' : 'Registrar gasto'}</Btn>
+          </div>
         </Modal>
       )}
     </div>

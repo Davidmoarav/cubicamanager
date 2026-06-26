@@ -20,6 +20,7 @@ export default function FacturacionPage() {
   const [busqueda, setBusqueda] = useState('')           // buscar en el listado
   const [orden, setOrden] = useState('fecha_desc')        // ordenar listado
   const [buscarFactura, setBuscarFactura] = useState('')  // buscar factura para asociar nota
+  const [mostrarOtroCliente, setMostrarOtroCliente] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -95,7 +96,7 @@ export default function FacturacionPage() {
         '\n\nSi menciona "doc_tipo" o "factura_ref", ejecuta el SQL 14_notas_credito_debito.sql en Supabase.')
       return
     }
-    await load(); setModal(false)
+    await load(); setModal(false); setBuscarFactura(''); setMostrarOtroCliente(false)
   }
 
   const setEstado = async (id: string, estado: string) => {
@@ -277,7 +278,7 @@ export default function FacturacionPage() {
       </div>
 
       {modal && (
-        <Modal title={form.doc_tipo === 'nota_credito' ? 'Nueva nota de crédito' : form.doc_tipo === 'nota_debito' ? 'Nueva nota de débito' : 'Nueva factura'} onClose={() => setModal(false)}>
+        <Modal title={form.doc_tipo === 'nota_credito' ? 'Nueva nota de crédito' : form.doc_tipo === 'nota_debito' ? 'Nueva nota de débito' : 'Nueva factura'} onClose={() => { setModal(false); setBuscarFactura(''); setMostrarOtroCliente(false) }}>
           {/* Tipo de documento: factura / NC / ND */}
           <div style={{ marginBottom:14 }}>
             <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#6b7a8d', marginBottom:6 }}>Documento</label>
@@ -371,8 +372,16 @@ export default function FacturacionPage() {
             <div className="mb-3">
               <label className="label-base">{form.tipo === 'compra' ? 'Proveedor' : 'Cliente'}</label>
               <select
-                value={form.cliente || ''}
-                onChange={e => upd('cliente', e.target.value)}
+                value={mostrarOtroCliente ? '__otro__' : (form.cliente || '')}
+                onChange={e => {
+                  if (e.target.value === '__otro__') {
+                    setMostrarOtroCliente(true)
+                    upd('cliente', '')
+                  } else {
+                    setMostrarOtroCliente(false)
+                    upd('cliente', e.target.value)
+                  }
+                }}
                 className="input-base cursor-pointer">
                 <option value="">— Seleccionar {form.tipo === 'compra' ? 'proveedor' : 'cliente'} —</option>
                 {(form.tipo === 'compra' ? proveedores : clientes).map((c: any) => {
@@ -381,9 +390,9 @@ export default function FacturacionPage() {
                 })}
                 <option value="__otro__">+ Otro (escribir manual)</option>
               </select>
-              {form.cliente === '__otro__' && (
+              {mostrarOtroCliente && (
                 <input autoFocus placeholder={`Nombre del ${form.tipo === 'compra' ? 'proveedor' : 'cliente'}`}
-                  className="input-base mt-2" value=""
+                  className="input-base mt-2" value={form.cliente || ''}
                   onChange={e => upd('cliente', e.target.value)} />
               )}
             </div>
@@ -418,7 +427,7 @@ export default function FacturacionPage() {
               options={[{value:'pendiente',label:'Pendiente'},{value:'pagada',label:'Pagada'},{value:'vencida',label:'Vencida'}]} />
           </div>
           <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:14 }}>
-            <Btn onClick={() => setModal(false)}>Cancelar</Btn>
+            <Btn onClick={() => { setModal(false); setBuscarFactura(''); setMostrarOtroCliente(false) }}>Cancelar</Btn>
             <Btn variant="primary" onClick={save} disabled={saving}>{saving?'Guardando...':'Guardar'}</Btn>
           </div>
         </Modal>

@@ -141,7 +141,7 @@ export default function FinanzasPage() {
       {tab === 'iva' && (
         <div>
           {/* Selector de período */}
-          <div className="flex items-center justify-between mb-4 bg-white border border-line rounded-xl p-3 shadow-card">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4 bg-white border border-line rounded-xl p-3 shadow-card">
             <div className="flex items-center gap-3">
               <span className="text-[13px] font-semibold text-ink">Período:</span>
               <select value={periodoSel} onChange={e => setPeriodoSel(e.target.value)}
@@ -174,7 +174,7 @@ export default function FinanzasPage() {
               <div>
                 <label className="label-base">Régimen tributario</label>
                 <select value={ppmRegimen} onChange={e => setPpmRegimen(e.target.value)}
-                  className="input-base cursor-pointer min-w-[220px]">
+                  className="input-base cursor-pointer w-full sm:w-auto sm:min-w-[220px]">
                   <option value="pro_pyme_general">Pro-Pyme General (14 D N°3)</option>
                   <option value="pro_pyme_transparente">Pro-Pyme Transparente (14 D N°8)</option>
                   <option value="regimen_general">Régimen General (14 A)</option>
@@ -221,7 +221,8 @@ export default function FinanzasPage() {
                   No hay facturas registradas. Agrega facturas de venta y compra para calcular el IVA.
                 </p>
               : (
-                <table className="w-full border-collapse text-[12px]">
+                <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-[12px] min-w-[680px]">
                   <thead>
                     <tr className="border-b-2 border-[#e4e9f0]">
                       <th className={thS}>Período</th>
@@ -254,6 +255,7 @@ export default function FinanzasPage() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             <p className="text-[11px] text-muted mt-3">
               IVA a pagar = IVA Débito (ventas) − IVA Crédito (compras). Total a pagar = IVA a pagar + PPM del período.

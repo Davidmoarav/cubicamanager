@@ -83,8 +83,8 @@ export default function RRHHPage() {
                 </div>
                 <Badge estado={e.estado} tipo="empleado" />
                 <div className="flex gap-1">
-                  <Btn onClick={() => { setForm({ ...e }); setModal('editar') }} className="text-[11px] px-2 py-1">✎</Btn>
-                  <Btn variant="danger" onClick={() => del(e.id)} className="text-[11px] px-2 py-1">✕</Btn>
+                  <Btn onClick={() => { setForm({ ...e }); setModal('editar') }} className="px-2.5 py-1.5">✎</Btn>
+                  <Btn variant="danger" onClick={() => del(e.id)} className="px-2.5 py-1.5">✕</Btn>
                 </div>
               </div>
             ))}

@@ -121,14 +121,14 @@ export default function RemuneracionesPage() {
       )}
 
       {/* TABS */}
-      <div className="inline-flex gap-1 p-1 bg-canvas rounded-xl mb-6">
+      <div className="flex gap-1 p-1 bg-canvas rounded-xl mb-6 overflow-x-auto">
         {[
           { key: 'liquidaciones' as const, label: '💰 Liquidaciones' },
           { key: 'empleados' as const,     label: '👤 Datos previsionales' },
           { key: 'parametros' as const,    label: '⚙ Parámetros' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition
+            className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-[13px] font-semibold transition
               ${tab === t.key ? 'bg-white text-brand shadow-card' : 'text-muted hover:text-ink'}`}>
             {t.label}
           </button>
@@ -147,7 +147,7 @@ export default function RemuneracionesPage() {
           </div>
 
           {/* Métricas */}
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
             <MetricCard label="Total imponible"  value={fmt(totales.imponible)} sub={`${liquidaciones.length} empleados`} />
             <MetricCard label="Total descuentos" value={fmt(totales.descuentos)} subColor="#b0401a" />
             <MetricCard label="Líquido a pagar"  value={fmt(totales.liquido)} subColor="#1a7a4a" sub="Total nómina del mes" />
@@ -182,7 +182,7 @@ export default function RemuneracionesPage() {
                     <td className={`${tdNum} text-danger`}>{fmt(calc.otros_descuentos)}</td>
                     <td className={`${tdNum} font-extrabold text-success`}>{fmt(calc.liquido_pagar)}</td>
                     <td className={tdS}>
-                      <Btn onClick={() => guardarLiq(empleado, calc)} className="text-[10px] px-2 py-0.5">Guardar</Btn>
+                      <Btn onClick={() => guardarLiq(empleado, calc)} className="text-[11px] px-2.5 py-1.5">Guardar</Btn>
                     </td>
                   </tr>
                 ))}
@@ -199,8 +199,8 @@ export default function RemuneracionesPage() {
 
       {/* ══════ TAB DATOS PREVISIONALES POR EMPLEADO ══════ */}
       {tab === 'empleados' && (
-        <div className="bg-white border border-[#e4e9f0] rounded-xl p-[18px]">
-          <table className="w-full border-collapse text-[12px]">
+        <div className="bg-white border border-[#e4e9f0] rounded-xl p-[18px] overflow-x-auto">
+          <table className="w-full border-collapse text-[12px] min-w-[640px]">
             <thead>
               <tr className="border-b-2 border-[#e4e9f0]">
                 <th className={thS}>Empleado</th>
@@ -221,7 +221,7 @@ export default function RemuneracionesPage() {
                   <td className={tdS}>{emp.contrato_tipo || 'indefinido'}</td>
                   <td className={tdNum}>{fmt(emp.sueldo)}</td>
                   <td className={tdNum}>{fmt((emp.bono_imponible || 0) + (emp.colacion || 0) + (emp.movilizacion || 0))}</td>
-                  <td className={tdS}><Btn onClick={() => openEmp(emp)} className="text-[10px] px-2 py-0.5">Editar</Btn></td>
+                  <td className={tdS}><Btn onClick={() => openEmp(emp)} className="text-[11px] px-2.5 py-1.5">Editar</Btn></td>
                 </tr>
               ))}
             </tbody>
@@ -236,7 +236,7 @@ export default function RemuneracionesPage() {
           <div className="bg-white border border-[#e4e9f0] rounded-xl p-5 mb-4">
             <div className="text-[14px] font-bold text-[#1a2535] mb-1">Porcentajes previsionales</div>
             <p className="text-[12px] text-muted mb-4">Valores por defecto que se aplican a todos los empleados (salvo que tengan valor propio).</p>
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <FormInput label="AFP - cotización obligatoria (%)" value={params.afp_pct} onChange={v => updParam('afp_pct', v)} type="number" />
               <FormInput label="AFP - comisión promedio (%)" value={params.afp_comision_pct} onChange={v => updParam('afp_comision_pct', v)} type="number" />
               <FormInput label="Salud - Fonasa/Isapre base (%)" value={params.salud_pct} onChange={v => updParam('salud_pct', v)} type="number" />
@@ -247,7 +247,7 @@ export default function RemuneracionesPage() {
 
           <div className="bg-white border border-[#e4e9f0] rounded-xl p-5 mb-4">
             <div className="text-[14px] font-bold text-[#1a2535] mb-4">Valores de referencia</div>
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <FormInput label="Valor UF ($)" value={params.uf_valor} onChange={v => updParam('uf_valor', v)} type="number" />
               <FormInput label="Valor UTM ($)" value={params.utm_valor} onChange={v => updParam('utm_valor', v)} type="number" />
               <FormInput label="Tope imponible (UF)" value={params.tope_imponible_uf} onChange={v => updParam('tope_imponible_uf', v)} type="number" />
@@ -266,7 +266,7 @@ export default function RemuneracionesPage() {
       {/* ══════ MODAL EDITAR PREVISIONAL EMPLEADO ══════ */}
       {empModal && (
         <Modal title={`Datos previsionales — ${empModal.nombre}`} onClose={() => setEmpModal(null)}>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormInput label="Sueldo base ($)" value={empForm.sueldo ?? 0} onChange={v => updEmp('sueldo', Number(v))} type="number" />
             <FormInput label="Horas extra (cant.)" value={empForm.horas_extra ?? 0} onChange={v => updEmp('horas_extra', Number(v))} type="number" />
 

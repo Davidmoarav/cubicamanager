@@ -153,8 +153,8 @@ export default function ClientesPage() {
                     <Td className="text-muted">{c.ciudad || c.comuna || '—'}</Td>
                     <Td>
                       <div className="flex gap-1">
-                        <Btn onClick={() => { setForm({ ...c }); setRutError(null); setModal('editar') }} className="text-[11px] px-2 py-1">Editar</Btn>
-                        <Btn variant="danger" onClick={() => del(c.id)} className="text-[11px] px-2 py-1">✕</Btn>
+                        <Btn onClick={() => { setForm({ ...c }); setRutError(null); setModal('editar') }} className="px-2.5 py-1.5">Editar</Btn>
+                        <Btn variant="danger" onClick={() => del(c.id)} className="px-2.5 py-1.5">✕</Btn>
                       </div>
                     </Td>
                   </tr>
@@ -167,8 +167,8 @@ export default function ClientesPage() {
       {/* ══════ MODAL ══════ */}
       {modal && (
         <Modal title={modal === 'nuevo' ? 'Nuevo cliente' : 'Editar cliente'} onClose={() => setModal(null)}>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="col-span-full">
               <FormInput label="Razón social *" value={form.razon_social || ''} onChange={v => upd('razon_social', v)} required placeholder="Ej: Inmobiliaria Ejemplo SpA" />
             </div>
 
@@ -193,13 +193,13 @@ export default function ClientesPage() {
             <FormInput label="Email"    value={form.email || ''}    onChange={v => upd('email', v)}    placeholder="contacto@cliente.cl" type="email" />
             <FormInput label="Teléfono" value={form.telefono || ''} onChange={v => upd('telefono', v)} placeholder="+56 9 1234 5678" />
 
-            <div className="col-span-2">
+            <div className="col-span-full">
               <FormInput label="Dirección" value={form.direccion || ''} onChange={v => upd('direccion', v)} placeholder="Av. 1 Sur 123" />
             </div>
             <FormInput label="Comuna" value={form.comuna || ''} onChange={v => upd('comuna', v)} placeholder="Ej: Santiago" />
             <FormInput label="Ciudad" value={form.ciudad || ''} onChange={v => upd('ciudad', v)} placeholder="Ej: Santiago" />
 
-            <div className="col-span-2">
+            <div className="col-span-full">
               <FormInput label="Notas" value={form.notas || ''} onChange={v => upd('notas', v)} placeholder="Cliente preferente, paga a 30 días, etc." />
             </div>
           </div>

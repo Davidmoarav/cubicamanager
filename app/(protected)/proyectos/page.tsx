@@ -232,15 +232,15 @@ export default function ProyectosPage() {
 
       {/* ── MODAL GESTIÓN DE OBRA (3 tabs) ── */}
       {gestion && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-5" onClick={() => { setGestion(null); load() }}>
-          <div className="bg-white rounded-2xl p-7 max-w-[860px] w-full shadow-pop max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-5" onClick={() => { setGestion(null); load() }}>
+          <div className="bg-white rounded-2xl p-4 sm:p-7 max-w-[860px] w-full shadow-pop max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-lg font-bold text-ink m-0 flex items-center gap-2">🏗 {gestion.nombre}</h3>
               <button onClick={() => { setGestion(null); load() }} className="text-2xl text-muted hover:text-ink leading-none transition">×</button>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 mb-6 p-1 bg-canvas rounded-xl">
+            <div className="flex gap-1 mb-6 p-1 bg-canvas rounded-xl overflow-x-auto no-scrollbar">
               {[
                 { key: 'obra' as const,        label: '📋 Control de obra' },
                 { key: 'presupuesto' as const, label: '💵 Presupuesto y pagos' },
@@ -249,7 +249,7 @@ export default function ProyectosPage() {
                 { key: 'docs' as const,        label: '📎 Documentos' },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`flex-1 px-3 py-2 rounded-lg text-[13px] font-semibold transition
+                  className={`shrink-0 lg:flex-1 whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-semibold transition
                     ${tab === t.key ? 'bg-white text-brand shadow-card' : 'text-muted hover:text-ink'}`}>
                   {t.label}
                 </button>

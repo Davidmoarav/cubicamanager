@@ -43,6 +43,10 @@
 ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--subtle); }
 
+/* Fila deslizable sin barra de scroll visible (tabs en móvil) */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Clases utilitarias reutilizables del design system */
 @layer components {
   .card {

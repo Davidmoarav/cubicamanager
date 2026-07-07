@@ -1,27 +1,19 @@
 'use client'
 // app/(protected)/contratos/page.tsx
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
 import type { Contrato } from '@/types'
 
 const EMPTY: Omit<Contrato,'id'|'created_at'|'user_id'> = { numero:'', contraparte:'', tipo:'Suma alzada', valor:0, inicio:'', fin:'', estado:'ejecucion' }
 
 export default function ContratosPage() {
-  const [items, setItems]   = useState<Contrato[]>([])
+  const { data: items = [], isLoading, mutate } = useSWR<Contrato[]>('/api/contratos', fetcher)
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
   const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res = await fetch('/api/contratos')
-    setItems(await res.json())
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -30,13 +22,13 @@ export default function ContratosPage() {
     setSaving(true)
     const method = modal === 'nuevo' ? 'POST' : 'PUT'
     await fetch('/api/contratos', { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify({ ...form, valor: Number(form.valor) }) })
-    await load(); setSaving(false); setModal(null)
+    await mutate(); setSaving(false); setModal(null)
   }
 
   const del = async (id: string) => {
     if (!confirm('¿Eliminar contrato?')) return
     await fetch('/api/contratos', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
-    await load()
+    await mutate()
   }
 
   const totalCartera = items.reduce((s,c) => s+c.valor, 0)
@@ -55,7 +47,7 @@ export default function ContratosPage() {
       </div>
 
       <div className="bg-white border border-[#e4e9f0] rounded-xl p-[18px]">
-        {loading
+        {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : items.length === 0
           ? <p className="text-muted text-center p-10">Sin contratos aún</p>

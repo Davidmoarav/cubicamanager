@@ -4,6 +4,8 @@
 // líneas (cantidad x rendimiento + precio) desde las partidas del proyecto.
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Btn, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { UNIDADES } from '@/types/cotizaciones'
@@ -31,10 +33,9 @@ function BadgeOC({ estado }: { estado: string }) {
 const nuevaLinea = () => ({ _k: crypto.randomUUID(), material: '', unidad: 'un', cantidad: 1, precio_unitario: 0 })
 
 export default function OrdenesCompraPage() {
-  const [items, setItems]             = useState<any[]>([])
-  const [proveedores, setProveedores] = useState<any[]>([])
-  const [proyectos, setProyectos]     = useState<any[]>([])
-  const [loading, setLoading]         = useState(true)
+  const { data: items = [], isLoading, mutate } = useSWR<any[]>('/api/ordenes-compra', fetcher)
+  const { data: proveedores = [] } = useSWR<any[]>('/api/proveedores', fetcher)
+  const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
 
   const [modal, setModal]     = useState<'nueva' | 'editar' | null>(null)
   const [editId, setEditId]   = useState<string | null>(null)
@@ -43,19 +44,6 @@ export default function OrdenesCompraPage() {
   const [saving, setSaving]   = useState(false)
   const [sugiriendo, setSugiriendo] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [oc, prov, proy] = await Promise.all([
-      fetch('/api/ordenes-compra').then(r => r.json()).catch(() => []),
-      fetch('/api/proveedores').then(r => r.json()).catch(() => []),
-      fetch('/api/proyectos').then(r => r.json()).catch(() => []),
-    ])
-    setItems(Array.isArray(oc) ? oc : [])
-    setProveedores(Array.isArray(prov) ? prov : [])
-    setProyectos(Array.isArray(proy) ? proy : [])
-    setLoading(false)
-  }, [])
-  useEffect(() => { load() }, [load])
 
   const provOptions = useMemo(
     () => [{ value: '', label: '— Sin proveedor —' }, ...proveedores.map(p => ({ value: p.id, label: p.nombre }))],
@@ -144,7 +132,7 @@ export default function OrdenesCompraPage() {
         '\n\nSi menciona "ordenes_compra", ejecuta el SQL 15_ordenes_compra.sql en Supabase.')
       return
     }
-    await load(); setModal(null)
+    await mutate(); setModal(null)
   }
 
   const cambiarEstado = async (oc: any, estado: string) => {
@@ -152,14 +140,14 @@ export default function OrdenesCompraPage() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: oc.id, estado }),
     })
-    await load()
+    await mutate()
   }
   const del = async (id: string) => {
     if (!confirm('¿Eliminar esta orden de compra?')) return
     await fetch('/api/ordenes-compra', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
     })
-    await load()
+    await mutate()
   }
 
   return (
@@ -178,7 +166,7 @@ export default function OrdenesCompraPage() {
 
       {/* Tabla */}
       <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
-        {loading
+        {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : items.length === 0
           ? <p className="text-muted text-center p-10">Aún no hay órdenes de compra. Crea la primera.</p>

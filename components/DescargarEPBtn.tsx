@@ -5,9 +5,7 @@
 // Carga empresa + logo (base64) antes de renderizar.
 
 import { useState } from 'react'
-import { pdf } from '@react-pdf/renderer'
 import { createClient } from '@/lib/supabase'
-import { EstadoPagoPDF } from './EstadoPagoPDF'
 import type { EstadoPago } from '@/types/estado-pago'
 
 interface Props {
@@ -22,6 +20,11 @@ export default function DescargarEPBtn({ ep, proyecto }: Props) {
   const generar = async () => {
     setLoading(true)
     try {
+      const [{ pdf }, { EstadoPagoPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./EstadoPagoPDF'),
+      ])
+
       // 1. Config de empresa
       const empresa = await fetch('/api/empresa').then(r => r.json()).catch(() => null)
 
@@ -62,6 +65,7 @@ export default function DescargarEPBtn({ ep, proyecto }: Props) {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err: any) {
+      console.error('Error al generar PDF:', err)
       alert('Error al generar PDF: ' + (err?.message || err))
     } finally {
       setLoading(false)

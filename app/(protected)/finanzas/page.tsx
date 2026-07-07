@@ -2,6 +2,8 @@
 // app/(protected)/finanzas/page.tsx — v2 con IVA y PRESUPUESTO
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Btn, MetricCard, SectionTitle } from '@/components/ui'
 import { fmt, fmtM } from '@/lib/format'
 
@@ -16,11 +18,11 @@ export default function FinanzasPage() {
   const [tab, setTab] = useState<'resumen' | 'iva' | 'presupuesto'>('resumen')
   const [periodoSel, setPeriodoSel] = useState<string>(new Date().toISOString().slice(0, 7))
 
-  const [facturas, setFacturas]     = useState<any[]>([])
-  const [empleados, setEmpleados]   = useState<any[]>([])
-  const [iva, setIva]               = useState<any[]>([])
-  const [presupuesto, setPresupuesto] = useState<any[]>([])
-  const [loading, setLoading]       = useState(true)
+  const { data: facturas = [], isLoading, mutate: mutFacturas } = useSWR<any[]>('/api/facturas', fetcher)
+  const { data: empleados = [], mutate: mutEmpleados } = useSWR<any[]>('/api/empleados', fetcher)
+  const { data: iva = [], mutate: mutIva } = useSWR<any[]>('/api/iva', fetcher)
+  const { data: presupuesto = [], mutate: mutPresupuesto } = useSWR<any[]>('/api/presupuesto', fetcher)
+  const refresh = () => { mutFacturas(); mutEmpleados(); mutIva(); mutPresupuesto() }
 
   // ─── PPM (form local del período seleccionado) ──────────
   const [ppmTasa, setPpmTasa]       = useState<string>('0')
@@ -28,22 +30,6 @@ export default function FinanzasPage() {
   const [ppmSaving, setPpmSaving]   = useState(false)
   const [ppmSavedAt, setPpmSavedAt] = useState<number | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [f, e, i, p] = await Promise.all([
-      fetch('/api/facturas').then(r => r.json()).catch(() => []),
-      fetch('/api/empleados').then(r => r.json()).catch(() => []),
-      fetch('/api/iva').then(r => r.json()).catch(() => []),
-      fetch('/api/presupuesto').then(r => r.json()).catch(() => []),
-    ])
-    setFacturas(Array.isArray(f) ? f : [])
-    setEmpleados(Array.isArray(e) ? e : [])
-    setIva(Array.isArray(i) ? i : [])
-    setPresupuesto(Array.isArray(p) ? p : [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   // ─── Resumen ─────────────────────────────────────────────
   const resumen = useMemo(() => {
@@ -80,12 +66,12 @@ export default function FinanzasPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ periodo: periodoSel, regimen: ppmRegimen, tasa: Number(ppmTasa) || 0 }),
       })
-      await load()
+      await refresh()
       setPpmSavedAt(Date.now())
     } finally {
       setPpmSaving(false)
     }
-  }, [periodoSel, ppmRegimen, ppmTasa, load])
+  }, [periodoSel, ppmRegimen, ppmTasa])
 
   const ivaTotales = useMemo(() => {
     if (!ivaPeriodo) return { debito: 0, credito: 0, pagar: 0, ppm: 0, total: 0 }
@@ -98,7 +84,7 @@ export default function FinanzasPage() {
     }
   }, [ivaPeriodo])
 
-  if (loading) return <p className="text-muted p-5">Cargando...</p>
+  if (isLoading) return <p className="text-muted p-5">Cargando...</p>
 
   return (
     <div>

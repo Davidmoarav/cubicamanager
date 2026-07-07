@@ -3,9 +3,7 @@
 // Descarga el PDF del informe ejecutivo con diseño Cubica.
 
 import { useState } from 'react'
-import { pdf } from '@react-pdf/renderer'
 import { createClient } from '@/lib/supabase'
-import { InformePDF } from './InformePDF'
 
 interface Props {
   data: any
@@ -19,6 +17,11 @@ export default function DescargarInformeBtn({ data, proximo }: Props) {
   const generar = async () => {
     setLoading(true)
     try {
+      const [{ pdf }, { InformePDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./InformePDF'),
+      ])
+
       const empresa = await fetch('/api/empresa').then(r => r.json()).catch(() => null)
 
       let logoUrl: string | null = null
@@ -49,6 +52,7 @@ export default function DescargarInformeBtn({ data, proximo }: Props) {
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch (err: any) {
+      console.error('Error al generar PDF:', err)
       alert('Error al generar PDF: ' + (err?.message || err))
     } finally {
       setLoading(false)

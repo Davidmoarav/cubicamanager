@@ -2,6 +2,8 @@
 // app/(protected)/cotizaciones/page.tsx — v5 con CONVERSIÓN
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import Link from 'next/link'
 import { Btn, FormInput, FormSelect, MetricCard, SectionTitle, Table, Td, Th } from '@/components/ui'
 import { fmt, fmtM } from '@/lib/format'
@@ -45,13 +47,13 @@ function BadgeCotiz({ estado }: { estado: string }) {
 }
 
 export default function CotizacionesPage() {
-  const [items, setItems]       = useState<Cotizacion[]>([])
-  const [clientes, setClientes] = useState<Cliente[]>([])
+  const { data: itemsRaw = [], isLoading, mutate } = useSWR<Cotizacion[]>('/api/cotizaciones', fetcher)
+  const items = Array.isArray(itemsRaw) ? itemsRaw : []
+  const { data: clientes = [] } = useSWR<Cliente[]>('/api/clientes', fetcher)
   const [modal, setModal]       = useState<'nuevo' | 'editar' | 'ver' | null>(null)
   const [form, setForm]         = useState<any>(EMPTY_COTIZACION)
   const [filtro, setFiltro]     = useState('todos')
   const [saving, setSaving]     = useState(false)
-  const [loading, setLoading]   = useState(true)
   const [apiError, setApiError] = useState<string | null>(null)
 
   // ─── Importar del catálogo ───────────────────────────────
@@ -60,34 +62,6 @@ export default function CotizacionesPage() {
   const [catLoading, setCatLoading] = useState(false)
   const [selected, setSelected]     = useState<Set<string>>(new Set())
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setApiError(null)
-    try {
-      const [resCot, resCli] = await Promise.all([
-        fetch('/api/cotizaciones'),
-        fetch('/api/clientes'),
-      ])
-      const dataCot = await resCot.json()
-      const dataCli = await resCli.json()
-
-      if (!Array.isArray(dataCot)) {
-        setApiError(dataCot?.error || 'Respuesta inesperada del servidor')
-        setItems([])
-      } else {
-        setItems(dataCot)
-      }
-      setClientes(Array.isArray(dataCli) ? dataCli : [])
-    } catch (err: any) {
-      setApiError('Error de red: ' + (err?.message ?? err))
-      setItems([])
-      setClientes([])
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -201,13 +175,13 @@ export default function CotizacionesPage() {
       alert('Error: ' + error)
       setSaving(false); return
     }
-    await load(); setSaving(false); setModal(null)
+    await mutate(); setSaving(false); setModal(null)
   }
 
   const del = async (id: string) => {
     if (!confirm('¿Eliminar cotización?')) return
     await fetch('/api/cotizaciones', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    await load()
+    await mutate()
   }
 
   const filtered = !Array.isArray(items)
@@ -240,7 +214,7 @@ export default function CotizacionesPage() {
         </div>
       )}
 
-      {!loading && clientes.length === 0 && (
+      {!isLoading && clientes.length === 0 && (
         <div className="bg-brand-bg border border-[#b5d4f4] text-[#0c447c] px-4 py-3 rounded-xl mb-4 text-[13px]">
           💡 Aún no tienes clientes guardados. <Link href="/clientes" className="underline font-semibold">Crea uno aquí</Link> antes de hacer una cotización.
         </div>
@@ -264,7 +238,7 @@ export default function CotizacionesPage() {
       </div>
 
       <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
-        {loading
+        {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : filtered.length === 0
           ? <p className="text-muted text-center p-10">Sin cotizaciones en este filtro</p>
@@ -292,7 +266,7 @@ export default function CotizacionesPage() {
                       <Td>
                         <div className="flex gap-1 flex-nowrap">
                           <DescargarPDFBtn cotizacion={c} />
-                          <ConvertirBtn cotizacion={c} onSuccess={load} />
+                          <ConvertirBtn cotizacion={c} onSuccess={mutate} />
                           <Btn
                             onClick={() => { setForm({ ...c, partidas: c.partidas ?? [] }); setModal(bloqueada ? 'ver' : 'editar') }}
                             style={{ fontSize: 11, padding: '4px 8px' }}>

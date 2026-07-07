@@ -2,6 +2,8 @@
 // app/(protected)/remuneraciones/page.tsx
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, MetricCard } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { calcularLiquidacion, type ParametrosRemuneracion, type EmpleadoPrevisional } from '@/types/finanzas'
@@ -20,10 +22,12 @@ function labelPeriodo(periodo: string) {
 
 export default function RemuneracionesPage() {
   const [tab, setTab] = useState<'liquidaciones' | 'parametros' | 'empleados'>('liquidaciones')
+  const { data: paramsData = null, mutate: mutateParams } = useSWR<ParametrosRemuneracion | null>('/api/parametros-rem', fetcher)
+  const { data: empData = [], isLoading, mutate: mutateEmp } = useSWR<EmpleadoPrevisional[]>('/api/empleados', fetcher)
   const [params, setParams] = useState<ParametrosRemuneracion | null>(null)
-  const [empleados, setEmpleados] = useState<EmpleadoPrevisional[]>([])
+  const empleados = useMemo(() => (empData as any[]).filter((e: any) => e.estado !== 'inactivo'), [empData])
+  useEffect(() => { if (paramsData !== undefined) setParams(prev => prev ?? paramsData) }, [paramsData])
   const [periodo, setPeriodo] = useState(periodoActual())
-  const [loading, setLoading] = useState(true)
   const [savingParams, setSavingParams] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -33,18 +37,6 @@ export default function RemuneracionesPage() {
   const [savingEmp, setSavingEmp] = useState(false)
 
   // ─── Carga inicial ───────────────────────────────────────
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [rp, re] = await Promise.all([
-      fetch('/api/parametros-rem').then(r => r.json()),
-      fetch('/api/empleados').then(r => r.json()),
-    ])
-    setParams(rp)
-    setEmpleados(Array.isArray(re) ? re.filter((e: any) => e.estado !== 'inactivo') : [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   // ─── Liquidaciones calculadas en vivo ────────────────────
   const liquidaciones = useMemo(() => {
@@ -91,7 +83,7 @@ export default function RemuneracionesPage() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(empForm),
     })
-    await load()
+    await mutateEmp()
     setSavingEmp(false)
     setEmpModal(null)
   }
@@ -105,7 +97,7 @@ export default function RemuneracionesPage() {
     setMsg(`Liquidación de ${emp.nombre} guardada`)
   }
 
-  if (loading || !params) return <p className="text-muted p-5">Cargando...</p>
+  if (isLoading || !params) return <p className="text-muted p-5">Cargando...</p>
 
   return (
     <div>

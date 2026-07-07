@@ -2,31 +2,20 @@
 // app/(protected)/rrhh/page.tsx
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
 import type { Empleado } from '@/types'
 
 const EMPTY: Omit<Empleado,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', cargo:'', sueldo:0, horas_extra:0, estado:'activo', tipo:'planta', inicio:'' }
 
 export default function RRHHPage() {
-  const [items, setItems]   = useState<Empleado[]>([])
-  const [proyectos, setProyectos] = useState<any[]>([])
+  const { data: items = [], isLoading, mutate } = useSWR<Empleado[]>('/api/empleados', fetcher)
+  const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
   const [saving, setSaving] = useState(false)
-  const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [emps, proys] = await Promise.all([
-      fetch('/api/empleados').then(r => r.json()),
-      fetch('/api/proyectos').then(r => r.json()).catch(() => []),
-    ])
-    setItems(Array.isArray(emps) ? emps : [])
-    setProyectos(Array.isArray(proys) ? proys : [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -35,13 +24,13 @@ export default function RRHHPage() {
     setSaving(true)
     const method = modal === 'nuevo' ? 'POST' : 'PUT'
     await fetch('/api/empleados', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sueldo: Number(form.sueldo), horas_extra: Number(form.horas_extra), proyecto_id: form.proyecto_id || null }) })
-    await load(); setSaving(false); setModal(null)
+    await mutate(); setSaving(false); setModal(null)
   }
 
   const del = async (id: string) => {
     if (!confirm('¿Eliminar trabajador?')) return
     await fetch('/api/empleados', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
-    await load()
+    await mutate()
   }
 
   const totalNomina = items.reduce((s, e) => s + e.sueldo + e.horas_extra * 14000, 0)
@@ -63,7 +52,7 @@ export default function RRHHPage() {
         <MetricCard label="Vacaciones"      value={items.filter(e=>e.estado==='vacaciones').length} sub="trabajadores" />
       </div>
 
-      {loading
+      {isLoading
         ? <p className="text-muted text-center p-10">Cargando...</p>
         : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

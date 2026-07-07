@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
+import { SWRConfig } from 'swr'
 import Sidebar from '@/components/Sidebar'
+import { fetcher } from '@/lib/fetcher'
 
 export default function AppShell({ userEmail, children }: { userEmail?: string; children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -13,7 +15,8 @@ export default function AppShell({ userEmail, children }: { userEmail?: string; 
   }, [pathname])
 
   return (
-    <div className="flex min-h-screen">
+    <SWRConfig value={{ fetcher, revalidateOnFocus: false, dedupingInterval: 5000, keepPreviousData: true }}>
+      <div className="flex min-h-screen">
       {/* Overlay móvil */}
       {sidebarOpen && (
         <div
@@ -42,6 +45,7 @@ export default function AppShell({ userEmail, children }: { userEmail?: string; 
           {children}
         </main>
       </div>
-    </div>
+      </div>
+    </SWRConfig>
   )
 }

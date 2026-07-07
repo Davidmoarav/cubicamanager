@@ -2,6 +2,8 @@
 // app/(protected)/facturacion/page.tsx — v3 con tipo venta/compra + neto/IVA + importador SII
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
 import ImportadorSII from '@/components/ImportadorSII'
 import ResumenBoletas from '@/components/ResumenBoletas'
@@ -9,10 +11,10 @@ import ResumenBoletas from '@/components/ResumenBoletas'
 const EMPTY: any = { numero:'', cliente:'', proyecto:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
 
 export default function FacturacionPage() {
-  const [items, setItems]             = useState<any[]>([])
-  const [clientes, setClientes]       = useState<any[]>([])
-  const [proveedores, setProveedores] = useState<any[]>([])
-  const [proyectos, setProyectos]     = useState<any[]>([])
+  const { data: items = [], isLoading, mutate } = useSWR<any[]>('/api/facturas', fetcher)
+  const { data: clientes = [] } = useSWR<any[]>('/api/clientes', fetcher)
+  const { data: proveedores = [] } = useSWR<any[]>('/api/proveedores', fetcher)
+  const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
   const [modal, setModal]             = useState(false)
   const [form, setForm]               = useState<any>({})
   const [filtro, setFiltro]           = useState('todos')
@@ -22,24 +24,7 @@ export default function FacturacionPage() {
   const [buscarFactura, setBuscarFactura]           = useState('')
   const [mostrarOtroCliente, setMostrarOtroCliente] = useState(false)
   const [saving, setSaving]   = useState(false)
-  const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [resF, resC, resPr, resPy] = await Promise.all([
-      fetch('/api/facturas').then(r => r.json()).catch(() => []),
-      fetch('/api/clientes').then(r => r.json()).catch(() => []),
-      fetch('/api/proveedores').then(r => r.json()).catch(() => []),
-      fetch('/api/proyectos').then(r => r.json()).catch(() => []),
-    ])
-    setItems(Array.isArray(resF) ? resF : [])
-    setClientes(Array.isArray(resC) ? resC : [])
-    setProveedores(Array.isArray(resPr) ? resPr : [])
-    setProyectos(Array.isArray(resPy) ? resPy : [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -94,18 +79,18 @@ export default function FacturacionPage() {
         '\n\nSi menciona "doc_tipo" o "factura_ref", ejecuta el SQL 14_notas_credito_debito.sql en Supabase.')
       return
     }
-    await load(); cerrarModal()
+    await mutate(); cerrarModal()
   }
 
   const setEstado = async (id: string, estado: string) => {
     await fetch('/api/facturas', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, estado }) })
-    await load()
+    await mutate()
   }
 
   const del = async (id: string) => {
     if (!confirm('¿Eliminar factura?')) return
     await fetch('/api/facturas', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    await load()
+    await mutate()
   }
 
   let filtered = items
@@ -154,8 +139,8 @@ export default function FacturacionPage() {
           <p className="text-sm text-muted mt-1">Ventas, compras e IVA</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <ImportadorSII onImported={load} />
-          <ResumenBoletas onSaved={load} />
+          <ImportadorSII onImported={mutate} />
+          <ResumenBoletas onSaved={mutate} />
           <Btn
             onClick={() => { setForm({ ...EMPTY, doc_tipo: 'nota_credito', emision: new Date().toISOString().split('T')[0] }); setModal(true) }}
             style={{ background: '#fdecea', borderColor: '#f5c6c2', color: '#b0401a', fontWeight: 700 }}>
@@ -222,7 +207,7 @@ export default function FacturacionPage() {
       </div>
 
       <div className="bg-white border border-line rounded-2xl p-5 shadow-card overflow-x-auto">
-        {loading
+        {isLoading
           ? <p className="text-muted text-center py-10">Cargando...</p>
           : filtered.length === 0
           ? <p className="text-muted text-center py-10">Sin facturas en este filtro</p>

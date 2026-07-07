@@ -5,9 +5,7 @@
 // Carga empresa + logo (base64) antes de renderizar.
 
 import { useState } from 'react'
-import { pdf } from '@react-pdf/renderer'
 import { createClient } from '@/lib/supabase'
-import { CotizacionPDF } from './CotizacionPDF'
 import type { Cotizacion } from '@/types/cotizaciones'
 import type { Cliente } from '@/types/cliente'
 
@@ -23,6 +21,12 @@ export default function DescargarPDFBtn({ cotizacion, cliente }: Props) {
   const generar = async () => {
     setLoading(true)
     try {
+      // Carga react-pdf y el componente solo al momento de generar (no en el bundle inicial)
+      const [{ pdf }, { CotizacionPDF }] = await Promise.all([
+        import('@react-pdf/renderer'),
+        import('./CotizacionPDF'),
+      ])
+
       // 1. Config de empresa
       const empresa = await fetch('/api/empresa').then(r => r.json()).catch(() => null)
 

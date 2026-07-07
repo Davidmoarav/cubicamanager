@@ -56,7 +56,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, proyectoNo
     setLoading(true)
     const [epData, presData, gastosData, partData, devData] = await Promise.all([
       fetch(`/api/estados-pago?proyecto_id=${proyectoId}`).then(r => r.json()),
-      fetch('/api/presupuesto').then(r => r.json()).catch(() => []),
+      fetch(`/api/presupuesto?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
       fetch(`/api/gastos-obra?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
       fetch(`/api/partidas-proyecto?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
       fetch(`/api/devoluciones?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),

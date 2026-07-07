@@ -1,7 +1,9 @@
 'use client'
 // app/(protected)/proyectos/page.tsx — v4 Tailwind moderno
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, fmtM } from '@/components/ui'
 import type { Proyecto } from '@/types'
 import DocumentosPanel from '@/components/DocumentosPanel'
@@ -19,30 +21,22 @@ const META: Record<string, { label: string; dot: string; chip: string; bar: stri
 }
 
 export default function ProyectosPage() {
-  const [items, setItems]     = useState<Proyecto[]>([])
+  const { data: items = [], isLoading, mutate } = useSWR<Proyecto[]>('/api/proyectos', fetcher)
   const [modal, setModal]     = useState<'nuevo'|'editar'|null>(null)
   const [gestion, setGestion] = useState<Proyecto | null>(null)
   const [tab, setTab]         = useState<'obra' | 'presupuesto' | 'mano_obra' | 'informe' | 'docs'>('obra')
   const [form, setForm]       = useState<any>({})
   const [filtro, setFiltro]   = useState('todos')
   const [saving, setSaving]   = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [kpis, setKpis]       = useState<Record<string, any>>({})
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [res, kpiRes] = await Promise.all([
-      fetch('/api/proyectos').then(r => r.json()),
-      fetch('/api/informe').then(r => r.json()).catch(() => []),
-    ])
-    setItems(Array.isArray(res) ? res : [])
+  const { data: kpiRes = [], mutate: mutateKpis } = useSWR<any[]>('/api/informe', fetcher)
+  const kpis = useMemo(() => {
     const map: Record<string, any> = {}
     if (Array.isArray(kpiRes)) kpiRes.forEach((k: any) => { map[k.proyecto_id] = k })
-    setKpis(map)
-    setLoading(false)
-  }, [])
+    return map
+  }, [kpiRes])
 
-  useEffect(() => { load() }, [load])
+  const refresh = () => { mutate(); mutateKpis() }
+
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -62,13 +56,13 @@ export default function ProyectosPage() {
       anticipo_pct: Number((form as any).anticipo_pct) || 0,
       retencion_pct: Number((form as any).retencion_pct) || 0,
     }) })
-    await load(); setSaving(false); setModal(null)
+    await mutate(); setSaving(false); setModal(null)
   }
 
   const del = async (id: string) => {
     if (!confirm('¿Eliminar este proyecto y todos sus datos?')) return
     await fetch('/api/proyectos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    await load()
+    await mutate()
   }
 
   const filtered = filtro === 'todos' ? items : items.filter(i => i.estado === filtro)
@@ -108,7 +102,7 @@ export default function ProyectosPage() {
         ))}
       </div>
 
-      {loading
+      {isLoading
         ? <div className="flex items-center justify-center py-20 text-muted">Cargando proyectos…</div>
         : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -196,7 +190,7 @@ export default function ProyectosPage() {
       )}
 
       {/* Empty state */}
-      {!loading && filtered.length === 0 && (
+      {!isLoading && filtered.length === 0 && (
         <div className="text-center py-16 text-muted">
           <div className="text-4xl mb-3">🏗</div>
           <p className="text-sm">No hay proyectos en este filtro.</p>
@@ -232,11 +226,11 @@ export default function ProyectosPage() {
 
       {/* ── MODAL GESTIÓN DE OBRA (3 tabs) ── */}
       {gestion && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-5" onClick={() => { setGestion(null); load() }}>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-5" onClick={() => { setGestion(null); refresh() }}>
           <div className="bg-white rounded-2xl p-4 sm:p-7 max-w-[860px] w-full shadow-pop max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
               <h3 className="text-lg font-bold text-ink m-0 flex items-center gap-2">🏗 {gestion.nombre}</h3>
-              <button onClick={() => { setGestion(null); load() }} className="text-2xl text-muted hover:text-ink leading-none transition">×</button>
+              <button onClick={() => { setGestion(null); refresh() }} className="text-2xl text-muted hover:text-ink leading-none transition">×</button>
             </div>
 
             {/* Tabs */}
@@ -256,7 +250,7 @@ export default function ProyectosPage() {
               ))}
             </div>
 
-            {tab === 'obra'        && <PartidasPanel proyectoId={gestion.id} markupGlobal={(gestion as any).markup_global ?? 20} onAvanceChange={load} />}
+            {tab === 'obra'        && <PartidasPanel proyectoId={gestion.id} markupGlobal={(gestion as any).markup_global ?? 20} onAvanceChange={refresh} />}
             {tab === 'presupuesto' && <PresupuestoPanel proyectoId={gestion.id} valorContrato={gestion.valor} proyectoNombre={gestion.nombre} proyectoCliente={gestion.cliente} proyectoDireccion={(gestion as any).direccion} />}
             {tab === 'mano_obra'   && <ManoObraPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
             {tab === 'informe'     && <InformePanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}

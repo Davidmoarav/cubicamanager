@@ -2,28 +2,20 @@
 // app/(protected)/catalogo-partidas/page.tsx
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, MetricCard } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { UNIDADES } from '@/types/cotizaciones'
 import type { CatalogoPartida } from '@/types/catalogo-partida'
 
 export default function CatalogoPartidasPage() {
-  const [allItems, setAllItems] = useState<CatalogoPartida[]>([])
-  const [loading, setLoading]   = useState(true)
+  const { data: allItems = [], isLoading, mutate } = useSWR<CatalogoPartida[]>('/api/catalogo-partidas', fetcher)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [modal, setModal]       = useState<{ type: 'padre' | 'hijo' | 'editar'; parentId?: string } | null>(null)
   const [form, setForm]         = useState<any>({})
   const [saving, setSaving]     = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res  = await fetch('/api/catalogo-partidas')
-    const data = await res.json()
-    setAllItems(Array.isArray(data) ? data : [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   const padres = useMemo(() => {
     const ps = allItems.filter(p => !p.parent_id).sort((a, b) => a.orden - b.orden)
@@ -51,7 +43,7 @@ export default function CatalogoPartidasPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
-    await load()
+    await mutate()
     setSaving(false)
     setModal(null)
   }
@@ -63,7 +55,7 @@ export default function CatalogoPartidasPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
-    await load()
+    await mutate()
   }
 
   const openNewPadre = () => {
@@ -99,7 +91,7 @@ export default function CatalogoPartidasPage() {
         <MetricCard label="Total ítems"          value={allItems.length} />
       </div>
 
-      {loading
+      {isLoading
         ? <p className="text-muted text-center p-[30px]">Cargando catálogo...</p>
         : padres.length === 0
         ? <div className="bg-[#f8fafc] border border-dashed border-[#d1d9e6] rounded-[10px] p-9 text-center">

@@ -1,7 +1,9 @@
 'use client'
 // app/(protected)/clientes/page.tsx
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import useSWR from 'swr'
+import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, MetricCard, Modal, SectionTitle, Table, Td, Th } from '@/components/ui'
 import { formatRut, isValidRut, cleanRut } from '@/lib/rut'
 import { fmt } from '@/lib/format'
@@ -14,28 +16,14 @@ const EMPTY: any = {
 }
 
 export default function ClientesPage() {
-  const [items, setItems]     = useState<Cliente[]>([])
+  const { data: items = [], isLoading, mutate } = useSWR<Cliente[]>('/api/clientes', fetcher)
+  const { data: proyectos = [] } = useSWR<Proyecto[]>('/api/proyectos', fetcher)
   const [modal, setModal]     = useState<'nuevo' | 'editar' | null>(null)
   const [form, setForm]       = useState<any>(EMPTY)
   const [search, setSearch]   = useState('')
   const [saving, setSaving]   = useState(false)
-  const [loading, setLoading] = useState(true)
   const [rutError, setRutError] = useState<string | null>(null)
-  const [proyectos, setProyectos]       = useState<Proyecto[]>([])
   const [verProyectos, setVerProyectos] = useState<Cliente | null>(null)
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [cData, pData] = await Promise.all([
-      fetch('/api/clientes').then(r => r.json()).catch(() => []),
-      fetch('/api/proyectos').then(r => r.json()).catch(() => []),
-    ])
-    setItems(Array.isArray(cData) ? cData : [])
-    setProyectos(Array.isArray(pData) ? pData : [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { load() }, [load])
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -74,7 +62,7 @@ export default function ClientesPage() {
       setSaving(false)
       return
     }
-    await load()
+    await mutate()
     setSaving(false)
     setModal(null)
   }
@@ -86,7 +74,7 @@ export default function ClientesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
-    await load()
+    await mutate()
   }
 
   // ─── Filtrado por búsqueda ───────────────────────────────
@@ -139,7 +127,7 @@ export default function ClientesPage() {
 
       {/* Tabla */}
       <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
-        {loading
+        {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : filtered.length === 0
           ? <p className="text-muted text-center p-10">

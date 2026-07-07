@@ -10,19 +10,29 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
-  const [{ data: proyectos }, { data: partidas }, { data: gastos }, { data: facturas }] = await Promise.all([
-    supabase.from('proyectos').select('*').eq('user_id', user.id),
-    supabase.from('partidas_proyecto').select('*').eq('user_id', user.id),
-    supabase.from('gastos_obra').select('*').eq('user_id', user.id),
-    supabase.from('facturas').select('*').eq('user_id', user.id),
+  // Opcional: acotar a un solo proyecto (evita escanear todas las obras)
+  const proyectoId = new URL(req.url).searchParams.get('proyecto_id')
+
+  let proyQuery = supabase.from('proyectos').select('*').eq('user_id', user.id)
+  if (proyectoId) proyQuery = proyQuery.eq('id', proyectoId)
+  const { data: proyectos } = await proyQuery
+  const arrProy = proyectos ?? []
+  if (arrProy.length === 0) return NextResponse.json([])
+
+  // Partidas / gastos / facturas acotados a las obras en juego (usan sus índices)
+  const proyIds = arrProy.map(p => p.id)
+  const proyNombres = arrProy.map(p => p.nombre).filter(Boolean)
+  const [{ data: partidas }, { data: gastos }, { data: facturas }] = await Promise.all([
+    supabase.from('partidas_proyecto').select('*').eq('user_id', user.id).in('proyecto_id', proyIds),
+    supabase.from('gastos_obra').select('*').eq('user_id', user.id).in('proyecto_id', proyIds),
+    supabase.from('facturas').select('*').eq('user_id', user.id).in('proyecto', proyNombres.length ? proyNombres : ['__no_match__']),
   ])
 
-  const arrProy = proyectos ?? []
   const arrPart = partidas ?? []
   const arrGastos = gastos ?? []
   const arrFacturas = facturas ?? []

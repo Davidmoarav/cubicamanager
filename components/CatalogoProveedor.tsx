@@ -76,13 +76,34 @@ export default function CatalogoProveedor({ proveedor, onClose }: { proveedor: a
     setMsg(`${data.insertados} productos cargados`); mutate()
   }
 
+  const descargarPlantilla = () => {
+    const filas = [
+      'codigo;descripcion;unidad;precio',
+      'ADH-01;Adhesivo EIFS 25 kg;saco;12000',
+      'MAL-02;Malla fibra de vidrio;m2;900',
+      'PERF-03;Perfil PVC arranque;ml;2500',
+    ].join('\n')
+    const blob = new Blob(['\ufeff' + filas], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'plantilla_catalogo.csv'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <Modal wide title={`Catálogo — ${proveedor.nombre}`} onClose={onClose}>
       {/* Carga CSV */}
       <div className="bg-canvas rounded-card p-3.5 mb-4">
         <div className="text-[13px] font-bold text-ink mb-1">Cargar desde CSV</div>
         <p className="text-[11px] text-muted mb-2">Columnas: código, descripción, unidad, precio. Detecta el separador ( , o ; ) automáticamente.</p>
-        <input ref={fileRef} type="file" accept=".csv" onChange={onFile} className="text-[12px]" />
+        <div className="flex items-center gap-3 flex-wrap">
+          <input ref={fileRef} type="file" accept=".csv" onChange={onFile} className="text-[12px]" />
+          <button onClick={descargarPlantilla} className="text-[12px] text-brand font-semibold underline">
+            Descargar plantilla CSV
+          </button>
+        </div>
         {preview && (
           <div className="mt-3">
             <p className="text-[12px] text-ink mb-2 font-semibold">{preview.length} productos detectados</p>

@@ -47,12 +47,20 @@ function BadgeCotiz({ estado }: { estado: string }) {
 }
 
 export default function CotizacionesPage() {
-  const { data: itemsRaw = [], isLoading, mutate } = useSWR<Cotizacion[]>('/api/cotizaciones', fetcher)
+  const [filtro, setFiltro]     = useState('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [limite, setLimite]     = useState(60)
+  const buscando = busqueda.trim().length >= 1
+  const { data: itemsRaw = [], isLoading, mutate } = useSWR<Cotizacion[]>(
+    buscando
+      ? `/api/cotizaciones?buscar=${encodeURIComponent(busqueda.trim())}`
+      : `/api/cotizaciones?limit=${limite}&estado=${filtro}`,
+    fetcher)
   const items = Array.isArray(itemsRaw) ? itemsRaw : []
+  const { data: resumen, mutate: mutResumen } = useSWR<any>('/api/cotizaciones?resumen=1', fetcher)
   const { data: clientes = [] } = useSWR<Cliente[]>('/api/clientes', fetcher)
   const [modal, setModal]       = useState<'nuevo' | 'editar' | 'ver' | null>(null)
   const [form, setForm]         = useState<any>(EMPTY_COTIZACION)
-  const [filtro, setFiltro]     = useState('todos')
   const [saving, setSaving]     = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
@@ -148,16 +156,12 @@ export default function CotizacionesPage() {
     return { neto: Math.round(neto), iva, total: Math.round(neto) + iva }
   }, [form.partidas])
 
-  const metricas = useMemo(() => {
-    const arr = Array.isArray(items) ? items : []
-    const calc = (c: Cotizacion) => (c.partidas ?? []).reduce((s, p) => s + p.cantidad * p.precio_unitario, 0)
-    return {
-      total:       arr.length,
-      aprobadas:   arr.filter(c => c.estado === 'aprobada').length,
-      convertidas: arr.filter(c => c.estado === 'convertida').length,
-      monto:       arr.filter(c => c.estado !== 'rechazada').reduce((s, c) => s + calc(c), 0),
-    }
-  }, [items])
+  const metricas = {
+    total:       resumen?.total_count ?? 0,
+    aprobadas:   resumen?.aprobadas   ?? 0,
+    convertidas: resumen?.convertidas ?? 0,
+    monto:       resumen?.monto       ?? 0,
+  }
 
   const save = async () => {
     if (!form.cliente_id && !form.cliente) {
@@ -175,18 +179,17 @@ export default function CotizacionesPage() {
       alert('Error: ' + error)
       setSaving(false); return
     }
-    await mutate(); setSaving(false); setModal(null)
+    await mutate(); mutResumen(); setSaving(false); setModal(null)
   }
 
   const del = async (id: string) => {
     if (!confirm('¿Eliminar cotización?')) return
     await fetch('/api/cotizaciones', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-    await mutate()
+    await mutate(); mutResumen()
   }
 
-  const filtered = !Array.isArray(items)
-    ? []
-    : filtro === 'todos' ? items : items.filter(i => i.estado === filtro)
+  // El servidor ya filtra por estado (y búsqueda); acá solo mostramos lo que llegó
+  const filtered = Array.isArray(items) ? items : []
 
   const calcTotal = (c: Cotizacion) => {
     const neto = (c.partidas ?? []).reduce((s, p) => s + p.cantidad * p.precio_unitario, 0)
@@ -237,11 +240,19 @@ export default function CotizacionesPage() {
         ))}
       </div>
 
+      {/* Buscador */}
+      <div className="mb-4">
+        <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
+          placeholder="Buscar por N°, cliente o proyecto…"
+          className="input-base !mb-0 w-full max-w-sm" />
+        {buscando && <p className="text-[11px] text-muted mt-1">Buscando en todas las cotizaciones (el filtro por estado se ignora).</p>}
+      </div>
+
       <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
         {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : filtered.length === 0
-          ? <p className="text-muted text-center p-10">Sin cotizaciones en este filtro</p>
+          ? <p className="text-muted text-center p-10">{buscando ? 'Sin resultados para la búsqueda.' : 'Sin cotizaciones en este filtro'}</p>
           : (
             <Table>
               <thead><tr>
@@ -283,6 +294,14 @@ export default function CotizacionesPage() {
               </tbody>
             </Table>
           )}
+        {!buscando && !isLoading && filtered.length >= limite && (
+          <div className="text-center mt-4">
+            <button onClick={() => setLimite(l => l + 60)}
+              className="px-4 py-2 rounded-lg border border-line text-brand text-[13px] font-semibold hover:bg-canvas">
+              Cargar más
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ══════ MODAL ══════ */}

@@ -57,6 +57,7 @@ export default function ProyectosPage() {
       utilidad_pct: Number((form as any).utilidad_pct) || 0,
       gg_pct: Number((form as any).gg_pct) || 0,
       anticipo_pct: Number((form as any).anticipo_pct) || 0,
+      anticipo: Number((form as any).anticipo) || 0,
       retencion_pct: Number((form as any).retencion_pct) || 0,
     }) })
     await mutate(); setSaving(false); setModal(null)
@@ -228,6 +229,7 @@ export default function ProyectosPage() {
             <FormInput label="Utilidad %"        value={(form as any).utilidad_pct ?? 0}  onChange={v => upd('utilidad_pct' as any, v)}  type="number" />
             <FormInput label="Gastos Generales %" value={(form as any).gg_pct ?? 0}        onChange={v => upd('gg_pct' as any, v)}        type="number" />
             <FormInput label="Anticipo carátula %" value={(form as any).anticipo_pct ?? 0} onChange={v => upd('anticipo_pct' as any, v)}  type="number" />
+            <FormInput label="Anticipo recibido ($)" value={(form as any).anticipo ?? 0} onChange={v => upd('anticipo' as any, v)} type="number" />
             <FormInput label="Retención %"        value={(form as any).retencion_pct ?? 0} onChange={v => upd('retencion_pct' as any, v)} type="number" />
           </div>
           <div className="flex gap-2 justify-end mt-3">
@@ -264,7 +266,7 @@ export default function ProyectosPage() {
             </div>
 
             {tab === 'obra'        && <PartidasPanel proyectoId={gestion.id} markupGlobal={(gestion as any).markup_global ?? 20} onAvanceChange={refresh} />}
-            {tab === 'presupuesto' && <PresupuestoPanel proyectoId={gestion.id} valorContrato={gestion.valor} proyectoNombre={gestion.nombre} proyectoCliente={gestion.cliente} proyectoDireccion={(gestion as any).direccion} />}
+            {tab === 'presupuesto' && <PresupuestoPanel proyectoId={gestion.id} valorContrato={gestion.valor} anticipoRecibido={(gestion as any).anticipo ?? 0} proyectoNombre={gestion.nombre} proyectoCliente={gestion.cliente} proyectoDireccion={(gestion as any).direccion} />}
             {tab === 'mano_obra'   && <ManoObraPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
             {tab === 'informe'     && <InformePanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
             {tab === 'docs'        && <DocumentosPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}

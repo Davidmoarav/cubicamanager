@@ -13,6 +13,7 @@ import { ESTADO_EP, type EstadoPago } from '@/types/estado-pago'
 import DescargarEPBtn from '@/components/DescargarEPBtn'
 
 interface Props {
+  anticipoRecibido?: number
   proyectoId: string
   valorContrato: number
   proyectoNombre?: string
@@ -22,7 +23,7 @@ interface Props {
 
 const IVA = 0.19
 
-export default function PresupuestoPanel({ proyectoId, valorContrato, proyectoNombre = '', proyectoCliente = '', proyectoDireccion = '' }: Props) {
+export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRecibido = 0, proyectoNombre = '', proyectoCliente = '', proyectoDireccion = '' }: Props) {
   const { soloLectura } = usePermisos('obra')
   const [eps, setEps]         = useState<EstadoPago[]>([])
   const [loading, setLoading] = useState(true)
@@ -200,11 +201,14 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, proyectoNo
     const antAmortizado = epsValidos.reduce((s, e) => s + (e.anticipo_desc || 0), 0)
     const retDevuelta = devoluciones.filter(d => d.tipo === 'retencion').reduce((s, d) => s + (d.monto || 0), 0)
     const antDevuelto = devoluciones.filter(d => d.tipo === 'anticipo').reduce((s, d) => s + (d.monto || 0), 0)
+    // Anticipo: te lo PAGAN al inicio (deuda tuya) y se amortiza en cada EP.
+    // Saldo = lo que aún queda por amortizar/devolver.
+    const antSaldo = anticipoRecibido - antAmortizado - antDevuelto
     return {
       retDescontada, retDevuelta, retSaldo: retDescontada - retDevuelta,
-      antAmortizado, antDevuelto, antSaldo: antAmortizado - antDevuelto,
+      anticipoRecibido, antAmortizado, antDevuelto, antSaldo,
     }
-  }, [eps, devoluciones])
+  }, [eps, devoluciones, anticipoRecibido])
 
   const abrirDev = (tipo: 'retencion' | 'anticipo') => {
     setDevForm({ tipo, monto: 0, fecha: new Date().toISOString().split('T')[0], glosa: '' })
@@ -523,9 +527,13 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, proyectoNo
                 <button onClick={() => abrirDev('anticipo')} className="text-[11px] font-bold px-2.5 py-1 bg-accent-bg text-accent rounded-md cursor-pointer border-none">+ Devolver</button>
               </div>
               <div className="flex flex-col gap-1.5 text-[12px]">
-                <div className="flex justify-between"><span className="text-muted">Amortizado acumulado</span><span className="font-bold text-ink">{fmt(control.antAmortizado)}</span></div>
+                <div className="flex justify-between"><span className="text-muted">Anticipo recibido</span><span className="font-bold text-ink">{fmt(control.anticipoRecibido)}</span></div>
+                <div className="flex justify-between"><span className="text-muted">Amortizado en EEPP</span><span className="font-bold text-success">− {fmt(control.antAmortizado)}</span></div>
                 <div className="flex justify-between"><span className="text-muted">Devuelto adicional</span><span className="font-bold text-success">− {fmt(control.antDevuelto)}</span></div>
-                <div className="flex justify-between border-t border-line pt-1.5 mt-0.5"><span className="font-bold text-ink">Saldo</span><span className="font-extrabold text-brand">{fmt(control.antSaldo)}</span></div>
+                <div className="flex justify-between border-t border-line pt-1.5 mt-0.5"><span className="font-bold text-ink">Saldo por amortizar</span><span className={`font-extrabold ${control.antSaldo > 0 ? 'text-brand' : 'text-success'}`}>{fmt(control.antSaldo)}</span></div>
+                {control.anticipoRecibido === 0 && control.antAmortizado > 0 && (
+                  <div className="text-[10px] text-[#b0641a] mt-1">⚠ Registra el anticipo recibido en los datos del proyecto para ver el saldo real.</div>
+                )}
               </div>
             </div>
           </div>

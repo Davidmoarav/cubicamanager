@@ -68,17 +68,32 @@ async function sugerirEP(supabase: any, proyectoId: string, userId: string) {
   const padres = todas.filter((p: any) => !p.parent_id)
   const hijos  = todas.filter((p: any) => p.parent_id)
 
-  // 2. EPs anteriores para saber cuánto ya se cobró de cada partida
-  const { data: epsPrevios } = await supabase
-    .from('estado_pago_detalle')
-    .select('partida_id, avance_actual, estado_pago_id')
+  // 2. EPs anteriores DE ESTE PROYECTO para saber cuánto ya se cobró de cada partida.
+  //    Solo cuentan los EP realmente presentados/aprobados/pagados: un borrador
+  //    no debe bloquear el cobro de ese avance.
+  const { data: epsProyecto } = await supabase
+    .from('estados_pago')
+    .select('id, estado')
     .eq('user_id', userId)
+    .eq('proyecto_id', proyectoId)
 
-  // avance ya cobrado por partida (el máximo avance_actual registrado)
+  const idsComprometidos = (epsProyecto ?? [])
+    .filter((e: any) => e.estado !== 'borrador')
+    .map((e: any) => e.id)
+
   const yaCobrado: Record<string, number> = {}
-  for (const d of (epsPrevios ?? [])) {
-    if (!yaCobrado[d.partida_id] || d.avance_actual > yaCobrado[d.partida_id]) {
-      yaCobrado[d.partida_id] = d.avance_actual
+  if (idsComprometidos.length > 0) {
+    const { data: epsPrevios } = await supabase
+      .from('estado_pago_detalle')
+      .select('partida_id, avance_actual')
+      .eq('user_id', userId)
+      .in('estado_pago_id', idsComprometidos)
+
+    // avance ya cobrado por partida (el máximo avance_actual registrado)
+    for (const d of (epsPrevios ?? [])) {
+      if (!yaCobrado[d.partida_id] || d.avance_actual > yaCobrado[d.partida_id]) {
+        yaCobrado[d.partida_id] = d.avance_actual
+      }
     }
   }
 

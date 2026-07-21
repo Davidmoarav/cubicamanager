@@ -9,6 +9,7 @@ import FilaPartida from '@/components/FilaPartida'
 import ImportarExcelPartidas from '@/components/ImportarExcelPartidas'
 import ImportarPrograma from '@/components/ImportarPrograma'
 import ResumenDistribucion from '@/components/ResumenDistribucion'
+import MatrizDistribucion from '@/components/MatrizDistribucion'
 import { fmt } from '@/lib/format'
 import { UNIDADES } from '@/types/cotizaciones'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
@@ -33,7 +34,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   const [allItems, setAllItems] = useState<PartidaProyecto[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const [vista, setVista] = useState<'arbol' | 'resumen'>('arbol')
+  const [vista, setVista] = useState<'arbol' | 'resumen' | 'matriz'>('arbol')
   const [modal, setModal] = useState<{ type: 'padre' | 'hijo' | 'editar'; parentId?: string } | null>(null)
   const [form, setForm] = useState<any>({})
   const [saving, setSaving] = useState(false)
@@ -335,6 +336,12 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
             className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'resumen' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
             📊 Resumen del proyecto
           </button>
+          {!soloLectura && (
+            <button onClick={() => setVista('matriz')}
+              className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'matriz' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
+              ✏️ Editar distribución
+            </button>
+          )}
         </div>
       )}
 
@@ -346,6 +353,9 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
           </div>
         : vista === 'resumen'
         ? <ResumenDistribucion raices={padres} />
+        : vista === 'matriz'
+        ? <MatrizDistribucion proyectoId={proyectoId} raices={padres} markupGlobal={markupGlobal}
+            onSaved={() => { load(); onAvanceChange?.() }} />
         : (
           <div className="flex flex-col">
             {padres.map((raiz, i) => (

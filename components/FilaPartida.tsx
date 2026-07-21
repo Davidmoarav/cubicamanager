@@ -54,8 +54,10 @@ export default function FilaPartida(props: Props) {
 
   const sangria = (nivel - 1) * 16
 
-  // Etiqueta de qué contiene cada grupo, según el nivel
-  const etiquetaHijos = nivel === 1 ? 'subproyecto' : nivel === 2 ? 'etapa' : 'partida'
+  // Etiqueta de qué contiene cada grupo: si sus hijos son a su vez grupos,
+  // son "subproyectos"/"etapas"; si son hojas, son "partidas".
+  const hijosSonGrupos = hijos.some((h: any) => (h.children?.length || 0) > 0 || h.es_grupo)
+  const etiquetaHijos = hijosSonGrupos ? (nivel === 1 ? 'subproyecto' : 'etapa') : 'partida'
 
   return (
     <div className={`rounded-lg overflow-hidden ${nivel === 1 ? 'mb-2' : 'mb-1'}`}>

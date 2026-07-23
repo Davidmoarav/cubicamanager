@@ -10,19 +10,10 @@ import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/render
 import type { EstadoPago, EstadoPagoDetalle } from '@/types/estado-pago'
 import type { EmpresaConfig } from '@/types/empresa'
 
-const NAVY = '#0F2B53'
-const GOLD = '#F5B800'
-const INK  = '#1a2535'
-const MUTE = '#6b7a8d'
-const LINE = '#d1d9e6'
-
-const fmtCL = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
-const pct = (n: number) => (Number(n) || 0).toLocaleString('es-CL', { maximumFractionDigits: 2 }) + '%'
-const fmtFecha = (iso?: string) => {
-  if (!iso) return '—'
-  try { return new Date(iso + 'T00:00:00').toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' }) }
-  catch { return iso }
-}
+import {
+  PDF_NAVY as NAVY, PDF_GOLD as GOLD, PDF_INK as INK, PDF_MUTE as MUTE, PDF_LINE as LINE,
+  fmtCL, pctCL as pct, fechaCorta as fmtFecha,
+} from './pdf-comunes'
 
 interface Props {
   ep: EstadoPago

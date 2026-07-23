@@ -155,4 +155,22 @@ Funcionalidad general coherente: cotización → conversión a proyecto → part
 
 **Nota (observación nueva):** `facturas.factura_ref` es `uuid` en `sql/10` pero el importador SII le escribe folios de texto — si en tu BD real la columna es `text` (drift), no pasa nada; si es `uuid`, esas filas fallarían. Verificar el tipo real de la columna.
 
-Fase 4 pendiente: API UF/UTM (mindicador.cl), tests de fórmulas, reemplazo de `xlsx`, componente PDF base.
+## 11. ✅ Fase 4 — APLICADA (2026-07-23)
+
+- **UF/UTM automáticas:** nueva ruta `/api/indicadores` (mindicador.cl, cache 12 h) + botón "↻ Traer UF/UTM del día" en Remuneraciones > Parámetros. Los valores siguen siendo editables a mano.
+- **Tests de fórmulas (`tests/formulas.test.ts`, `npm test`):** 14 tests — impuesto único (exención, continuidad de los 8 tramos, tramos 2 y máximo), liquidaciones (gratificación topada, factor de horas extra por jornada, AFC solo indefinido, tope AFC propio vs tope AFP, Isapre max(plan, 7%), base tributable del impuesto) e IVA (débito−crédito, arrastre de remanente multi-mes, notas de crédito, PPM con IVA en cero). **14/14 pasando.**
+- **IVA extraído a `lib/iva.ts`** como función pura `calcularResumenIVA()` — la ruta quedó de 36 líneas y la lógica es testeable.
+- **`xlsx` reemplazado:** `package.json` ahora apunta al build oficial de SheetJS 0.20.3 (corrige las 4 vulnerabilidades HIGH; API idéntica, cero cambios de código). ⚠️ Requiere `npm install` en tu máquina (el CDN de SheetJS estaba bloqueado en este entorno).
+- **PDFs unificados:** `components/pdf-comunes.ts` centraliza paleta (navy/dorado), `fmtCL`, `pctCL`, fechas corta/larga e `IVA_PCT`; las 4 plantillas importan de ahí (se eliminaron 4 copias de los helpers).
+
+**Verificación final:** `tsc` = 0 errores · `next build` exit 0 · `npm test` 14/14.
+
+---
+
+## Checklist de cierre (pasos manuales del usuario)
+
+1. ☐ Supabase > SQL Editor: ejecutar `sql/29_seguridad_multiempresa.sql` y luego `sql/30_parametros_rem_fase2.sql` (solo estos dos; NO re-ejecutar los antiguos).
+2. ☐ Supabase > Authentication > Providers > Email: "Confirm email" ACTIVADO.
+3. ☐ En tu máquina: `npm install` (trae zod, vitest y el xlsx parchado) y `npm test`.
+4. ☐ Verificar el tipo real de `facturas.factura_ref` en la BD (ver nota de la sección 10).
+5. ☐ Probar con un usuario invitado: dashboard con datos de la empresa, documentos compartidos, 403 en `/api/empleados` para jefe de obra.

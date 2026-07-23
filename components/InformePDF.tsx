@@ -8,13 +8,9 @@
 import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/renderer'
 import type { EmpresaConfig } from '@/types/empresa'
 
-const NAVY = '#0F2B53'
-const GOLD = '#F5B800'
-const INK  = '#1a2535'
-const MUTE = '#6b7a8d'
-const LINE = '#d1d9e6'
+import { PDF_NAVY as NAVY, PDF_GOLD as GOLD, PDF_INK as INK, PDF_MUTE as MUTE, PDF_LINE as LINE, fmtCL } from './pdf-comunes'
 
-const fmtCL = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
+// Formato propio del informe: "15 de marzo de 2026" (default hoy)
 const fmtFecha = (iso?: string) => {
   const d = iso ? new Date(iso) : new Date()
   return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })

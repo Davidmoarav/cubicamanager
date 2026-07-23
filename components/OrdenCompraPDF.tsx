@@ -8,17 +8,7 @@ import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/render
 import type { EmpresaConfig } from '@/types/empresa'
 import type { Proveedor } from '@/types'
 
-const fmtCL = (n: number) => '$' + Number(n || 0).toLocaleString('es-CL')
-
-const fmtFecha = (iso?: string) => {
-  if (!iso) return '—'
-  try {
-    const d = new Date(iso + 'T00:00:00')
-    return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  } catch { return iso }
-}
-
-const IVA = 0.19
+import { fmtCL, fechaLarga as fmtFecha, IVA_PCT as IVA } from './pdf-comunes'
 
 const createStyles = (color: string) => StyleSheet.create({
   page: { padding: 40, fontFamily: 'Helvetica', fontSize: 10, color: '#1a2535' },

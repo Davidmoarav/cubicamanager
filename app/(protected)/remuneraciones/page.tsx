@@ -249,6 +249,18 @@ export default function RemuneracionesPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <FormInput label="Valor UF ($)" value={params.uf_valor} onChange={v => updParam('uf_valor', v)} type="number" />
               <FormInput label="Valor UTM ($)" value={params.utm_valor} onChange={v => updParam('utm_valor', v)} type="number" />
+              <div className="flex items-end">
+                <Btn onClick={async () => {
+                  setMsg(null)
+                  const res = await fetch('/api/indicadores')
+                  const j = await res.json()
+                  if (!res.ok) { setMsg(j.error || 'No se pudo obtener UF/UTM'); return }
+                  setParams(p => p ? { ...p, uf_valor: j.uf, utm_valor: j.utm } : p)
+                  setMsg(`UF $${j.uf.toLocaleString('es-CL')} y UTM $${j.utm.toLocaleString('es-CL')} traídas de ${j.fuente}. Recuerda Guardar.`)
+                }}>
+                  ↻ Traer UF/UTM del día
+                </Btn>
+              </div>
               <FormInput label="Tope imponible (UF)" value={params.tope_imponible_uf} onChange={v => updParam('tope_imponible_uf', v)} type="number" />
               <FormInput label="Tope gratificación mensual ($)" value={params.gratificacion_tope} onChange={v => updParam('gratificacion_tope', v)} type="number" />
             </div>

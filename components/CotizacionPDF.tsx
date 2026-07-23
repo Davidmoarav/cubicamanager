@@ -9,18 +9,8 @@ import type { Cotizacion, PartidaCotizacion } from '@/types/cotizaciones'
 import type { Cliente } from '@/types/cliente'
 import type { EmpresaConfig } from '@/types/empresa'
 
-// ── HELPERS ─────────────────────────────────────────────
-const fmtCL = (n: number) => '$' + Number(n).toLocaleString('es-CL')
-
-const fmtFecha = (iso?: string) => {
-  if (!iso) return '—'
-  try {
-    const d = new Date(iso + 'T00:00:00')
-    return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  } catch { return iso }
-}
-
-const IVA = 0.19
+// ── HELPERS (compartidos por todas las plantillas) ──────
+import { fmtCL, fechaLarga as fmtFecha, IVA_PCT as IVA } from './pdf-comunes'
 
 // ── ESTILOS PDF ─────────────────────────────────────────
 const createStyles = (color: string) => StyleSheet.create({

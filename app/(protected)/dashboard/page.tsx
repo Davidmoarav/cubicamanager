@@ -15,17 +15,18 @@ export default async function DashboardPage() {
   const [{ data: proyectos }, { data: empleados }, { data: facturas }] = await Promise.all([
     supabase.from('proyectos').select('id, nombre, cliente, avance, valor, estado, created_at').eq('user_id', ownerId).order('created_at', { ascending: false }),
     supabase.from('empleados').select('id, tipo').eq('user_id', ownerId),
-    supabase.from('facturas').select('id, numero, cliente, tipo, estado, monto, created_at').eq('user_id', ownerId).order('created_at', { ascending: false }),
+    supabase.from('facturas').select('id, numero, cliente, tipo, doc_tipo, estado, monto, created_at').eq('user_id', ownerId).order('created_at', { ascending: false }),
   ])
 
   const p = proyectos ?? []
   const e = empleados ?? []
   const f = facturas  ?? []
 
-  // Ingresos = solo facturas de VENTA (las de compra no son ingresos)
+  // Ingresos = solo facturas de VENTA. Con signo: notas de crédito restan.
+  const efecto    = (x:any) => ((x.doc_tipo === 'nota_credito' ? -1 : 1) * (x.monto || 0))
   const ventas    = f.filter((x:any) => (x.tipo || 'venta') !== 'compra')
-  const cobrado   = ventas.filter((x:any) => x.estado === 'pagada').reduce((s:number, x:any) => s + (x.monto || 0), 0)
-  const pendiente = ventas.filter((x:any) => x.estado !== 'pagada').reduce((s:number, x:any) => s + (x.monto || 0), 0)
+  const cobrado   = ventas.filter((x:any) => x.estado === 'pagada').reduce((s:number, x:any) => s + efecto(x), 0)
+  const pendiente = ventas.filter((x:any) => x.estado !== 'pagada').reduce((s:number, x:any) => s + efecto(x), 0)
   const activos   = p.filter((x:any) => x.estado === 'activo').length
 
   const estadosP = [

@@ -125,11 +125,13 @@ export default function FacturacionPage() {
     }
   })
 
+  // Efecto con signo: las notas de CRÉDITO restan (rebajan la factura), las de débito suman
+  const efecto       = (f: any) => ((f.doc_tipo === 'nota_credito' ? -1 : 1) * (f.monto || 0))
   const ventas       = items.filter(f => (f.tipo || 'venta') === 'venta')
   const compras      = items.filter(f => f.tipo === 'compra')
-  const cobrado      = ventas.filter(f => f.estado === 'pagada').reduce((s, f) => s + (f.monto || 0), 0)
-  const pendiente    = ventas.filter(f => f.estado === 'pendiente').reduce((s, f) => s + (f.monto || 0), 0)
-  const totalCompras = compras.reduce((s, f) => s + (f.monto || 0), 0)
+  const cobrado      = ventas.filter(f => f.estado === 'pagada').reduce((s, f) => s + efecto(f), 0)
+  const pendiente    = ventas.filter(f => f.estado === 'pendiente').reduce((s, f) => s + efecto(f), 0)
+  const totalCompras = compras.reduce((s, f) => s + efecto(f), 0)
 
   // Resultados del buscador server-side (ya vienen filtrados por doc_tipo=factura + término)
   const facturasParaNota = facturasBuscadas
@@ -235,9 +237,9 @@ export default function FacturacionPage() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-center ${f.tipo === 'compra' ? 'bg-accent-bg text-accent' : 'bg-success-bg text-success'}`}>
                         {f.tipo === 'compra' ? 'COMPRA' : 'VENTA'}
                       </span>
-                      {(f.doc_tipo === 'nota_credito' || f.doc_tipo === 'nota_debito') && (
-                        <span className={`text-[9px] font-bold px-1.5 py-px rounded text-center ${f.doc_tipo === 'nota_credito' ? 'bg-danger-bg text-danger' : 'bg-warning-bg text-warning'}`}>
-                          {f.doc_tipo === 'nota_credito' ? '➖ N.CRÉDITO' : '➕ N.DÉBITO'}
+                      {(f.doc_tipo === 'nota_credito' || f.doc_tipo === 'nota_debito' || f.doc_tipo === 'boleta') && (
+                        <span className={`text-[9px] font-bold px-1.5 py-px rounded text-center ${f.doc_tipo === 'nota_credito' ? 'bg-danger-bg text-danger' : f.doc_tipo === 'nota_debito' ? 'bg-warning-bg text-warning' : 'bg-canvas text-muted'}`}>
+                          {f.doc_tipo === 'nota_credito' ? '➖ N.CRÉDITO' : f.doc_tipo === 'nota_debito' ? '➕ N.DÉBITO' : '🧾 BOLETA'}
                         </span>
                       )}
                     </div>
@@ -410,10 +412,10 @@ export default function FacturacionPage() {
 
             <FormInput label="Monto NETO (CLP)" value={form.neto || ''} onChange={updNeto} type="number" />
             <div>
-              <label className="label-base">IVA (19%) — automático</label>
-              <div className="px-[11px] py-2 bg-canvas border border-line rounded-[7px] text-[13px] font-semibold">
-                {fmt(form.iva || 0)}
-              </div>
+              {/* Editable: documentos exentos o parcialmente exentos llevan IVA ≠ 19% */}
+              <FormInput label="IVA (auto 19%, editable)" value={form.iva ?? ''} type="number"
+                onChange={v => { const iva = Number(v) || 0; setForm((f: any) => ({ ...f, iva, monto: (Number(f.neto) || 0) + iva })) }} />
+              <p className="text-[10px] text-muted -mt-2">Déjalo en 0 si el documento es exento</p>
             </div>
 
             <div className="col-span-2 px-3.5 py-2.5 bg-[#e8f1fb] rounded-lg flex justify-between items-center">

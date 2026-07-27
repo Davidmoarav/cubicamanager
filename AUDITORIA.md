@@ -167,9 +167,33 @@ Funcionalidad general coherente: cotización → conversión a proyecto → part
 
 ---
 
+## 12. ✅ Corrección importador SII + cálculos de facturación (2026-07-27)
+
+Reporte del usuario: "no hace bien los cálculos y a veces no se suben algunas facturas con carga masiva ni comprobantes electrónicos". Causas encontradas y corregidas:
+
+**Filas que no se subían:**
+- CSV se partía con `split(',')` simple → razones sociales con comas/comillas corrían las columnas y la fila se descartaba en silencio. Ahora: split que respeta comillas (`lib/sii.ts: splitCSVLine`).
+- Anti-duplicados por folio+período+tipo **sin RUT** → dos proveedores con el mismo folio: el segundo se botaba como "duplicado". Ahora: clave con RUT (`sql/33` agrega `rut_contraparte`; la ruta autodetecta si la columna existe y avisa si falta).
+- Fechas `AAAA-MM-DD` generaban fechas corruptas que hacían fallar el lote completo de 100 filas. Ahora: `parseFechaSII` valida y el lote que falla se reintenta fila a fila reportando cuáles fallaron (ya no se pierde el resto).
+- Notas de crédito/débito **bloqueaban** toda la importación si su factura no estaba en el sistema. Ahora la asociación es opcional (botón "Guardar de todas formas").
+- Encoding: el SII exporta Latin-1 y se leía como UTF-8. Ahora se detecta y decodifica (`decodificarCSV`).
+
+**Comprobantes electrónicos:** el mapa de tipos cubría 8 códigos. Ahora cubre 14: boletas 35/38/39/41, comprobante de pago electrónico 48 (→ `doc_tipo: boleta`), liquidación factura 43, y notas de exportación 111/112. La página de facturación muestra la etiqueta 🧾 BOLETA.
+
+**Cálculos:**
+- Los totales del mes (Cobrado / Por cobrar / Compras) en facturación, el endpoint `resumen` y el dashboard **sumaban las notas de crédito en vez de restarlas**. Ahora suman con signo. (El IVA del período en Finanzas ya estaba correcto.)
+- El IVA manual estaba forzado a 19% del neto: ahora es editable (documentos exentos en 0).
+- El importador reporta: insertadas, duplicadas, filas sin montos omitidas y fallidas con folio.
+
+**Tests nuevos (`tests/sii.test.ts`): 19** — CSV con comillas, fechas (incl. el caso que corrompía lotes), montos, los 14 códigos SII, claves de duplicado con/sin RUT + 1 test de boletas en IVA. **Total suite: 34/34** · `tsc` 0 errores · build OK.
+
+**Pendiente manual:** ejecutar `sql/33_factura_rut.sql` (sin él, la importación funciona pero deduplica sin RUT, como antes).
+
+---
+
 ## Checklist de cierre (pasos manuales del usuario)
 
-1. ☐ Supabase > SQL Editor: ejecutar `sql/29_seguridad_multiempresa.sql` y luego `sql/30_parametros_rem_fase2.sql` (solo estos dos; NO re-ejecutar los antiguos).
+1. ☐ Supabase > SQL Editor: ejecutar `sql/29_seguridad_multiempresa.sql`, `sql/30_parametros_rem_fase2.sql` y `sql/33_factura_rut.sql` (solo estos; NO re-ejecutar los antiguos). Opcional: `sql/31` (detectar duplicados) y `sql/32` (limpiar y blindar).
 2. ☐ Supabase > Authentication > Providers > Email: "Confirm email" ACTIVADO.
 3. ☐ En tu máquina: `npm install` (trae zod, vitest y el xlsx parchado) y `npm test`.
 4. ☐ Verificar el tipo real de `facturas.factura_ref` en la BD (ver nota de la sección 10).

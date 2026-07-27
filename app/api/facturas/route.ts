@@ -22,14 +22,16 @@ export async function GET(req: Request) {
 
   // ── Resumen agregado, calculado en el servidor (no trae filas al cliente) ──
   if (resumen) {
-    let q = supabase.from('facturas').select('tipo, estado, monto').eq('user_id', ownerId)
+    let q = supabase.from('facturas').select('tipo, doc_tipo, estado, monto').eq('user_id', ownerId)
     if (periodo) q = q.eq('periodo', periodo)
     const { data, error } = await q
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     const rows = data ?? []
     const ventas  = rows.filter((r: any) => (r.tipo || 'venta') !== 'compra')
     const compras = rows.filter((r: any) => r.tipo === 'compra')
-    const sum = (arr: any[]) => arr.reduce((s, r) => s + (Number(r.monto) || 0), 0)
+    // Con signo: notas de crédito restan, notas de débito suman
+    const sum = (arr: any[]) => arr.reduce((s, r) =>
+      s + ((r.doc_tipo === 'nota_credito' ? -1 : 1) * (Number(r.monto) || 0)), 0)
     return NextResponse.json({
       ventas: {
         cobrado:   sum(ventas.filter((r: any) => r.estado === 'pagada')),

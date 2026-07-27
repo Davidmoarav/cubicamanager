@@ -8,12 +8,7 @@ import useSWR from 'swr'
 import { Btn, Modal } from '@/components/ui'
 import { fetcher } from '@/lib/fetcher'
 import { fmt } from '@/lib/format'
-
-// Mapeo de código de tipo de documento SII → nuestro doc_tipo
-const TIPO_DOC_SII: Record<string, string> = {
-  '33': 'factura', '34': 'factura', '56': 'nota_debito', '61': 'nota_credito',
-  '39': 'factura', '41': 'factura', '46': 'factura', '110': 'factura',
-}
+import { decodificarCSV, splitCSVLine, parseFechaSII, parseMontoSII, mapTipoDocSII } from '@/lib/sii'
 
 interface FilaSII {
   numero: string
@@ -79,23 +74,13 @@ export default function ImportadorSII({ onImported }: Props) {
   const [importing, setImporting] = useState(false)
   const [resultado, setResultado] = useState<any>(null)
   const [error, setError]     = useState('')
+  const [omitidas, setOmitidas] = useState(0)   // filas del CSV sin montos (no importables)
   // Cuando el archivo es SOLO notas (sin columna Tipo Doc), forzar el tipo
   const [docForzado, setDocForzado] = useState<'auto' | 'nota_credito' | 'nota_debito'>('auto')
   // Paso de asociación de notas a su factura
   const [asociar, setAsociar] = useState(false)
   const [refs, setRefs]       = useState<Record<number, string>>({})   // index -> id de factura (UUID)
   const [refLabels, setRefLabels] = useState<Record<number, string>>({})   // index -> folio (display)
-
-  // Parsea fecha SII (DD-MM-AA o DD-MM-AAAA) → YYYY-MM-DD
-  const parseFecha = (s: string): string | null => {
-    if (!s) return null
-    const limpio = s.trim().split(' ')[0]  // quitar hora si viene
-    const partes = limpio.split(/[-/]/)
-    if (partes.length !== 3) return null
-    let [d, m, a] = partes
-    if (a.length === 2) a = '20' + a
-    return `${a}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
-  }
 
   // Normaliza nombre de columna para buscar (sin tildes, minúsculas)
   const norm = (s: string) => s.toLowerCase()
@@ -112,13 +97,14 @@ export default function ImportadorSII({ onImported }: Props) {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const texto = e.target?.result as string
+        // Decodifica UTF-8 y, si viene corrupto (SII exporta Latin-1), reintenta en Windows-1252
+        const texto = decodificarCSV(e.target?.result as ArrayBuffer)
         const lineas = texto.split(/\r?\n/).filter(l => l.trim())
         if (lineas.length < 2) { setError('El archivo está vacío o no tiene datos'); return }
 
         // Detectar separador (; o ,)
         const sep = lineas[0].includes(';') ? ';' : ','
-        const header = lineas[0].split(sep).map(h => norm(h))
+        const header = splitCSVLine(lineas[0], sep).map(h => norm(h))
 
         // Buscar índices de columnas por nombre (flexible)
         const idx = (nombres: string[]) => {
@@ -146,14 +132,17 @@ export default function ImportadorSII({ onImported }: Props) {
         }
 
         const parsed: FilaSII[] = []
+        let sinMontos = 0
         for (let i = 1; i < lineas.length; i++) {
-          const c = lineas[i].split(sep)
-          const neto = Number((c[iNeto] || '0').replace(/[^\d-]/g, '')) || 0
-          const exento = iExento >= 0 ? (Number((c[iExento] || '0').replace(/[^\d-]/g, '')) || 0) : 0
-          const total = Number((c[iTotal] || '0').replace(/[^\d-]/g, '')) || 0
-          if (neto === 0 && total === 0 && exento === 0) continue
+          // Split que respeta comillas: "EMPRESA X, LTDA" ya no corre las columnas
+          const c = splitCSVLine(lineas[i], sep)
+          const neto = parseMontoSII(c[iNeto])
+          const exento = iExento >= 0 ? parseMontoSII(c[iExento]) : 0
+          const total = parseMontoSII(c[iTotal])
+          const iva = iIva >= 0 ? parseMontoSII(c[iIva]) : 0
+          if (neto === 0 && total === 0 && exento === 0 && iva === 0) { sinMontos++; continue }
 
-          const emision = iFecha >= 0 ? parseFecha(c[iFecha]) : null
+          const emision = iFecha >= 0 ? parseFechaSII(c[iFecha]) : null
           const codTipo = iTipoDoc >= 0 ? (c[iTipoDoc] || '').trim() : '33'
 
           parsed.push({
@@ -162,22 +151,23 @@ export default function ImportadorSII({ onImported }: Props) {
             rut: iRut >= 0 ? (c[iRut] || '').trim() : '',
             neto: neto + exento,   // el neto total incluye lo exento (sin IVA)
             exento,
-            iva: iIva >= 0 ? (Number((c[iIva] || '0').replace(/[^\d-]/g, '')) || 0) : 0,
+            iva,
             total,
             emision,
             periodo: emision ? emision.slice(0, 7) : null,
-            doc_tipo: TIPO_DOC_SII[codTipo] || 'factura',
+            doc_tipo: mapTipoDocSII(codTipo),
             ref_detectada: iRef >= 0 ? (c[iRef] || '').trim() : '',
           })
         }
 
+        setOmitidas(sinMontos)
         if (parsed.length === 0) { setError('No se encontraron facturas válidas en el archivo'); return }
         setFilas(parsed)
       } catch (err: any) {
         setError('Error al leer el archivo: ' + (err?.message || 'desconocido'))
       }
     }
-    reader.readAsText(file, 'UTF-8')
+    reader.readAsArrayBuffer(file)
   }
 
   const totales = filas.reduce((acc, f) => ({
@@ -186,7 +176,8 @@ export default function ImportadorSII({ onImported }: Props) {
     total: acc.total + f.total,
     nc: acc.nc + (f.doc_tipo === 'nota_credito' ? 1 : 0),
     nd: acc.nd + (f.doc_tipo === 'nota_debito' ? 1 : 0),
-  }), { neto: 0, iva: 0, total: 0, nc: 0, nd: 0 })
+    boletas: acc.boletas + (f.doc_tipo === 'boleta' ? 1 : 0),
+  }), { neto: 0, iva: 0, total: 0, nc: 0, nd: 0, boletas: 0 })
 
   const aplicarTipo = (f: FilaSII) => docForzado === 'auto' ? f : { ...f, doc_tipo: docForzado }
   const esNota = (dt: string) => dt === 'nota_credito' || dt === 'nota_debito'
@@ -233,13 +224,17 @@ export default function ImportadorSII({ onImported }: Props) {
   }
 
   // Paso 2: guardar (con la factura referenciada por cada nota).
-  const guardar = async () => {
+  // La asociación es OPCIONAL: si la factura original no está en el sistema
+  // (p. ej. es de un período anterior no importado), la nota se guarda igual
+  // — el IVA la considera de todas formas — y se puede asociar después.
+  const [avisadoSinAsociar, setAvisadoSinAsociar] = useState(false)
+  const guardar = async (forzar = false) => {
     setError('')
-    // Toda nota debe quedar asociada a una factura existente (factura_ref es un id real)
     const final = filas.map(aplicarTipo)
     const sinAsociar = final.some((f, i) => esNota(f.doc_tipo) && !refs[i])
-    if (sinAsociar) {
-      setError('Cada nota de crédito/débito debe asociarse a una factura. Busca y selecciona la factura de las que quedaron vacías (deben estar cargadas en el sistema).')
+    if (sinAsociar && !forzar && !avisadoSinAsociar) {
+      setAvisadoSinAsociar(true)
+      setError('Hay notas sin factura asociada. Puedes asociarlas ahora, o presionar "Guardar de todas formas": se importan igual (el IVA las considera) y las puedes asociar después.')
       return
     }
     setImporting(true)
@@ -259,7 +254,7 @@ export default function ImportadorSII({ onImported }: Props) {
     onImported?.()
   }
 
-  const reset = () => { setFilas([]); setNombreArchivo(''); setResultado(null); setError(''); setDocForzado('auto'); setAsociar(false); setRefs({}); setRefLabels({}) }
+  const reset = () => { setFilas([]); setNombreArchivo(''); setResultado(null); setError(''); setDocForzado('auto'); setAsociar(false); setRefs({}); setRefLabels({}); setOmitidas(0); setAvisadoSinAsociar(false) }
 
   return (
     <>
@@ -310,7 +305,10 @@ export default function ImportadorSII({ onImported }: Props) {
                 {error && <div className="bg-danger-bg border border-[#f5c6c2] text-danger px-3 py-2.5 rounded-lg text-[12px] mb-4">{error}</div>}
                 <div className="flex gap-2 justify-end">
                   <Btn onClick={() => setAsociar(false)}>Volver</Btn>
-                  <Btn variant="primary" onClick={guardar} disabled={importing}>{importing ? 'Guardando…' : 'Asociar y guardar'}</Btn>
+                  {avisadoSinAsociar && (
+                    <Btn onClick={() => guardar(true)} disabled={importing}>Guardar de todas formas</Btn>
+                  )}
+                  <Btn variant="primary" onClick={() => guardar()} disabled={importing}>{importing ? 'Guardando…' : 'Asociar y guardar'}</Btn>
                 </div>
               </>
             ) : (
@@ -357,10 +355,12 @@ export default function ImportadorSII({ onImported }: Props) {
                       <div><div className="text-[11px] text-muted">Neto</div><div className="text-base font-bold text-ink">{fmt(totales.neto)}</div></div>
                       <div><div className="text-[11px] text-muted">IVA {tipo === 'compra' ? 'crédito' : 'débito'}</div><div className={`text-base font-bold ${tipo === 'compra' ? 'text-success' : 'text-brand'}`}>{fmt(totales.iva)}</div></div>
                     </div>
-                    {(totales.nc > 0 || totales.nd > 0) && (
-                      <div className="flex gap-3 text-[11px] text-muted pt-2 border-t border-line">
+                    {(totales.nc > 0 || totales.nd > 0 || totales.boletas > 0 || omitidas > 0) && (
+                      <div className="flex flex-wrap gap-3 text-[11px] text-muted pt-2 border-t border-line">
+                        {totales.boletas > 0 && <span>🧾 {totales.boletas} boleta(s)/comprobante(s)</span>}
                         {totales.nc > 0 && <span>➖ {totales.nc} nota(s) de crédito</span>}
                         {totales.nd > 0 && <span>➕ {totales.nd} nota(s) de débito</span>}
+                        {omitidas > 0 && <span className="text-warning">⚠ {omitidas} fila(s) sin montos omitida(s)</span>}
                       </div>
                     )}
                   </div>
@@ -413,9 +413,21 @@ export default function ImportadorSII({ onImported }: Props) {
             <div className="text-center py-4">
               <div className="text-4xl mb-3">✅</div>
               <div className="text-base font-bold text-ink mb-2">Importación completada</div>
-              <div className="text-[13px] text-muted mb-1">{resultado.insertadas} factura(s) importada(s)</div>
+              <div className="text-[13px] text-muted mb-1">{resultado.insertadas} documento(s) importado(s)</div>
               {resultado.duplicadas > 0 && (
-                <div className="text-[12px] text-warning mb-4">{resultado.duplicadas} ya existían (omitidas)</div>
+                <div className="text-[12px] text-warning mb-1">{resultado.duplicadas} ya existían (omitidas)</div>
+              )}
+              {(resultado.omitidas ?? 0) > 0 && (
+                <div className="text-[12px] text-warning mb-1">{resultado.omitidas} fila(s) sin montos válidos</div>
+              )}
+              {(resultado.fallidas ?? 0) > 0 && (
+                <div className="text-[12px] text-danger mb-1">
+                  {resultado.fallidas} fila(s) fallaron al guardar
+                  {resultado.detalle_fallidas?.length > 0 && `: ${resultado.detalle_fallidas.map((x: any) => `N°${x.numero || '?'}`).join(', ')}`}
+                </div>
+              )}
+              {resultado.advertencia && (
+                <div className="text-[11px] text-warning mb-2">{resultado.advertencia}</div>
               )}
               <div className="flex gap-2 justify-center mt-4">
                 <Btn onClick={reset}>Importar otro archivo</Btn>

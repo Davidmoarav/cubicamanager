@@ -110,6 +110,7 @@ export const FacturaSchema = z.object({
   doc_tipo:    z.enum(['factura', 'nota_credito', 'nota_debito', 'boleta']).optional(),
   factura_ref: z.string().trim().max(100).nullish(),
   partida_id:  uuid.nullish(),
+  rut_contraparte: z.string().trim().max(20).nullish(),
   neto:        dinero.optional(),
   iva:         dinero.optional(),
   monto:       dinero.optional(),

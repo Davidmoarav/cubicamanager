@@ -146,6 +146,16 @@ describe('calcularResumenIVA', () => {
     expect(p.iva_a_pagar).toBe(123_500)
   })
 
+  it('las boletas (y comprobantes electrónicos) suman IVA débito como una venta', () => {
+    const r = calcularResumenIVA([
+      { periodo: '2026-04', tipo: 'venta', doc_tipo: 'boleta', iva: 19_000, neto: 100_000 },
+      { periodo: '2026-04', tipo: 'venta', doc_tipo: 'factura', iva: 38_000, neto: 200_000 },
+    ])
+    expect(r[0].iva_debito).toBe(57_000)
+    expect(r[0].neto_ventas).toBe(300_000)
+    expect(r[0].n_ventas).toBe(2)
+  })
+
   it('el PPM se paga aunque el IVA quede en cero por remanente', () => {
     const r = calcularResumenIVA([
       { periodo: '2026-01', tipo: 'compra', iva: 500_000, neto: 2_000_000 },

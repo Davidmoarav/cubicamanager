@@ -63,8 +63,10 @@ begin
   end;
 
   begin
+    -- Incluye rut_contraparte: dos proveedores pueden repetir folio (ver sql/36)
     create unique index if not exists uq_factura_clave_sii
-      on facturas(user_id, tipo, coalesce(doc_tipo,'factura'), numero, coalesce(periodo,''))
+      on facturas(user_id, tipo, coalesce(doc_tipo,'factura'), numero,
+                  coalesce(periodo,''), coalesce(rut_contraparte,''))
       where numero is not null and numero <> '';
     raise notice 'OK: candado facturas(clave SII) creado';
   exception when others then

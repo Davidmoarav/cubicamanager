@@ -422,8 +422,14 @@ export default function ImportadorSII({ onImported }: Props) {
               )}
               {(resultado.fallidas ?? 0) > 0 && (
                 <div className="text-[12px] text-danger mb-1">
-                  {resultado.fallidas} fila(s) fallaron al guardar
-                  {resultado.detalle_fallidas?.length > 0 && `: ${resultado.detalle_fallidas.map((x: any) => `N°${x.numero || '?'}`).join(', ')}`}
+                  <div className="font-semibold">{resultado.fallidas} fila(s) fallaron al guardar</div>
+                  {resultado.detalle_fallidas?.length > 0 && (
+                    <div className="mt-1.5 text-left bg-danger-bg border border-[#f5c6c2] rounded-lg p-2 max-w-[420px] mx-auto">
+                      <div className="text-[11px] text-danger mb-1">Motivo (primer error):</div>
+                      <div className="text-[11px] font-mono break-words">{resultado.detalle_fallidas[0]?.motivo || 'sin detalle'}</div>
+                      <div className="text-[10px] text-muted mt-1">Folios: {resultado.detalle_fallidas.map((x: any) => `N°${x.numero || '?'}`).join(', ')}</div>
+                    </div>
+                  )}
                 </div>
               )}
               {resultado.advertencia && (

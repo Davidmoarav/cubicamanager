@@ -27,11 +27,16 @@ export default function ResumenBoletas({ onSaved }: Props) {
   const guardar = async () => {
     if (montoNum <= 0) { setError('Ingresa un monto mayor a cero'); return }
     setSaving(true); setError('')
+    // Número único por registro: cada resumen que registras es una fila nueva,
+    // aunque repitas categoría/tipo/período. El sufijo (hora en base36) evita
+    // el choque con el índice de duplicados, permitiendo agregar cuantos quieras.
+    const sufijo = Date.now().toString(36).slice(-5).toUpperCase()
+    const numero = `RESUMEN-${docNombre.toUpperCase()}-${tipo.toUpperCase()}-${periodo}-${sufijo}`
     const payload = {
-      numero: `RESUMEN-${periodo}`,
-      cliente: `${docNombre} ${periodo}`,
+      numero,
+      cliente: `${docNombre}${tipo === 'exento' ? ' exentas' : ''} ${periodo}`,
       tipo: 'venta',
-      doc_tipo: 'factura',
+      doc_tipo: 'boleta',      // suma al IVA débito como venta; se muestra con la etiqueta 🧾
       neto,
       iva,
       monto: montoNum,
@@ -46,7 +51,12 @@ export default function ResumenBoletas({ onSaved }: Props) {
     setSaving(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      setError('No se pudo guardar: ' + (err.error || 'error'))
+      const msg = String(err.error || '')
+      if (msg.includes('duplicate') || msg.includes('uq_factura_clave_sii')) {
+        setError(`Ya registraste el resumen de ${docNombre.toLowerCase()} ${tipo === 'exento' ? 'exentas' : 'afectas'} de ${periodo}. Para cambiarlo, elimina el registro anterior en la lista de facturas y vuelve a registrarlo.`)
+      } else {
+        setError('No se pudo guardar: ' + (msg || 'error'))
+      }
       return
     }
     setMonto('')

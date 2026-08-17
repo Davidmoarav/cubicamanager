@@ -6,7 +6,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { EdicionIASchema, normalizar, type EdicionIA, type OpIA } from '@/lib/copiloto/schema'
+import { EdicionIASchema, normalizar, type EdicionIA } from '@/lib/copiloto/schema'
 import { editarDemo, type CatItem, type PartidaActual } from '@/lib/copiloto/demo'
 import { proveedorActivo, completarJSON, extraerJSON } from '@/lib/copiloto/ia'
 import { promptEdicion } from '@/lib/copiloto/prompt'
@@ -27,6 +27,11 @@ export async function POST(req: Request) {
   const body = BodySchema.safeParse(await req.json().catch(() => ({})))
   if (!body.success) return NextResponse.json({ error: 'Faltan datos de la instrucción.' }, { status: 400 })
   const { proyecto_id, instruccion } = body.data
+
+  // Evita insertar o modificar partidas en un proyecto ajeno o inexistente.
+  const { data: proyecto } = await supabase.from('proyectos').select('id')
+    .eq('id', proyecto_id).eq('user_id', ownerId).maybeSingle()
+  if (!proyecto) return NextResponse.json({ error: 'Proyecto no encontrado.' }, { status: 404 })
 
   // Partidas actuales + catálogo
   const [{ data: partRows }, { data: catRows }] = await Promise.all([
@@ -69,20 +74,17 @@ export async function POST(req: Request) {
 
   for (const op of edicion.ops) {
     if (op.accion === 'agregar') {
-      // Grupo destino: match por nombre, o crear "OTROS"
+      // Grupo destino: match por nombre, o crear el grupo solicitado por la IA.
       const raicesGrupo = partidas.filter(p => !p.parent_id && p.es_grupo)
       let padre = raicesGrupo.find(g => normalizar(g.descripcion).includes(normalizar(op.grupo)) ||
                                         normalizar(op.grupo).includes(normalizar(g.descripcion)))
       if (!padre) {
-        padre = raicesGrupo.find(g => normalizar(g.descripcion) === 'otros')
-        if (!padre) {
-          const { data: nuevo } = await supabase.from('partidas_proyecto').insert({
-            proyecto_id, parent_id: null, orden: ++maxOrden,
-            descripcion: 'OTROS', unidad: 'gl', cantidad: 0, precio_unitario: 0,
-            avance: 0, es_grupo: true, user_id: ownerId,
-          }).select('*').single()
-          if (nuevo) { padre = nuevo as PartidaActual; partidas.push(padre) }
-        }
+        const { data: nuevo } = await supabase.from('partidas_proyecto').insert({
+          proyecto_id, parent_id: null, orden: ++maxOrden,
+          descripcion: op.grupo.trim().toUpperCase(), unidad: 'gl', cantidad: 0, precio_unitario: 0,
+          avance: 0, es_grupo: true, user_id: ownerId,
+        }).select('*').single()
+        if (nuevo) { padre = nuevo as PartidaActual; partidas.push(padre) }
       }
       if (!padre) continue
       const { error } = await supabase.from('partidas_proyecto').insert({

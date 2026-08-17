@@ -46,7 +46,7 @@ Si falta alguno, córrelo desde `sql/03_empresa_config.sql` (logos) y
 
 ## 3. Variables de entorno
 
-### Desarrollo (`.env.local`) — ya configurado
+### Desarrollo (`.env.local`)
 ```
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
@@ -56,11 +56,13 @@ COPILOTO_PROVEEDOR=demo          # copiloto sin costo (plantillas + catálogo re
 ### Para IA real (opcional) **[TÚ]**
 Cuando tengas API key, cambia el proveedor y agrega la clave:
 ```
-COPILOTO_PROVEEDOR=anthropic      # o: openai
-ANTHROPIC_API_KEY=sk-ant-...      # (o OPENAI_API_KEY=sk-...)
-# COPILOTO_MODELO=claude-sonnet-4-5   # opcional, hay default
+COPILOTO_PROVEEDOR=openai         # o: gemini | anthropic
+OPENAI_API_KEY=sk-...
+# COPILOTO_MODELO=gpt-5-mini       # opcional, hay un default
 ```
-El copiloto valida la respuesta con Zod y, si la IA falla, cae solo a modo demo.
+El copiloto valida toda respuesta con Zod y, si la IA falla, cae solo a modo demo.
+No subas `.env.local`: usa `.env.example` como plantilla y configura las mismas
+variables en tu hosting.
 
 ### Producción **[TÚ]**
 En tu hosting (Vercel u otro), además de las de Supabase, define:

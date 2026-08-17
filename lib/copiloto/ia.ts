@@ -1,63 +1,92 @@
-// lib/copiloto/ia.ts
-// Abstracción del proveedor de IA. Sin SDKs: fetch directo a las APIs REST.
-// Config en .env.local:
-//   COPILOTO_PROVEEDOR=demo | anthropic | openai   (default: demo)
-//   ANTHROPIC_API_KEY=...   COPILOTO_MODELO=claude-sonnet-4-5 (opcional)
-//   OPENAI_API_KEY=...      COPILOTO_MODELO=gpt-4o-mini      (opcional)
+// Adaptador server-side de proveedores de IA para el Copiloto.
+// Las claves NUNCA se exponen al navegador: van solo en .env.local / hosting.
+// Configuración: ver .env.example.
 
-export type Proveedor = 'demo' | 'anthropic' | 'openai'
+export type Proveedor = 'demo' | 'gemini' | 'anthropic' | 'openai'
+
+const TIMEOUT_MS = 45_000
 
 export function proveedorActivo(): Proveedor {
   const p = (process.env.COPILOTO_PROVEEDOR || 'demo').toLowerCase()
+  if (p === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini'
   if (p === 'anthropic' && process.env.ANTHROPIC_API_KEY) return 'anthropic'
   if (p === 'openai' && process.env.OPENAI_API_KEY) return 'openai'
   return 'demo'
 }
 
-// Llama al LLM y devuelve el texto crudo de la respuesta.
+async function pedir(url: string, init: RequestInit, proveedor: string): Promise<any> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal })
+    if (!res.ok) throw new Error(`${proveedor} no respondió correctamente (${res.status})`)
+    return await res.json()
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new Error(`${proveedor} tardó demasiado en responder`)
+    throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function textoOpenAI(data: any): string {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) return data.output_text
+  const contenido = data?.output
+    ?.flatMap((item: any) => item?.content ?? [])
+    ?.filter((parte: any) => parte?.type === 'output_text')
+    ?.map((parte: any) => parte.text ?? '')
+    ?.join('')
+  if (typeof contenido === 'string' && contenido.trim()) return contenido
+  throw new Error('OpenAI no devolvió texto')
+}
+
+// Llama al LLM y devuelve el JSON en texto. La validación de dominio ocurre
+// siempre con Zod en las rutas antes de modificar la base de datos.
 export async function completarJSON(system: string, user: string, maxTokens = 4000): Promise<string> {
   const prov = proveedorActivo()
 
-  if (prov === 'anthropic') {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+  if (prov === 'gemini') {
+    const modelo = process.env.COPILOTO_MODELO || 'gemini-2.5-flash-lite'
+    const data = await pedir(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY!,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY! },
       body: JSON.stringify({
-        model: process.env.COPILOTO_MODELO || 'claude-sonnet-5',
-        max_tokens: maxTokens,
-        system,
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig: { maxOutputTokens: maxTokens, responseMimeType: 'application/json', temperature: 0.2 },
+      }),
+    }, 'Gemini')
+    const texto = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p?.text ?? '').join('')
+    if (!texto?.trim()) throw new Error('Gemini no devolvió texto')
+    return texto
+  }
+
+  if (prov === 'anthropic') {
+    const data = await pedir('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({
+        model: process.env.COPILOTO_MODELO || 'claude-sonnet-4-5', max_tokens: maxTokens, system,
         messages: [{ role: 'user', content: user }],
       }),
-    })
-    if (!res.ok) throw new Error(`Anthropic ${res.status}: ${(await res.text()).slice(0, 300)}`)
-    const data = await res.json()
-    return data?.content?.[0]?.text ?? ''
+    }, 'Anthropic')
+    const texto = data?.content?.find((parte: { type?: string }) => parte.type === 'text')?.text
+    if (!texto?.trim()) throw new Error('Anthropic no devolvió texto')
+    return texto
   }
 
   if (prov === 'openai') {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Responses es la API actual de OpenAI. El modo JSON reduce respuestas que
+    // no se pueden validar; Zod sigue siendo la autoridad antes de persistir.
+    const data = await pedir('https://api.openai.com/v1/responses', {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
       body: JSON.stringify({
-        model: process.env.COPILOTO_MODELO || 'gpt-4o-mini',
-        max_tokens: maxTokens,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user },
-        ],
+        model: process.env.COPILOTO_MODELO || 'gpt-5-mini', instructions: system, input: user,
+        max_output_tokens: maxTokens, text: { format: { type: 'json_object' } }, store: false,
       }),
-    })
-    if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 300)}`)
-    const data = await res.json()
-    return data?.choices?.[0]?.message?.content ?? ''
+    }, 'OpenAI')
+    return textoOpenAI(data)
   }
 
   throw new Error('Proveedor demo no llama a la IA')

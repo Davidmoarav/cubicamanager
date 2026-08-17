@@ -70,7 +70,7 @@ export default function PerfilPanel() {
   }
 
   return (
-    <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
+    <div className="bg-white border border-line rounded-card p-5 shadow-card">
       <div className="text-[15px] font-bold text-ink mb-1">Mi cuenta</div>
 
       <div className="flex flex-wrap gap-x-6 gap-y-1 mb-5 pb-4 border-b border-line2">

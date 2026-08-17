@@ -118,9 +118,9 @@ export default function RemuneracionesPage() {
       {/* TABS */}
       <div className="flex gap-1 p-1 bg-canvas rounded-xl mb-6 overflow-x-auto">
         {[
-          { key: 'liquidaciones' as const, label: '💰 Liquidaciones' },
-          { key: 'empleados' as const,     label: '👤 Datos previsionales' },
-          { key: 'parametros' as const,    label: '⚙ Parámetros' },
+          { key: 'liquidaciones' as const, label: 'Liquidaciones' },
+          { key: 'empleados' as const,     label: 'Datos previsionales' },
+          { key: 'parametros' as const,    label: 'Parámetros' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-lg text-[13px] font-semibold transition
@@ -189,7 +189,7 @@ export default function RemuneracionesPage() {
           </div>
 
           <p className="text-[11px] text-muted mt-2.5">
-            💡 Las liquidaciones se calculan automáticamente con los parámetros y datos previsionales de cada empleado. Edita los datos en la pestaña correspondiente.
+            Las liquidaciones se calculan automáticamente con los parámetros y datos previsionales de cada empleado. Edita los datos en la pestaña correspondiente.
           </p>
         </div>
       )}

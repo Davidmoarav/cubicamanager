@@ -41,7 +41,7 @@ export default function SelectorFactura({ value, label, onPick, onClear }: { val
             ? <div className="px-3 py-3 text-[11px] text-muted text-center">Sin facturas de compra que coincidan</div>
             : facturas.map(f => (
               <button key={f.id} type="button" onClick={() => { onPick(f); setOpen(false); setQ('') }}
-                className="w-full text-left px-3 py-2 text-[12px] hover:bg-canvas border-b border-[#f0f4f8]">
+                className="w-full text-left px-3 py-2 text-[12px] hover:bg-canvas border-b border-[#F1ECE6]">
                 <span className="font-semibold text-ink">N° {f.numero}</span> · {f.cliente} <span className="text-muted">· {fmt(f.monto)}</span>
               </button>
             ))}

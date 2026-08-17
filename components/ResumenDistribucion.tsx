@@ -144,7 +144,7 @@ export default function ResumenDistribucion({ raices }: { raices: Nodo[] }) {
                   </td>
                 </tr>
                 {g.filas.map((f, fi) => (
-                  <tr key={`f-${gi}-${fi}`} className="border-b border-line2 hover:bg-[#fafbfc]">
+                  <tr key={`f-${gi}-${fi}`} className="border-b border-line2 hover:bg-[#FBFAF9]">
                     <td className="px-3 py-2 text-[#1a2535] sticky left-0 bg-white z-10">
                       {f.descripcion}
                     </td>

@@ -87,7 +87,7 @@ export default function ContratosPage() {
                             <span className="font-semibold text-ink">{Math.round((c as any).ejecutado / c.valor * 100)}%</span>
                             <span className="text-muted">{fmt((c as any).ejecutado)}</span>
                           </div>
-                          <div className="h-1.5 bg-[#eef2f7] rounded-full overflow-hidden">
+                          <div className="h-1.5 bg-[#F1ECE6] rounded-full overflow-hidden">
                             <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, Math.round((c as any).ejecutado / c.valor * 100))}%` }} />
                           </div>
                         </div>

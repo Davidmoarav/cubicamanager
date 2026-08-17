@@ -265,7 +265,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
 
       setFilas(filasCopia)
       const warn = noEmparej.length
-        ? ` ⚠ Sin emparejar: ${noEmparej.join(', ')} — revisa que el nombre coincida con un beneficiario del proyecto.`
+        ? ` Sin emparejar: ${noEmparej.join(', ')} — revisa que el nombre coincida con un beneficiario del proyecto.`
         : ''
       setImportMsg(`Leído: ${emparej.length} beneficiarios emparejados · ${celdasSet} cantidades · ${nuevas} partidas nuevas.${warn} Revisa y pulsa "Guardar distribución".`)
     } catch (e: any) {
@@ -316,7 +316,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
       })
       const data = await res.json()
       if (!res.ok) { setMsg(data.error || 'Error al guardar'); setGuardando(false); return }
-      setMsg(`✓ Guardado: ${data.inserts} nuevas · ${data.updates} actualizadas · ${data.borrados} eliminadas`)
+      setMsg(`Guardado: ${data.inserts} nuevas · ${data.updates} actualizadas · ${data.borrados} eliminadas`)
       setRemovidas([])
       onSaved()
     } catch (e: any) {
@@ -342,14 +342,14 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
           <strong className="text-ink">{fmt(granTotal)}</strong>
         </div>
         <div className="flex gap-1.5 flex-wrap">
-          <Btn onClick={descargarPlantilla} style={{ fontSize: 12, padding: '5px 10px' }}>⬇ Plantilla</Btn>
-          <Btn onClick={exportarExcel} style={{ fontSize: 12, padding: '5px 10px' }}>⬇ Exportar datos</Btn>
+          <Btn onClick={descargarPlantilla} style={{ fontSize: 12, padding: '5px 10px' }}>Plantilla</Btn>
+          <Btn onClick={exportarExcel} style={{ fontSize: 12, padding: '5px 10px' }}>Exportar datos</Btn>
           <label className="inline-flex items-center gap-1 text-[12px] font-semibold px-2.5 py-[5px] rounded-lg border border-line bg-white cursor-pointer hover:border-brand text-ink">
-            📥 Importar cantidades
+            Importar cantidades
             <input type="file" accept=".xlsx,.xls" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) importarExcel(f); e.currentTarget.value = '' }} />
           </label>
-          <Btn onClick={abrirCatalogo} style={{ fontSize: 12, padding: '5px 10px' }}>📋 Del catálogo</Btn>
+          <Btn onClick={abrirCatalogo} style={{ fontSize: 12, padding: '5px 10px' }}>Del catálogo</Btn>
           <Btn onClick={nuevaFila} style={{ fontSize: 12, padding: '5px 10px' }}>+ Partida</Btn>
           <Btn variant="primary" onClick={guardar} disabled={guardando} style={{ fontSize: 12, padding: '5px 12px' }}>
             {guardando ? 'Guardando…' : 'Guardar distribución'}
@@ -358,13 +358,13 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
       </div>
 
       {importMsg && (
-        <div className={`text-[12px] mb-2 rounded-lg p-2.5 ${importMsg.startsWith('No se') ? 'bg-danger-bg text-danger' : 'bg-[#e8f1fb] text-[#0c447c]'}`}>
+        <div className={`text-[12px] mb-2 rounded-lg p-2.5 ${importMsg.startsWith('No se') ? 'bg-danger-bg text-danger' : 'bg-[#FCEAE3] text-[#0c447c]'}`}>
           {importMsg}
         </div>
       )}
 
       {msg && (
-        <div className={`text-[12px] mb-2 rounded-lg p-2.5 ${msg.startsWith('✓') ? 'bg-[#e6f4ea] text-[#1a7a4a]' : 'bg-danger-bg text-danger'}`}>
+        <div className={`text-[12px] mb-2 rounded-lg p-2.5 ${msg.startsWith('') ? 'bg-[#e6f4ea] text-[#1a7a4a]' : 'bg-danger-bg text-danger'}`}>
           {msg}
         </div>
       )}
@@ -390,7 +390,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
           </thead>
           <tbody>
             {filas.map((f, fi) => (
-              <tr key={f.key} className="border-b border-line2 hover:bg-[#fafbfc]">
+              <tr key={f.key} className="border-b border-line2 hover:bg-[#FBFAF9]">
                 <td className="px-2 py-1 sticky left-0 bg-white z-10">
                   <input value={f.descripcion} onChange={e => setCampo(fi, 'descripcion', e.target.value)}
                     placeholder="Descripción de la partida"
@@ -448,7 +448,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
         Escribe la cantidad que aplica a cada beneficiario. Vacío o 0 = no se le aplica esa partida (si ya la tenía, se elimina al guardar).
         Los costos y el precio son compartidos por todos los beneficiarios de esa partida.{' '}
         <a href="/Plantilla_Distribucion.xlsx" download className="text-brand font-semibold hover:underline">
-          ⬇ Descargar plantilla de ejemplo
+          Descargar plantilla de ejemplo
         </a>.
       </p>
 

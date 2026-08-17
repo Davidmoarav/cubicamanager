@@ -6,6 +6,7 @@ import { Btn, FormInput, FormSelect, Modal } from '@/components/ui'
 import { usePermisos } from '@/lib/usePermisos'
 import SelectorCatalogo from '@/components/SelectorCatalogo'
 import FilaPartida from '@/components/FilaPartida'
+import { IconEdit } from '@/components/Icon'
 import ImportarExcelPartidas from '@/components/ImportarExcelPartidas'
 import ImportarPrograma from '@/components/ImportarPrograma'
 import ResumenDistribucion from '@/components/ResumenDistribucion'
@@ -18,7 +19,7 @@ import type { CatalogoPartida } from '@/types/catalogo-partida'
 const colorAvance = (pct: number) => {
   if (pct === 0) return '#d1d9e6'
   if (pct < 50) return '#e09820'
-  if (pct < 100) return '#1e6bb8'
+  if (pct < 100) return '#E5502A'
   return '#1a7a4a'
 }
 
@@ -334,7 +335,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
     <div>
       {soloLectura && (
         <div className="bg-[#fff8e6] border border-[#f0dca8] text-[#8a6314] text-[12px] px-4 py-2.5 rounded-lg mb-4">
-          👁 <strong>Solo lectura.</strong> Puedes consultar el avance y los costos, pero no modificar la obra.
+          <strong>Solo lectura.</strong> Puedes consultar el avance y los costos, pero no modificar la obra.
         </div>
       )}
       <div className={soloLectura ? 'pointer-events-none opacity-95' : ''}>
@@ -351,13 +352,13 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
           {!soloLectura && (
             <>
               <Btn onClick={() => setShowExcel(true)} style={{ fontSize: 12, padding: '5px 12px', background: '#e6f4ea', borderColor: '#a8d5b8', color: '#1a7a4a', fontWeight: 700 }}>
-                📊 Importar de Excel
+                Importar de Excel
               </Btn>
-              <Btn onClick={() => setShowPrograma(true)} style={{ fontSize: 12, padding: '5px 12px', background: '#e8f1fb', borderColor: '#b5d4f4', color: '#0c447c', fontWeight: 700 }}>
-                🏘️ Programa (beneficiarios)
+              <Btn onClick={() => setShowPrograma(true)} style={{ fontSize: 12, padding: '5px 12px', background: '#FCEAE3', borderColor: '#b5d4f4', color: '#0c447c', fontWeight: 700 }}>
+               Programa (beneficiarios)
               </Btn>
               <Btn onClick={openImport} style={{ fontSize: 12, padding: '5px 12px', background: '#eeedfe', borderColor: '#ccc5fc', color: '#534ab7', fontWeight: 700 }}>
-                📋 Del catálogo
+                Del catálogo
               </Btn>
               <Btn variant="primary" onClick={openNewPadre} style={{ fontSize: 12, padding: '5px 12px' }}>+ Nueva partida</Btn>
             </>
@@ -366,7 +367,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
       </div>
 
       {padres.length > 0 && (
-        <div className="h-2.5 bg-[#e8edf2] rounded-full overflow-hidden mb-4">
+        <div className="h-2.5 bg-[#EDE7E0] rounded-full overflow-hidden mb-4">
           <div className="h-full rounded-full transition-all duration-500" style={{ width: `${avanceGeneral}%`, background: colorAvance(avanceGeneral) }} />
         </div>
       )}
@@ -376,16 +377,16 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
         <div className="flex gap-1 bg-canvas rounded-lg p-0.5 w-fit mb-3">
           <button onClick={() => setVista('arbol')}
             className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'arbol' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
-            🌳 Árbol por subproyecto
+            Árbol por subproyecto
           </button>
           <button onClick={() => setVista('resumen')}
             className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'resumen' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
-            📊 Resumen del proyecto
+            Resumen del proyecto
           </button>
           {!soloLectura && (
             <button onClick={() => setVista('matriz')}
               className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'matriz' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
-              ✏️ Editar distribución
+             Editar distribución
             </button>
           )}
         </div>
@@ -465,7 +466,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
 
               {/* Encabezado */}
               <div className="flex items-center gap-2 flex-wrap">
-                {p.notas && <span className="text-[10px] font-semibold text-[#0c447c] bg-[#e8f1fb] px-2 py-0.5 rounded">{p.notas}</span>}
+                {p.notas && <span className="text-[10px] font-semibold text-[#0c447c] bg-[#FCEAE3] px-2 py-0.5 rounded">{p.notas}</span>}
                 <span className="text-[11px] text-muted">{cant} {p.unidad}</span>
               </div>
 
@@ -527,7 +528,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
                             <span className="text-[12px] font-bold text-ink">{fmt(costo)}</span>
                             {!soloLectura && (
                               <div className="flex gap-1">
-                                <button onClick={() => openEditMat(p, m)} className="w-6 h-6 rounded bg-canvas text-muted text-[11px]">✎</button>
+                                <button onClick={() => openEditMat(p, m)} className="w-6 h-6 rounded bg-canvas text-muted flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>
                                 <button onClick={() => delMat(m.id)} className="w-6 h-6 rounded bg-danger-bg text-danger text-[11px]">✕</button>
                               </div>
                             )}
@@ -544,7 +545,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
                 {!soloLectura && mats.length > 0 && matchingCount > 0 && (
                   <button onClick={() => aplicarMaterialesATodos(p, matchingCount)} disabled={aplicandoMat}
                     className="w-full py-2 mt-1.5 bg-[#eef3f9] border border-[#c5ddf5] rounded-[6px] text-[11px] text-brand font-bold disabled:opacity-60">
-                    {aplicandoMat ? 'Aplicando…' : `📋 Aplicar estos materiales a los otros ${matchingCount} beneficiarios`}
+                    {aplicandoMat ? 'Aplicando…' : `Aplicar estos materiales a los otros ${matchingCount} beneficiarios`}
                   </button>
                 )}
               </div>
@@ -600,11 +601,11 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
               <div className="flex gap-2">
                 <button type="button" onClick={() => upd('es_grupo', true)}
                   className={`flex-1 py-2 rounded-lg border text-[12px] font-semibold ${form.es_grupo ? 'border-brand bg-brand-bg text-brand' : 'border-line text-muted'}`}>
-                  📁 Agrupador<div className="text-[10px] font-normal opacity-80">Subproyecto o etapa (agrupa partidas)</div>
+                  Agrupador<div className="text-[10px] font-normal opacity-80">Subproyecto o etapa (agrupa partidas)</div>
                 </button>
                 <button type="button" onClick={() => upd('es_grupo', false)}
                   className={`flex-1 py-2 rounded-lg border text-[12px] font-semibold ${!form.es_grupo ? 'border-brand bg-brand-bg text-brand' : 'border-line text-muted'}`}>
-                  🔧 Partida<div className="text-[10px] font-normal opacity-80">Actividad real con costo</div>
+                  Partida<div className="text-[10px] font-normal opacity-80">Actividad real con costo</div>
                 </button>
               </div>
             </div>
@@ -682,7 +683,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
           <div className="flex flex-col gap-3">
             <SelectorCatalogo
               mostrarSiempre
-              label="🔎 Elegir material del catálogo (autocompleta precio)"
+              label="Elegir material del catálogo (autocompleta precio)"
               onPick={p => setMatForm((f: any) => ({ ...f, material: p.descripcion, unidad: p.unidad || f.unidad || 'un', precio_unitario: Number(p.precio) || 0 }))}
             />
             <FormInput label="Material *" value={matForm.material || ''} onChange={v => setMatForm((f: any) => ({ ...f, material: v }))} placeholder="Ej: Adhesivo EIFS" />
@@ -748,10 +749,10 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
                       <div
                         key={cp.id}
                         onClick={() => toggleSelect(cp.id)}
-                        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg cursor-pointer border-[1.5px] ${isSel ? 'border-brand bg-[#e8f1fb]' : 'border-[#e4e9f0] bg-white'}`}
+                        className={`flex items-center gap-3 px-3.5 py-2.5 rounded-lg cursor-pointer border-[1.5px] ${isSel ? 'border-brand bg-[#FCEAE3]' : 'border-[#e4e9f0] bg-white'}`}
                       >
                         <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-white text-[12px] font-bold border-2 ${isSel ? 'bg-brand border-brand' : 'bg-white border-[#d1d9e6]'}`}>
-                          {isSel ? '✓' : ''}
+                          {isSel ? '' : ''}
                         </div>
                         <div className="flex-1">
                           <div className="text-[13px] font-bold text-[#1a2535]">{cp.descripcion}</div>

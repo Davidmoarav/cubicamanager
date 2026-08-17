@@ -94,9 +94,9 @@ export default function FinanzasPage() {
       {/* TABS */}
       <div className="inline-flex gap-1 p-1 bg-canvas rounded-xl mb-6">
         {[
-          { key: 'resumen' as const,     label: '📊 Resumen' },
-          { key: 'iva' as const,         label: '🧾 Control IVA' },
-          { key: 'presupuesto' as const, label: '🏗 Avance presupuestario' },
+          { key: 'resumen' as const,     label: 'Resumen' },
+          { key: 'iva' as const,         label: 'Control IVA' },
+          { key: 'presupuesto' as const, label: 'Avance presupuestario' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition
@@ -116,7 +116,7 @@ export default function FinanzasPage() {
             <MetricCard label="Nómina mensual"    value={fmtM(resumen.nomina)}    sub="Mano de obra directa" />
           </div>
           <div className="bg-brand-bg border border-[#b5d4f4] rounded-xl px-5 py-4 text-[13px] text-[#0c447c]">
-            💡 Para el detalle de IVA a pagar al SII, revisa la pestaña <strong>Control IVA</strong>. Para ver cuánto presupuesto llevas ejecutado por obra, ve a <strong>Avance presupuestario</strong>.
+            Para el detalle de IVA a pagar al SII, revisa la pestaña <strong>Control IVA</strong>. Para ver cuánto presupuesto llevas ejecutado por obra, ve a <strong>Avance presupuestario</strong>.
           </div>
         </div>
       )}
@@ -139,7 +139,7 @@ export default function FinanzasPage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-            <MetricCard label="IVA Débito (ventas)"  value={fmt(ivaTotales.debito)}  sub="IVA que cobraste"   subColor="#1e6bb8" />
+            <MetricCard label="IVA Débito (ventas)"  value={fmt(ivaTotales.debito)}  sub="IVA que cobraste"   subColor="#E5502A" />
             <MetricCard label="IVA Crédito (compras)" value={fmt(ivaTotales.credito)} sub="IVA que pagaste"    subColor="#1a7a4a" />
             <MetricCard label="IVA a pagar al SII"   value={fmt(ivaTotales.pagar)}   sub={ivaTotales.remanente > 0 ? `Remanente a favor: ${fmt(ivaTotales.remanente)}` : 'Por pagar este período'} subColor={ivaTotales.remanente > 0 ? '#1a7a4a' : '#b0401a'} />
           </div>
@@ -175,7 +175,7 @@ export default function FinanzasPage() {
                 {ppmSaving ? 'Guardando...' : 'Guardar tasa'}
               </Btn>
               {ppmSavedAt && Date.now() - ppmSavedAt < 4000 && (
-                <span className="text-[12px] text-success font-semibold">Guardado ✓</span>
+                <span className="text-[12px] text-success font-semibold">Guardado</span>
               )}
             </div>
             <p className="text-[11px] text-muted mt-3">
@@ -198,7 +198,7 @@ export default function FinanzasPage() {
             </div>
           )}
 
-          <div className="bg-white border border-line rounded-2xl p-6 shadow-card">
+          <div className="bg-white border border-line rounded-card p-6 shadow-card">
             <div className="text-sm font-bold text-ink mb-4">Historial por período (F29)</div>
             {iva.length === 0
               ? <p className="text-muted text-center p-5 text-[13px]">
@@ -222,7 +222,7 @@ export default function FinanzasPage() {
                   <tbody>
                     {iva.map(p => (
                       <tr key={p.periodo} onClick={() => setPeriodoSel(p.periodo)}
-                        className={`border-b border-canvas cursor-pointer ${p.periodo === periodoSel ? 'bg-[#e8f1fb]' : 'bg-transparent'}`}>
+                        className={`border-b border-canvas cursor-pointer ${p.periodo === periodoSel ? 'bg-[#FCEAE3]' : 'bg-transparent'}`}>
                         <td className={`${tdS} font-bold`}>{labelPeriodo(p.periodo)}</td>
                         <td className={tdNum}>{fmt(p.neto_ventas)}</td>
                         <td className={`${tdNum} text-brand`}>{fmt(p.iva_debito)}</td>
@@ -287,7 +287,7 @@ export default function FinanzasPage() {
                           <span className="text-muted">Avance físico de obra</span>
                           <span className="font-bold text-brand">{p.avance_fisico}%</span>
                         </div>
-                        <div className="h-2 bg-[#e8edf2] rounded overflow-hidden">
+                        <div className="h-2 bg-[#EDE7E0] rounded overflow-hidden">
                           <div className="h-full bg-brand rounded" style={{ width: `${p.avance_fisico}%` }} />
                         </div>
                       </div>
@@ -297,7 +297,7 @@ export default function FinanzasPage() {
                           <span className="text-muted">Presupuesto ejecutado</span>
                           <span className={`font-bold ${alerta ? 'text-danger' : 'text-success'}`}>{p.pct_presupuesto}%</span>
                         </div>
-                        <div className="h-2 bg-[#e8edf2] rounded overflow-hidden">
+                        <div className="h-2 bg-[#EDE7E0] rounded overflow-hidden">
                           <div className={`h-full rounded ${alerta ? 'bg-danger' : 'bg-success'}`} style={{ width: `${p.pct_presupuesto}%` }} />
                         </div>
                       </div>
@@ -308,12 +308,12 @@ export default function FinanzasPage() {
                         </div>
                         {alerta && (
                           <span className="text-[11px] font-bold text-danger bg-danger-bg px-2.5 py-[3px] rounded-xl">
-                            ⚠ Gasto {desviacion}% sobre avance físico
+                            Gasto {desviacion}% sobre avance físico
                           </span>
                         )}
                         {!alerta && desviacion < -10 && (
                           <span className="text-[11px] font-bold text-success bg-success-bg px-2.5 py-[3px] rounded-xl">
-                            ✓ Bajo presupuesto
+                            Bajo presupuesto
                           </span>
                         )}
                       </div>

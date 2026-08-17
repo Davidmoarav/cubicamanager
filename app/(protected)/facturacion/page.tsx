@@ -6,6 +6,7 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
 import ImportadorSII from '@/components/ImportadorSII'
+import { IconSearch } from '@/components/Icon'
 import ResumenBoletas from '@/components/ResumenBoletas'
 
 const EMPTY: any = { numero:'', cliente:'', proyecto:'', proyecto_id:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
@@ -160,7 +161,7 @@ export default function FacturacionPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         <MetricCard label="Ventas cobradas"  value={fmtM(cobrado)}      sub="Facturas pagadas"        subColor="#1a7a4a" />
         <MetricCard label="Por cobrar"       value={fmtM(pendiente)}    sub="Ventas pendientes"       subColor="#b07d1a" />
-        <MetricCard label="Compras (gastos)" value={fmtM(totalCompras)} sub="Facturas de proveedores" subColor="#1e6bb8" />
+        <MetricCard label="Compras (gastos)" value={fmtM(totalCompras)} sub="Facturas de proveedores" subColor="#E5502A" />
       </div>
 
       {/* Selector de período */}
@@ -194,7 +195,7 @@ export default function FacturacionPage() {
       {/* Búsqueda + ordenamiento */}
       <div className="flex gap-2 mb-5 flex-wrap items-center">
         <div className="relative flex-1 min-w-[220px]">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[14px]">🔍</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><IconSearch className="w-4 h-4" /></span>
           <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
             placeholder="Buscar por cliente, número o proyecto…"
             className="input-base pl-9 w-full" />
@@ -219,7 +220,7 @@ export default function FacturacionPage() {
         {busqueda && ` · filtrando "${busqueda}"`}
       </div>
 
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card overflow-x-auto">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card overflow-x-auto">
         {isLoading
           ? <p className="text-muted text-center py-10">Cargando...</p>
           : filtered.length === 0
@@ -239,7 +240,7 @@ export default function FacturacionPage() {
                       </span>
                       {(f.doc_tipo === 'nota_credito' || f.doc_tipo === 'nota_debito' || f.doc_tipo === 'boleta') && (
                         <span className={`text-[9px] font-bold px-1.5 py-px rounded text-center ${f.doc_tipo === 'nota_credito' ? 'bg-danger-bg text-danger' : f.doc_tipo === 'nota_debito' ? 'bg-warning-bg text-warning' : 'bg-canvas text-muted'}`}>
-                          {f.doc_tipo === 'nota_credito' ? '➖ N.CRÉDITO' : f.doc_tipo === 'nota_debito' ? '➕ N.DÉBITO' : '🧾 BOLETA'}
+                          {f.doc_tipo === 'nota_credito' ? 'N.CRÉDITO' : f.doc_tipo === 'nota_debito' ? 'N.DÉBITO' : 'BOLETA'}
                         </span>
                       )}
                     </div>
@@ -287,9 +288,9 @@ export default function FacturacionPage() {
             <label className="label-base">Documento</label>
             <div className="flex gap-2">
               {[
-                { k: 'factura',      label: '🧾 Factura',     active: 'border-brand bg-[#e8f1fb] text-brand' },
-                { k: 'nota_credito', label: '➖ Nota crédito', active: 'border-danger bg-danger-bg text-danger' },
-                { k: 'nota_debito',  label: '➕ Nota débito',  active: 'border-success bg-success-bg text-success' },
+                { k: 'factura',      label: 'Factura',     active: 'border-brand bg-[#FCEAE3] text-brand' },
+                { k: 'nota_credito', label: 'Nota crédito', active: 'border-danger bg-danger-bg text-danger' },
+                { k: 'nota_debito',  label: 'Nota débito',  active: 'border-success bg-success-bg text-success' },
               ].map(d => (
                 <button key={d.k} onClick={() => upd('doc_tipo', d.k)}
                   className={`flex-1 p-2.5 rounded-lg border-[1.5px] cursor-pointer text-[12px] font-bold transition ${form.doc_tipo === d.k ? d.active : 'border-line2 bg-white text-muted'}`}>
@@ -315,7 +316,7 @@ export default function FacturacionPage() {
               ) : (
                 <>
                   <div className="relative mb-2">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-[13px]">🔍</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"><IconSearch className="w-4 h-4" /></span>
                     <input value={buscarFactura} onChange={e => setBuscarFactura(e.target.value)}
                       placeholder="Buscar por número o cliente…" autoFocus
                       className="input-base pl-9 w-full" />
@@ -327,7 +328,7 @@ export default function FacturacionPage() {
                         </div>
                       : facturasParaNota.map(f => (
                         <button key={f.id} onClick={() => onSelectFacturaRef(f.id)}
-                          className="w-full text-left px-3 py-2 hover:bg-canvas border-b border-[#f0f4f8] last:border-0 transition">
+                          className="w-full text-left px-3 py-2 hover:bg-canvas border-b border-[#F1ECE6] last:border-0 transition">
                           <div className="text-[13px] font-semibold text-ink">{f.numero || 's/n'} · {f.cliente}</div>
                           <div className="text-[11px] text-muted">{fmt(f.monto)} · {f.tipo === 'compra' ? 'compra' : 'venta'} · {f.emision || 's/f'}</div>
                         </button>
@@ -350,11 +351,11 @@ export default function FacturacionPage() {
             <div className="flex gap-2">
               <button onClick={() => upd('tipo', 'venta')}
                 className={`flex-1 py-2.5 rounded-lg border-[1.5px] cursor-pointer text-[13px] font-bold transition ${form.tipo === 'venta' ? 'border-success bg-success-bg text-success' : 'border-line2 bg-white text-muted'}`}>
-                📤 Venta (emitida)
+                Venta (emitida)
               </button>
               <button onClick={() => upd('tipo', 'compra')}
                 className={`flex-1 py-2.5 rounded-lg border-[1.5px] cursor-pointer text-[13px] font-bold transition ${form.tipo === 'compra' ? 'border-accent bg-accent-bg text-accent' : 'border-line2 bg-white text-muted'}`}>
-                📥 Compra (recibida)
+                Compra (recibida)
               </button>
             </div>
           </div>
@@ -418,7 +419,7 @@ export default function FacturacionPage() {
               <p className="text-[10px] text-muted -mt-2">Déjalo en 0 si el documento es exento</p>
             </div>
 
-            <div className="col-span-2 px-3.5 py-2.5 bg-[#e8f1fb] rounded-lg flex justify-between items-center">
+            <div className="col-span-2 px-3.5 py-2.5 bg-[#FCEAE3] rounded-lg flex justify-between items-center">
               <span className="text-[13px] font-semibold text-[#0c447c]">Total (con IVA)</span>
               <span className="text-[15px] font-extrabold text-brand">{fmt(form.monto || 0)}</span>
             </div>

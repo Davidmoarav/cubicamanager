@@ -36,7 +36,7 @@ export default function ResumenBoletas({ onSaved }: Props) {
       numero,
       cliente: `${docNombre}${tipo === 'exento' ? ' exentas' : ''} ${periodo}`,
       tipo: 'venta',
-      doc_tipo: 'boleta',      // suma al IVA débito como venta; se muestra con la etiqueta 🧾
+      doc_tipo: 'boleta',      // suma al IVA débito como venta; se muestra con la etiqueta
       neto,
       iva,
       monto: montoNum,
@@ -67,7 +67,7 @@ export default function ResumenBoletas({ onSaved }: Props) {
   return (
     <>
       <Btn onClick={() => setOpen(true)} className="!bg-[#fff7e6] !border-[#f0d9a8] !text-warning font-bold">
-        🧾 Resumen boletas
+        Resumen boletas
       </Btn>
 
       {open && (

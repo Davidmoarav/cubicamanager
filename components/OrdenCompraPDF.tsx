@@ -79,7 +79,7 @@ interface Props {
 }
 
 export function OrdenCompraPDF({ orden, proveedor, empresa, logoUrl }: Props) {
-  const color = empresa?.color_primario || '#1e6bb8'
+  const color = empresa?.color_primario || '#E5502A'
   const styles = createStyles(color)
 
   const lineas: any[] = orden?.lineas ?? []

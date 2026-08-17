@@ -126,7 +126,7 @@ export default function ClientesPage() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card">
         {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : filtered.length === 0
@@ -193,11 +193,11 @@ export default function ClientesPage() {
                 onChange={e => handleRutChange(e.target.value)}
                 onBlur={handleRutBlur}
                 placeholder="76.123.456-7"
-                className={`w-full px-[11px] py-2 border rounded-[7px] text-[13px] font-mono bg-[#fafbfc] box-border outline-none ${rutError ? 'border-danger' : 'border-[#d1d9e6]'}`}
+                className={`w-full px-[11px] py-2 border rounded-[7px] text-[13px] font-mono bg-[#FBFAF9] box-border outline-none ${rutError ? 'border-danger' : 'border-[#d1d9e6]'}`}
               />
               {rutError && <div className="text-[11px] text-danger mt-1">{rutError}</div>}
               {form.rut && !rutError && isValidRut(form.rut) && (
-                <div className="text-[11px] text-success mt-1">✓ RUT válido</div>
+                <div className="text-[11px] text-success mt-1">RUT válido</div>
               )}
             </div>
 

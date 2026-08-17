@@ -89,7 +89,7 @@ export default function AuditoriaPage() {
       </p>
 
       {/* Filtros */}
-      <div className="bg-white border border-line rounded-2xl p-4 shadow-card mb-5">
+      <div className="bg-white border border-line rounded-card p-4 shadow-card mb-5">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <div>
             <label className="text-[11px] text-muted block mb-1">Usuario</label>
@@ -133,7 +133,7 @@ export default function AuditoriaPage() {
       </div>
 
       {/* Lista */}
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card">
         {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : eventos.length === 0

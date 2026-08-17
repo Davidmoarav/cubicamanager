@@ -27,8 +27,8 @@ const EMPTY_PARTIDA = (): PartidaCotizacion => ({
 })
 
 const ESTADO_COTIZ: Record<string, { label: string; bg: string; color: string }> = {
-  borrador:   { label: 'Borrador',   bg: '#f0f4f8', color: '#6b7a8d' },
-  enviada:    { label: 'Enviada',    bg: '#e8f1fb', color: '#1e6bb8' },
+  borrador:   { label: 'Borrador',   bg: '#F1ECE6', color: '#6b7a8d' },
+  enviada:    { label: 'Enviada',    bg: '#FCEAE3', color: '#E5502A' },
   aprobada:   { label: 'Aprobada',   bg: '#e6f4ed', color: '#1a7a4a' },
   rechazada:  { label: 'Rechazada',  bg: '#fdecea', color: '#b0401a' },
   convertida: { label: 'Convertida', bg: '#eeedfe', color: '#534ab7' },
@@ -219,7 +219,7 @@ export default function CotizacionesPage() {
 
       {!isLoading && clientes.length === 0 && (
         <div className="bg-brand-bg border border-[#b5d4f4] text-[#0c447c] px-4 py-3 rounded-xl mb-4 text-[13px]">
-          💡 Aún no tienes clientes guardados. <Link href="/clientes" className="underline font-semibold">Crea uno aquí</Link> antes de hacer una cotización.
+          Aún no tienes clientes guardados. <Link href="/clientes" className="underline font-semibold">Crea uno aquí</Link> antes de hacer una cotización.
         </div>
       )}
 
@@ -248,7 +248,7 @@ export default function CotizacionesPage() {
         {buscando && <p className="text-[11px] text-muted mt-1">Buscando en todas las cotizaciones (el filtro por estado se ignora).</p>}
       </div>
 
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card">
         {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : filtered.length === 0
@@ -313,7 +313,7 @@ export default function CotizacionesPage() {
           {/* AVISO si está convertida */}
           {esConvertida || modal === 'ver' ? (
             <div className="bg-accent-bg border border-[#ccc5fc] text-accent px-3.5 py-2.5 rounded-lg mb-4 text-[13px]">
-              🔒 Esta cotización ya fue convertida a proyecto. No se puede editar para mantener la trazabilidad.
+              Esta cotización ya fue convertida a proyecto. No se puede editar para mantener la trazabilidad.
               {form.proyecto_id && (
                 <>
                   {' '}
@@ -340,7 +340,7 @@ export default function CotizacionesPage() {
                   value={form.cliente_id || ''}
                   onChange={e => handleClienteChange(e.target.value)}
                   disabled={modal === 'ver'}
-                  className="w-full px-[11px] py-2 border border-[#d1d9e6] rounded-[7px] text-[13px] bg-[#fafbfc] outline-none"
+                  className="w-full px-[11px] py-2 border border-[#d1d9e6] rounded-[7px] text-[13px] bg-[#FBFAF9] outline-none"
                 >
                   <option value="">— Selecciona un cliente —</option>
                   {clientes.map(c => (
@@ -378,7 +378,7 @@ export default function CotizacionesPage() {
               <div className="text-[14px] font-bold text-[#1a2535]">Partidas ({form.partidas?.length ?? 0})</div>
               {modal !== 'ver' && (
                 <div className="flex gap-1.5">
-                  <Btn onClick={openImport} style={{ fontSize: 12, padding: '5px 12px', background: '#eeedfe', borderColor: '#ccc5fc', color: '#534ab7', fontWeight: 700 }}>📋 Importar del catálogo</Btn>
+                  <Btn onClick={openImport} style={{ fontSize: 12, padding: '5px 12px', background: '#eeedfe', borderColor: '#ccc5fc', color: '#534ab7', fontWeight: 700 }}>Importar del catálogo</Btn>
                   <Btn variant="primary" onClick={addPartida} style={{ fontSize: 12, padding: '5px 12px' }}>+ Agregar partida</Btn>
                 </div>
               )}
@@ -393,10 +393,10 @@ export default function CotizacionesPage() {
             {form.partidas?.map((p: any, idx: number) => {
               const subtotal = (Number(p.cantidad) || 0) * (Number(p.precio_unitario) || 0)
               return (
-                <div key={p.id || idx} className="bg-[#fafbfc] border border-[#e4e9f0] rounded-lg p-3.5 mb-2.5">
+                <div key={p.id || idx} className="bg-[#FBFAF9] border border-[#e4e9f0] rounded-lg p-3.5 mb-2.5">
                   <div className="flex justify-between items-center mb-2.5">
                     <div className="flex items-center gap-1.5">
-                      <div className="text-[11px] font-bold text-brand bg-[#e8f1fb] px-2 py-[2px] rounded">
+                      <div className="text-[11px] font-bold text-brand bg-[#FCEAE3] px-2 py-[2px] rounded">
                         PARTIDA {idx + 1}
                       </div>
                       {p.catalogo_id && (
@@ -404,7 +404,7 @@ export default function CotizacionesPage() {
                           className="text-[10px] font-semibold text-accent bg-accent-bg px-2 py-[2px] rounded"
                           title="Esta partida traerá sus sub-partidas del catálogo al convertir a proyecto"
                         >
-                          📋 con desglose
+                          con desglose
                         </span>
                       )}
                     </div>
@@ -513,10 +513,10 @@ export default function CotizacionesPage() {
                         <div
                           key={cp.id}
                           onClick={() => toggleSelect(cp.id)}
-                          className={`flex items-center gap-3 px-3.5 py-2.5 border-[1.5px] rounded-lg cursor-pointer ${isSel ? 'border-brand bg-[#e8f1fb]' : 'border-[#e4e9f0] bg-white'}`}
+                          className={`flex items-center gap-3 px-3.5 py-2.5 border-[1.5px] rounded-lg cursor-pointer ${isSel ? 'border-brand bg-[#FCEAE3]' : 'border-[#e4e9f0] bg-white'}`}
                         >
                           <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 text-white text-[12px] font-bold ${isSel ? 'border-brand bg-brand' : 'border-[#d1d9e6] bg-white'}`}>
-                            {isSel ? '✓' : ''}
+                            {isSel ? '' : ''}
                           </div>
                           <div className="flex-1">
                             <div className="text-[13px] font-bold text-[#1a2535]">{cp.descripcion}</div>

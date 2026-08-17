@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
+import { IconEdit } from '@/components/Icon'
 import type { Empleado } from '@/types'
 
 const EMPTY: Omit<Empleado,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', cargo:'', sueldo:0, horas_extra:0, estado:'activo', tipo:'planta', inicio:'' }
@@ -69,7 +70,7 @@ export default function RRHHPage() {
               ? <p className="text-[13px] text-muted text-center p-5">Sin trabajadores aún</p>
               : items.map(e => (
               <div key={e.id} className="flex items-center gap-3 py-2.5 border-b border-canvas">
-                <div className="w-9 h-9 rounded-full bg-[#e8f1fb] flex items-center justify-center text-[12px] font-bold text-brand shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[#FCEAE3] flex items-center justify-center text-[12px] font-bold text-brand shrink-0">
                   {initials(e.nombre)}
                 </div>
                 <div className="flex-1">
@@ -78,7 +79,7 @@ export default function RRHHPage() {
                 </div>
                 <Badge estado={e.estado} tipo="empleado" />
                 <div className="flex gap-1">
-                  <Btn onClick={() => { setForm({ ...e }); setModal('editar') }} className="px-2.5 py-1.5">✎</Btn>
+                  <Btn onClick={() => { setForm({ ...e }); setModal('editar') }} className="px-2.5 py-1.5"><IconEdit className="w-3.5 h-3.5" /></Btn>
                   <Btn variant="danger" onClick={() => del(e.id)} className="px-2.5 py-1.5">✕</Btn>
                 </div>
               </div>

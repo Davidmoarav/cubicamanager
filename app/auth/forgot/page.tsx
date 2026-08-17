@@ -35,7 +35,7 @@ function ForgotForm() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-5">
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl px-9 py-10 w-full max-w-[420px] shadow-[var(--shadow-lg)]">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-card px-9 py-10 w-full max-w-[420px] shadow-[var(--shadow-lg)]">
 
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Cubica Manager" className="w-14 h-14 rounded-xl object-contain mx-auto mb-3 block" />
@@ -45,7 +45,7 @@ function ForgotForm() {
 
         {sent ? (
           <div className="text-center">
-            <div className="text-4xl mb-4">📬</div>
+            <div className="text-4xl mb-4"></div>
             <p className="text-[14px] font-semibold text-[var(--text)] mb-2">Revisa tu correo</p>
             <p className="text-[13px] text-[var(--muted)] mb-6">
               Si el email está registrado, recibirás un link para crear una nueva contraseña. Puede demorar unos minutos.

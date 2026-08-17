@@ -75,7 +75,7 @@ export default function UsuariosPage() {
     return (
       <div className="p-6">
         <SectionTitle>Usuarios y roles</SectionTitle>
-        <div className="bg-white border border-line rounded-2xl p-8 text-center shadow-card">
+        <div className="bg-white border border-line rounded-card p-8 text-center shadow-card">
           <p className="text-muted text-[14px]">Solo el administrador puede gestionar los usuarios de la empresa.</p>
         </div>
       </div>
@@ -87,7 +87,7 @@ export default function UsuariosPage() {
       <SectionTitle>Usuarios y roles</SectionTitle>
 
       {/* Invitar */}
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card mb-6">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card mb-6">
         <div className="text-[14px] font-bold text-ink mb-1">Dar acceso a un usuario</div>
         <p className="text-[12px] text-muted mb-3">
           Ingresa su email y elige su rol. Luego pídele que <strong>cree su cuenta con ese mismo email</strong> en la
@@ -111,7 +111,7 @@ export default function UsuariosPage() {
       </div>
 
       {/* Lista */}
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card">
         {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : error

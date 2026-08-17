@@ -69,7 +69,7 @@ export default function UpdatePasswordPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-5">
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl px-9 py-10 w-full max-w-[420px] shadow-[var(--shadow-lg)]">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-card px-9 py-10 w-full max-w-[420px] shadow-[var(--shadow-lg)]">
 
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Cubica Manager" className="w-14 h-14 rounded-xl object-contain mx-auto mb-3 block" />

@@ -52,7 +52,7 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
       <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Avance financiero</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
         <MetricCard label="Cobrado" value={`${k.cobrado_pct}%`} sub={fmt(k.total_cobrado)} subColor="#1a7a4a" />
-        <MetricCard label="Facturado acumulado" value={`${k.avance_financiero_pct}%`} sub={fmt(k.total_facturado)} subColor="#1e6bb8" />
+        <MetricCard label="Facturado acumulado" value={`${k.avance_financiero_pct}%`} sub={fmt(k.total_facturado)} subColor="#E5502A" />
         <MetricCard label="Saldo por facturar" value={fmt(k.saldo_por_facturar)} sub="del contrato" subColor="#b0401a" />
         <MetricCard label="Valor contrato (neto)" value={fmt(k.valor_contrato)} sub={`${k.n_estados} estados de pago`} />
       </div>
@@ -76,7 +76,7 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
         <MetricCard label="Retención acumulada" value={fmt(k.retencion_acumulada)} sub="retenida a la fecha" />
         <MetricCard label="Retención por liberar" value={fmt(k.retencion_saldo)} sub={`devuelto ${fmt(k.retencion_devuelta)}`} subColor="#b0401a" />
         <MetricCard label="Anticipo amortizado" value={fmt(k.anticipo_amortizado)} sub="descontado en EPs" />
-        <MetricCard label="Saldo anticipo" value={fmt(k.anticipo_saldo)} sub={`devuelto ${fmt(k.anticipo_devuelto)}`} subColor="#1e6bb8" />
+        <MetricCard label="Saldo anticipo" value={fmt(k.anticipo_saldo)} sub={`devuelto ${fmt(k.anticipo_devuelto)}`} subColor="#E5502A" />
       </div>
 
       {/* ─── Mano de obra ─── */}

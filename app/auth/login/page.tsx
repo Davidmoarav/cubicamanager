@@ -49,7 +49,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] flex items-center justify-center p-5">
-      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl px-9 py-10 w-full max-w-[420px] shadow-[var(--shadow-lg)]">
+      <div className="bg-[var(--surface)] border border-[var(--border)] rounded-card px-9 py-10 w-full max-w-[420px] shadow-[var(--shadow-lg)]">
 
         {/* Logo */}
         <div className="text-center mb-8">

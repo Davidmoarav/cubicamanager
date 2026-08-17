@@ -93,7 +93,7 @@ export default function ProyectosPage() {
 
       {soloLectura && (
         <div className="bg-[#fff8e6] border border-[#f0dca8] text-[#8a6314] text-[12px] px-4 py-2.5 rounded-lg mb-5">
-          👁 <strong>Solo lectura.</strong> Puedes consultar las obras y sus datos para contabilizar, pero no modificarlas.
+          <strong>Solo lectura.</strong> Puedes consultar las obras y sus datos para contabilizar, pero no modificarlas.
         </div>
       )}
 
@@ -122,7 +122,7 @@ export default function ProyectosPage() {
             const m = META[p.estado] || META.cotizacion
             return (
               <div key={p.id}
-                className="group bg-white border border-line rounded-2xl p-5 shadow-card hover:shadow-pop hover:-translate-y-0.5 transition-all duration-200">
+                className="group bg-white border border-line rounded-card p-5 shadow-card hover:shadow-pop hover:-translate-y-0.5 transition-all duration-200">
                 {/* Estado chip */}
                 <div className="flex items-center justify-between mb-3">
                   <span className={`inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${m.chip}`}>
@@ -143,7 +143,7 @@ export default function ProyectosPage() {
                       <span>Avance</span>
                       <span className="font-bold text-ink">{p.avance}%</span>
                     </div>
-                    <div className="h-2 bg-[#eef2f7] rounded-full overflow-hidden">
+                    <div className="h-2 bg-[#F1ECE6] rounded-full overflow-hidden">
                       <div className={`h-full rounded-full bg-gradient-to-r ${m.bar} transition-all duration-500`} style={{ width: `${p.avance}%` }} />
                     </div>
                   </div>
@@ -179,7 +179,7 @@ export default function ProyectosPage() {
                 <div className="flex gap-2">
                   <button onClick={() => openGestion(p)}
                     className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-bold text-brand bg-brand-bg hover:bg-brand hover:text-white transition">
-                    🏗 Gestionar
+                    Gestionar
                   </button>
                   {puedeEditar && (
                     <>
@@ -200,7 +200,7 @@ export default function ProyectosPage() {
 
           {/* Tarjeta nueva */}
           {puedeEditar && <button onClick={openNew}
-            className="border-2 border-dashed border-line2 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-muted hover:border-brand hover:text-brand hover:bg-brand-bg/40 transition min-h-[210px] cursor-pointer">
+            className="border-2 border-dashed border-line2 rounded-card p-5 flex flex-col items-center justify-center gap-2 text-muted hover:border-brand hover:text-brand hover:bg-brand-bg/40 transition min-h-[210px] cursor-pointer">
             <div className="w-12 h-12 rounded-full bg-canvas flex items-center justify-center text-2xl">+</div>
             <div className="text-[13px] font-semibold">Nuevo proyecto</div>
           </button>}
@@ -210,7 +210,7 @@ export default function ProyectosPage() {
       {/* Empty state */}
       {!isLoading && filtered.length === 0 && (
         <div className="text-center py-16 text-muted">
-          <div className="text-4xl mb-3">🏗</div>
+          <div className="text-4xl mb-3"></div>
           <p className="text-sm">No hay proyectos en este filtro.</p>
         </div>
       )}
@@ -262,20 +262,20 @@ export default function ProyectosPage() {
       {/* ── MODAL GESTIÓN DE OBRA (3 tabs) ── */}
       {gestion && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-5" onClick={() => { setGestion(null); refresh() }}>
-          <div className="bg-white rounded-2xl p-4 sm:p-7 max-w-[860px] w-full shadow-pop max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-card p-4 sm:p-7 max-w-[860px] w-full shadow-pop max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-lg font-bold text-ink m-0 flex items-center gap-2">🏗 {gestion.nombre}</h3>
+              <h3 className="text-lg font-bold text-ink m-0 flex items-center gap-2">{gestion.nombre}</h3>
               <button onClick={() => { setGestion(null); refresh() }} className="text-2xl text-muted hover:text-ink leading-none transition">×</button>
             </div>
 
             {/* Tabs */}
             <div className="flex gap-1 mb-6 p-1 bg-canvas rounded-xl overflow-x-auto no-scrollbar">
               {[
-                { key: 'obra' as const,        label: '📋 Control de obra' },
-                { key: 'presupuesto' as const, label: '💵 Presupuesto y pagos' },
-                { key: 'mano_obra' as const,   label: '👷 Mano de obra' },
-                { key: 'informe' as const,     label: '📊 Informe ejecutivo' },
-                { key: 'docs' as const,        label: '📎 Documentos' },
+                { key: 'obra' as const,        label: 'Control de obra' },
+                { key: 'presupuesto' as const, label: 'Presupuesto y pagos' },
+                { key: 'mano_obra' as const,   label: 'Mano de obra' },
+                { key: 'informe' as const,     label: 'Informe ejecutivo' },
+                { key: 'docs' as const,        label: 'Documentos' },
               ].map(t => (
                 <button key={t.key} onClick={() => setTab(t.key)}
                   className={`shrink-0 lg:flex-1 whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-semibold transition

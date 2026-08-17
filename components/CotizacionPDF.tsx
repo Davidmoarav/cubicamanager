@@ -233,7 +233,7 @@ interface Props {
 }
 
 export function CotizacionPDF({ cotizacion, cliente, empresa, logoUrl }: Props) {
-  const color = empresa?.color_primario || '#1e6bb8'
+  const color = empresa?.color_primario || '#E5502A'
   const styles = createStyles(color)
 
   const partidas: PartidaCotizacion[] = cotizacion.partidas ?? []

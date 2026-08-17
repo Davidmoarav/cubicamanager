@@ -3,7 +3,7 @@
 // (getOwnerId): un miembro invitado ve la empresa, no su cuenta vacía.
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getOwnerId } from '@/lib/roles'
-import { Badge, SectionTitle, Table, Th, Td } from '@/components/ui'
+import { Badge, Table, Th, Td } from '@/components/ui'
 import { fmt, fmtM } from '@/lib/format'
 
 export default async function DashboardPage() {
@@ -36,37 +36,37 @@ export default async function DashboardPage() {
   ]
 
   const metricas = [
-    { label: 'Ingresos cobrados', value: fmtM(cobrado),   sub: 'Facturas pagadas',    color: 'text-success', icon: '💰' },
+    { label: 'Ingresos cobrados', value: fmtM(cobrado),   sub: 'Facturas pagadas',    color: 'text-success', icon: '' },
     { label: 'Por cobrar',        value: fmtM(pendiente), sub: 'Facturas pendientes', color: 'text-danger',  icon: '⏳' },
-    { label: 'Proyectos activos', value: activos,         sub: `+${p.filter((x:any)=>x.estado==='cotizacion').length} en cotización`, color: 'text-warning', icon: '🏗' },
-    { label: 'Personal',          value: e.length,        sub: `${e.filter((x:any)=>x.tipo==='subcontrato').length} subcontratados`, color: 'text-muted', icon: '👷' },
+    { label: 'Proyectos activos', value: activos,         sub: `+${p.filter((x:any)=>x.estado==='cotizacion').length} en cotización`, color: 'text-warning', icon: '' },
+    { label: 'Personal',          value: e.length,        sub: `${e.filter((x:any)=>x.tipo==='subcontrato').length} subcontratados`, color: 'text-muted', icon: '' },
   ]
 
   return (
     <div>
       <div className="mb-6">
-        <SectionTitle>Panel general</SectionTitle>
+        <h1 className="text-[22px] font-extrabold text-ink tracking-tight">Panel general</h1>
         <p className="text-sm text-muted mt-1">Resumen de tu operación</p>
       </div>
 
       {/* Métricas */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {metricas.map(m => (
-          <div key={m.label} className="bg-white border border-line rounded-2xl p-5 shadow-card hover:shadow-pop transition-shadow duration-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-muted">{m.label}</span>
-              <span className="text-base opacity-70">{m.icon}</span>
+          <div key={m.label} className="bg-white border border-line rounded-card p-5 shadow-card hover:shadow-pop hover:-translate-y-0.5 transition duration-200">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10.5px] font-bold uppercase tracking-wider text-muted">{m.label}</span>
+              <span className="w-8 h-8 rounded-xl bg-brand-bg flex items-center justify-center text-[15px]">{m.icon}</span>
             </div>
-            <div className="text-2xl font-extrabold text-ink tabular-nums">{m.value}</div>
-            <div className={`text-xs mt-1 font-medium ${m.color}`}>{m.sub}</div>
+            <div className="text-[26px] font-extrabold text-ink tabular-nums tracking-tight leading-none">{m.value}</div>
+            <div className={`text-xs mt-1.5 font-semibold ${m.color}`}>{m.sub}</div>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         {/* Estado proyectos */}
-        <div className="bg-white border border-line rounded-2xl p-6 shadow-card">
-          <div className="text-sm font-bold text-ink mb-4">Estado de proyectos</div>
+        <div className="bg-white border border-line rounded-card p-6 shadow-card">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-muted mb-4">Estado de proyectos</div>
           {estadosP.map(s => {
             const count = p.filter((x:any) => x.estado === s.key).length
             const pct   = p.length ? Math.round((count / p.length) * 100) : 0
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
                   <span className="font-semibold text-ink">{s.label}</span>
                   <span className="text-muted">{count} proyecto{count !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="h-2 bg-[#eef2f7] rounded-full overflow-hidden">
+                <div className="h-2 bg-canvas rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${s.bar} transition-all duration-500`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
@@ -86,12 +86,12 @@ export default async function DashboardPage() {
         </div>
 
         {/* Últimas facturas */}
-        <div className="bg-white border border-line rounded-2xl p-6 shadow-card">
-          <div className="text-sm font-bold text-ink mb-4">Últimas facturas</div>
+        <div className="bg-white border border-line rounded-card p-6 shadow-card">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-muted mb-4">Últimas facturas</div>
           {f.length === 0
             ? <p className="text-[13px] text-muted text-center py-5">Sin facturas aún</p>
             : f.slice(0, 4).map((fac:any) => (
-              <div key={fac.id} className="flex justify-between items-center py-2.5 border-b border-[#f0f4f8] last:border-0">
+              <div key={fac.id} className="flex justify-between items-center py-2.5 border-b border-line/60 last:border-0">
                 <div>
                   <div className="text-[13px] font-semibold text-ink">{fac.cliente}</div>
                   <div className="text-[11px] text-muted">{fac.numero || '—'}</div>
@@ -106,8 +106,8 @@ export default async function DashboardPage() {
       </div>
 
       {/* Proyectos recientes */}
-      <div className="bg-white border border-line rounded-2xl p-6 shadow-card">
-        <div className="text-sm font-bold text-ink mb-4">Proyectos recientes</div>
+      <div className="bg-white border border-line rounded-card p-6 shadow-card">
+        <div className="text-[11px] font-bold uppercase tracking-wider text-muted mb-4">Proyectos recientes</div>
         {p.length === 0
           ? <p className="text-[13px] text-muted text-center py-5">Dirígete a Proyectos para crear el primero.</p>
           : (
@@ -125,10 +125,10 @@ export default async function DashboardPage() {
                       <Td className="text-muted">{pr.cliente}</Td>
                       <Td>
                         <div className="flex items-center gap-2 min-w-[120px]">
-                          <div className="flex-1 h-1.5 bg-[#eef2f7] rounded-full overflow-hidden">
+                          <div className="flex-1 h-1.5 bg-canvas rounded-full overflow-hidden">
                             <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
                           </div>
-                          <span className="text-[11px] text-muted w-8 text-right">{pct}%</span>
+                          <span className={`text-[11px] font-bold w-8 text-right ${pct === 100 ? 'text-success' : 'text-brand'}`}>{pct}%</span>
                         </div>
                       </Td>
                       <Td className="font-bold tabular-nums">{fmtM(pr.valor)}</Td>

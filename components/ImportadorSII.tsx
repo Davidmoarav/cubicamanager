@@ -54,7 +54,7 @@ function BuscadorFactura({ tipo, value, label, onChange }: { tipo: string; value
             ? <div className="px-2.5 py-3 text-[11px] text-muted text-center">Sin facturas que coincidan</div>
             : resultados.map(f => (
               <button type="button" key={f.id} onClick={() => { onChange(f); setOpen(false); setQ('') }}
-                className="w-full text-left px-2.5 py-2 text-[11px] hover:bg-canvas border-b border-[#f0f4f8] leading-tight">
+                className="w-full text-left px-2.5 py-2 text-[11px] hover:bg-canvas border-b border-[#F1ECE6] leading-tight">
                 <span className="font-bold text-ink">N° {f.numero}</span>
                 <span className="text-muted"> · {f.emision || '—'}</span><br />
                 <span className="truncate">{f.cliente}</span>
@@ -259,7 +259,7 @@ export default function ImportadorSII({ onImported }: Props) {
   return (
     <>
       <Btn onClick={() => setOpen(true)} className="!bg-success-bg !border-[#b9e0c9] !text-success font-bold">
-        📥 Importar del SII
+        Importar del SII
       </Btn>
 
       {open && (
@@ -283,7 +283,7 @@ export default function ImportadorSII({ onImported }: Props) {
                     </thead>
                     <tbody>
                       {filas.map(aplicarTipo).map((f, i) => ({ f, i })).filter(x => esNota(x.f.doc_tipo)).map(({ f, i }) => (
-                        <tr key={i} className="border-t border-[#f0f4f8]">
+                        <tr key={i} className="border-t border-[#F1ECE6]">
                           <td className="px-2 py-1.5 whitespace-nowrap">
                             {f.numero} <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${f.doc_tipo === 'nota_credito' ? 'bg-danger-bg text-danger' : 'bg-brand-bg text-brand'}`}>{f.doc_tipo === 'nota_credito' ? 'NC' : 'ND'}</span>
                           </td>
@@ -323,11 +323,11 @@ export default function ImportadorSII({ onImported }: Props) {
                 <div className="flex gap-2">
                   <button onClick={() => setTipo('compra')}
                     className={`flex-1 py-2.5 rounded-lg border-[1.5px] text-[13px] font-bold transition ${tipo === 'compra' ? 'border-accent bg-accent-bg text-accent' : 'border-line2 text-muted'}`}>
-                    📥 Compras (IVA crédito)
+                    Compras (IVA crédito)
                   </button>
                   <button onClick={() => setTipo('venta')}
                     className={`flex-1 py-2.5 rounded-lg border-[1.5px] text-[13px] font-bold transition ${tipo === 'venta' ? 'border-success bg-success-bg text-success' : 'border-line2 text-muted'}`}>
-                    📤 Ventas (IVA débito)
+                    Ventas (IVA débito)
                   </button>
                 </div>
               </div>
@@ -336,7 +336,7 @@ export default function ImportadorSII({ onImported }: Props) {
               <label className="block border-2 border-dashed border-line2 rounded-xl p-6 text-center cursor-pointer hover:border-brand hover:bg-brand-bg/30 transition mb-4">
                 <input type="file" accept=".csv" className="hidden"
                   onChange={e => e.target.files?.[0] && procesarArchivo(e.target.files[0])} />
-                <div className="text-3xl mb-2">📄</div>
+                <div className="text-3xl mb-2"></div>
                 <div className="text-[13px] font-semibold text-ink">{nombreArchivo || 'Haz clic para elegir el CSV del SII'}</div>
                 <div className="text-[11px] text-muted mt-1">Archivo .csv separado por ; o ,</div>
               </label>
@@ -357,10 +357,10 @@ export default function ImportadorSII({ onImported }: Props) {
                     </div>
                     {(totales.nc > 0 || totales.nd > 0 || totales.boletas > 0 || omitidas > 0) && (
                       <div className="flex flex-wrap gap-3 text-[11px] text-muted pt-2 border-t border-line">
-                        {totales.boletas > 0 && <span>🧾 {totales.boletas} boleta(s)/comprobante(s)</span>}
-                        {totales.nc > 0 && <span>➖ {totales.nc} nota(s) de crédito</span>}
-                        {totales.nd > 0 && <span>➕ {totales.nd} nota(s) de débito</span>}
-                        {omitidas > 0 && <span className="text-warning">⚠ {omitidas} fila(s) sin montos omitida(s)</span>}
+                        {totales.boletas > 0 && <span>{totales.boletas} boleta(s)/comprobante(s)</span>}
+                        {totales.nc > 0 && <span>{totales.nc} nota(s) de crédito</span>}
+                        {totales.nd > 0 && <span>{totales.nd} nota(s) de débito</span>}
+                        {omitidas > 0 && <span className="text-warning">{omitidas} fila(s) sin montos omitida(s)</span>}
                       </div>
                     )}
                   </div>
@@ -370,8 +370,8 @@ export default function ImportadorSII({ onImported }: Props) {
                     <label className="label-base">¿Qué tipo de documento contiene este archivo?</label>
                     <select value={docForzado} onChange={e => setDocForzado(e.target.value as any)} className="input-base cursor-pointer">
                       <option value="auto">Detectar automático (facturas, o por código si existe)</option>
-                      <option value="nota_credito">➖ Todo son notas de CRÉDITO</option>
-                      <option value="nota_debito">➕ Todo son notas de DÉBITO</option>
+                      <option value="nota_credito">Todo son notas de CRÉDITO</option>
+                      <option value="nota_debito">Todo son notas de DÉBITO</option>
                     </select>
                     <p className="text-[11px] text-muted mt-1.5">
                       Si el SII te entrega las notas en un archivo separado (sin columna de tipo), elige aquí qué son.
@@ -386,7 +386,7 @@ export default function ImportadorSII({ onImported }: Props) {
                       </thead>
                       <tbody>
                         {filas.slice(0, 30).map((f, i) => (
-                          <tr key={i} className="border-t border-[#f0f4f8]">
+                          <tr key={i} className="border-t border-[#F1ECE6]">
                             <td className="px-2 py-1.5">{f.numero}</td>
                             <td className="px-2 py-1.5 truncate max-w-[140px]">{f.contraparte}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.neto)}</td>
@@ -411,7 +411,7 @@ export default function ImportadorSII({ onImported }: Props) {
           ) : (
             /* Resultado */
             <div className="text-center py-4">
-              <div className="text-4xl mb-3">✅</div>
+              <div className="text-4xl mb-3"></div>
               <div className="text-base font-bold text-ink mb-2">Importación completada</div>
               <div className="text-[13px] text-muted mb-1">{resultado.insertadas} documento(s) importado(s)</div>
               {resultado.duplicadas > 0 && (

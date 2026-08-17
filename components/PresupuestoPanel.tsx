@@ -146,8 +146,8 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   }
 
   const CAT_LABEL: Record<string, string> = {
-    mano_obra: '👷 Mano de obra', materiales: '🧱 Materiales', equipos: '🚜 Equipos',
-    subcontrato: '🔧 Subcontrato', fletes: '🚚 Fletes', otros: '📦 Otros',
+    mano_obra: 'Mano de obra', materiales: 'Materiales', equipos: 'Equipos',
+    subcontrato: 'Subcontrato', fletes: 'Fletes', otros: 'Otros',
   }
 
   // ─── Abrir modal: pedir sugerencia de EP (trae % del proyecto) ──
@@ -259,7 +259,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
       body: JSON.stringify({ id: ep.id, estado, generar_factura: generarFactura }),
     })
     const data = await res.json()
-    if (data.factura_generada) alert('✓ Factura generada en el módulo de Facturación')
+    if (data.factura_generada) alert('Factura generada en el módulo de Facturación')
     await load()
   }
 
@@ -294,7 +294,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
     <div>
       {soloLectura && (
         <div className="bg-[#fff8e6] border border-[#f0dca8] text-[#8a6314] text-[12px] px-4 py-2.5 rounded-lg mb-4">
-          👁 <strong>Solo lectura.</strong> Puedes consultar el presupuesto y los estados de pago, pero no modificarlos.
+          <strong>Solo lectura.</strong> Puedes consultar el presupuesto y los estados de pago, pero no modificarlos.
         </div>
       )}
       {/* Sub-pestañas */}
@@ -354,8 +354,8 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
             <div className="text-[10px] text-muted">
               {resumen.costo_ejecutado > 0
                 ? (resumen.desviacion_ejecutada >= 0
-                    ? `Bajo costo para el ${resumen.pct_ejecutado ?? 0}% de avance ✓`
-                    : `⚠ Sobregirado para el avance actual`)
+                    ? `Bajo costo para el ${resumen.pct_ejecutado ?? 0}% de avance`
+                    : `Sobregirado para el avance actual`)
                 : 'Sin avance cargado'}
             </div>
             <div className="text-[10px] text-subtle mt-0.5">Total obra: {resumen.desviacion >= 0 ? '+' : ''}{fmt(resumen.desviacion)}</div>
@@ -368,7 +368,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
         </div>
         {/* Barra presupuesto vs gasto */}
         <div className="mt-3">
-          <div className="h-2.5 bg-[#e8edf2] rounded-full overflow-hidden">
+          <div className="h-2.5 bg-[#EDE7E0] rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-500 ${resumen.pct_gastado > 100 ? 'bg-danger' : 'bg-warning'}`}
               style={{ width: `${Math.min(100, resumen.pct_gastado)}%` }} />
           </div>
@@ -376,8 +376,8 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
         {/* Desglose del gasto real */}
         {resumen.gasto_real > 0 && (
           <div className="flex gap-4 mt-3 text-[11px] text-muted">
-            <span>🧾 Facturas proveedores: {fmt(resumen.gasto_facturas)}</span>
-            <span>✍️ Gastos manuales: {fmt(resumen.gasto_manual)}</span>
+            <span>Facturas proveedores: {fmt(resumen.gasto_facturas)}</span>
+            <span>Gastos manuales: {fmt(resumen.gasto_manual)}</span>
           </div>
         )}
       </div>
@@ -400,7 +400,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                         <span className={`ml-2 font-bold ${sobre ? 'text-danger' : 'text-muted'}`}>{d.pct_gastado}%</span>
                       </span>
                     </div>
-                    <div className="h-2 bg-[#e8edf2] rounded-full overflow-hidden">
+                    <div className="h-2 bg-[#EDE7E0] rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${sobre ? 'bg-danger' : 'bg-warning'}`}
                         style={{ width: `${Math.min(100, d.pct_gastado)}%` }} />
                     </div>
@@ -452,7 +452,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
           <span>Avance de cobro</span>
           <span className="font-bold text-success">{pctCobrado}%</span>
         </div>
-        <div className="h-2.5 bg-[#e8edf2] rounded-full overflow-hidden">
+        <div className="h-2.5 bg-[#EDE7E0] rounded-full overflow-hidden">
           <div className="h-full bg-success rounded-full transition-all duration-500" style={{ width: `${pctCobrado}%` }} />
         </div>
       </div>
@@ -506,7 +506,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-ink">EP N°{ep.numero}</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: s.bg, color: s.color }} >{s.label}</span>
-                        {ep.factura_id && <span className="text-[10px] text-accent font-semibold">🧾 Facturado</span>}
+                        {ep.factura_id && <span className="text-[10px] text-accent font-semibold">Facturado</span>}
                       </div>
                       <div className="text-[11px] text-muted mt-0.5">
                         {ep.periodo} · {ep.fecha}
@@ -525,7 +525,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
 
                   {/* Desglose */}
                   {(ep.bruto > 0 || ep.retencion_monto > 0 || ep.anticipo_desc > 0) && (
-                    <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[11px] text-muted mt-2 pt-2 border-t border-[#f0f4f8]">
+                    <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[11px] text-muted mt-2 pt-2 border-t border-[#F1ECE6]">
                       <span>Avance: {fmt(ep.avance_obra ?? ep.monto_neto)}</span>
                       {ep.utilidad_monto > 0 && <span className="text-success">+ Util. {ep.utilidad_pct}%: {fmt(ep.utilidad_monto)}</span>}
                       {ep.gg_monto > 0 && <span className="text-success">+ GG {ep.gg_pct}%: {fmt(ep.gg_monto)}</span>}
@@ -550,7 +550,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                     {ep.estado === 'aprobado' && (
                       <>
                         {!ep.factura_id && (
-                          <Btn onClick={() => cambiarEstado(ep, 'aprobado', true)} className="!text-[11px] !px-[10px] !py-1 !bg-accent-bg !border-[#ccc5fc] !text-accent font-bold">🧾 Generar factura</Btn>
+                          <Btn onClick={() => cambiarEstado(ep, 'aprobado', true)} className="!text-[11px] !px-[10px] !py-1 !bg-accent-bg !border-[#ccc5fc] !text-accent font-bold">Generar factura</Btn>
                         )}
                         <Btn onClick={() => cambiarEstado(ep, 'pagado')} className="!text-[11px] !px-[10px] !py-1 !bg-success-bg !border-[#b9e0c9] !text-success">Marcar pagado</Btn>
                       </>
@@ -603,7 +603,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                 <div className="flex justify-between"><span className="text-muted">Devuelto adicional</span><span className="font-bold text-success">− {fmt(control.antDevuelto)}</span></div>
                 <div className="flex justify-between border-t border-line pt-1.5 mt-0.5"><span className="font-bold text-ink">Saldo por amortizar</span><span className={`font-extrabold ${control.antSaldo > 0 ? 'text-brand' : 'text-success'}`}>{fmt(control.antSaldo)}</span></div>
                 {control.anticipoRecibido === 0 && control.antAmortizado > 0 && (
-                  <div className="text-[10px] text-[#b0641a] mt-1">⚠ Registra el anticipo recibido en los datos del proyecto para ver el saldo real.</div>
+                  <div className="text-[10px] text-[#b0641a] mt-1">Registra el anticipo recibido en los datos del proyecto para ver el saldo real.</div>
                 )}
               </div>
             </div>
@@ -737,12 +737,12 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
             <div>
               <label className="label-base">Categoría</label>
               <select className="input-base cursor-pointer" value={gastoForm.categoria || 'materiales'} onChange={e => updGasto('categoria', e.target.value)}>
-                <option value="mano_obra">👷 Mano de obra</option>
-                <option value="materiales">🧱 Materiales</option>
-                <option value="equipos">🚜 Equipos</option>
-                <option value="subcontrato">🔧 Subcontrato</option>
-                <option value="fletes">🚚 Fletes</option>
-                <option value="otros">📦 Otros</option>
+                <option value="mano_obra">Mano de obra</option>
+                <option value="materiales">Materiales</option>
+                <option value="equipos">Equipos</option>
+                <option value="subcontrato">Subcontrato</option>
+                <option value="fletes">Fletes</option>
+                <option value="otros">Otros</option>
               </select>
             </div>
             <div>

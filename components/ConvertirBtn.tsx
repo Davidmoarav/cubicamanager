@@ -69,7 +69,7 @@ export default function ConvertirBtn({ cotizacion, onSuccess }: Props) {
       // Éxito: refrescar lista y ofrecer ir al proyecto
       onSuccess?.()
       const irAlProyecto = confirm(
-        '✓ Proyecto creado correctamente.\n\n' +
+        'Proyecto creado correctamente.\n\n' +
         '¿Quieres ir al módulo de Proyectos para verlo?'
       )
       if (irAlProyecto) router.push('/proyectos')

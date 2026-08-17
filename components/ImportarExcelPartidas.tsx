@@ -192,13 +192,13 @@ export default function ImportarExcelPartidas({ proyectoId, markup = 20, onImpor
           </p>
           <a href="/Plantilla_Partidas_ObraManager.xlsx" download
             className="flex items-center gap-2 text-[12px] text-brand font-semibold mb-3 hover:underline">
-            ⬇ Descargar plantilla de ejemplo
+            Descargar plantilla de ejemplo
             <span className="text-[11px] text-muted font-normal">(recomendado si armas desde cero — evita errores)</span>
           </a>
           <label className="block border-2 border-dashed border-line rounded-xl p-8 text-center cursor-pointer hover:border-brand hover:bg-brand-bg/30 transition">
             <input type="file" accept=".xlsx,.xls" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) leerArchivo(f) }} />
-            <div className="text-3xl mb-2">📊</div>
+            <div className="text-3xl mb-2"></div>
             <div className="text-[13px] font-semibold text-brand">Elegir archivo Excel</div>
             <div className="text-[11px] text-muted mt-1">.xlsx o .xls</div>
           </label>
@@ -232,12 +232,12 @@ export default function ImportarExcelPartidas({ proyectoId, markup = 20, onImpor
                   <button onClick={() => setExpandido(abierto ? null : i)}
                     className="w-full flex items-center gap-2 px-3 py-2 bg-white text-left">
                     <span className="text-[10px] text-muted" style={{ transform: abierto ? 'rotate(90deg)' : 'none' }}>▶</span>
-                    <span className="text-[11px] font-bold text-brand bg-[#e8f1fb] px-1.5 py-0.5 rounded">{i + 1}</span>
+                    <span className="text-[11px] font-bold text-brand bg-[#FCEAE3] px-1.5 py-0.5 rounded">{i + 1}</span>
                     <span className="text-[12px] font-bold text-ink flex-1 truncate">{sub.nombre}</span>
                     <span className="text-[10px] text-muted">{sub.etapas.length} etapas · {npart} partidas</span>
                   </button>
                   {abierto && (
-                    <div className="px-3 py-2 bg-[#fafbfc] border-t border-line2">
+                    <div className="px-3 py-2 bg-[#FBFAF9] border-t border-line2">
                       {sub.etapas.map((et, j) => (
                         <div key={j} className="mb-1.5">
                           <div className="text-[11px] font-semibold text-ink">{i + 1}.{j + 1} {et.nombre}</div>

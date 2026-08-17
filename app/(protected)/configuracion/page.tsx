@@ -74,9 +74,22 @@ export default function ConfiguracionPage() {
     const ext  = file.name.split('.').pop()?.toLowerCase() || 'png'
     const path = `${ownerId}/logo.${ext}`
 
+    // Subir el ArrayBuffer con contentType explícito: evita el error
+    // "No content provided" que ocurre al pasar un File directo en algunos navegadores.
+    const buffer = await file.arrayBuffer()
+    if (buffer.byteLength === 0) {
+      setMsg({ kind: 'error', text: 'El archivo está vacío o no se pudo leer. Intenta con otro.' })
+      setUploading(false)
+      return
+    }
+
     const { error: upErr } = await supabase.storage
       .from('empresa-logos')
-      .upload(path, file, { upsert: true, cacheControl: '3600' })
+      .upload(path, buffer, {
+        upsert: true,
+        cacheControl: '3600',
+        contentType: file.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      })
 
     if (upErr) {
       setMsg({ kind: 'error', text: 'Error al subir logo: ' + upErr.message })
@@ -154,7 +167,7 @@ export default function ConfiguracionPage() {
       </div>
 
       {tab === 'perfil' ? <PerfilPanel /> : !esAdmin ? (
-        <div className="bg-white border border-line rounded-2xl p-8 text-center shadow-card">
+        <div className="bg-white border border-line rounded-card p-8 text-center shadow-card">
           <p className="text-muted text-[14px]">Solo el administrador puede editar los datos de la empresa.</p>
         </div>
       ) : (
@@ -175,12 +188,12 @@ export default function ConfiguracionPage() {
       )}
 
       {/* ─── LOGO ─── */}
-      <div className="bg-white border border-line rounded-2xl p-6 shadow-card mb-5">
+      <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Logo de la empresa</div>
 
         <div className="flex items-center gap-6">
           {/* Preview */}
-          <div className="w-40 h-40 border border-dashed border-[#d1d9e6] rounded-[10px] bg-[#fafbfc] flex items-center justify-center shrink-0 overflow-hidden">
+          <div className="w-40 h-40 border border-dashed border-[#d1d9e6] rounded-[10px] bg-[#FBFAF9] flex items-center justify-center shrink-0 overflow-hidden">
             {logoUrl
               ? <img src={logoUrl} alt="Logo" className="max-w-[90%] max-h-[90%] object-contain" />
               : <div className="text-[12px] text-[#a0aab8] text-center p-3">Sin logo<br/>Sube uno aquí</div>}
@@ -208,7 +221,7 @@ export default function ConfiguracionPage() {
       </div>
 
       {/* ─── DATOS DE LA EMPRESA ─── */}
-      <div className="bg-white border border-line rounded-2xl p-6 shadow-card mb-5">
+      <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Datos legales y comerciales</div>
 
         <div className="grid grid-cols-2 gap-3.5">
@@ -231,16 +244,16 @@ export default function ConfiguracionPage() {
       </div>
 
       {/* ─── PERSONALIZACIÓN PDF ─── */}
-      <div className="bg-white border border-line rounded-2xl p-6 shadow-card mb-5">
+      <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Personalización de documentos PDF</div>
 
         <div className="grid grid-cols-[180px_1fr] gap-3.5 items-center">
           <label className="text-[12px] font-semibold text-muted">Color principal</label>
           <div className="flex items-center gap-[10px]">
-            <input type="color" value={form.color_primario || '#1e6bb8'}
+            <input type="color" value={form.color_primario || '#E5502A'}
               onChange={e => upd('color_primario', e.target.value)}
               className="w-[50px] h-9 border border-[#d1d9e6] rounded-[6px] cursor-pointer" />
-            <input value={form.color_primario || '#1e6bb8'}
+            <input value={form.color_primario || '#E5502A'}
               onChange={e => upd('color_primario', e.target.value)}
               className="w-[120px] px-[11px] py-2 border border-[#d1d9e6] rounded-[7px] text-[13px] font-mono" />
             <span className="text-[12px] text-muted">Se usa en títulos y bordes del PDF</span>

@@ -17,6 +17,10 @@ export interface PartidaProyecto {
   // Jerarquía y costos (columnas de sql/08, 13, 14 y 28)
   es_grupo?: boolean
   categoria?: string | null
+  // Carta Gantt (sql/37)
+  fecha_inicio?: string | null
+  fecha_fin?: string | null
+  responsable?: string | null
   costo_unitario?: number
   costo_material_unit?: number
   costo_mo_unit?: number

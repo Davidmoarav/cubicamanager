@@ -114,7 +114,7 @@ export default function CatalogoProveedor({ proveedor, onClose }: { proveedor: a
                   <th className="px-2 py-1">Unidad</th><th className="text-right px-2 py-1">Precio</th>
                 </tr></thead>
                 <tbody>{preview.slice(0, 50).map((p, i) => (
-                  <tr key={i} className="border-t border-[#f0f4f8]">
+                  <tr key={i} className="border-t border-[#F1ECE6]">
                     <td className="px-2 py-1">{p.codigo}</td><td className="px-2 py-1">{p.descripcion}</td>
                     <td className="px-2 py-1 text-center">{p.unidad}</td><td className="px-2 py-1 text-right">{fmt(p.precio)}</td>
                   </tr>
@@ -154,7 +154,7 @@ export default function CatalogoProveedor({ proveedor, onClose }: { proveedor: a
                 <th className="px-2 py-1.5"></th>
               </tr></thead>
               <tbody>{productos.map(p => (
-                <tr key={p.id} className="border-t border-[#f0f4f8]">
+                <tr key={p.id} className="border-t border-[#F1ECE6]">
                   <td className="px-2 py-1.5 font-mono text-[11px]">{p.codigo}</td>
                   <td className="px-2 py-1.5">{p.descripcion}</td>
                   <td className="px-2 py-1.5 text-center text-muted">{p.unidad}</td>

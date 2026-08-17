@@ -6,12 +6,13 @@
 // las hojas (partidas reales) tienen el slider de avance y su costo.
 
 import { fmt } from '@/lib/format'
+import { IconEdit, IconEye } from '@/components/Icon'
 
 function colorAvance(pct: number) {
-  if (pct >= 100) return '#16a34a'
-  if (pct >= 50)  return '#2563eb'
-  if (pct > 0)    return '#d97706'
-  return '#94a3b8'
+  if (pct >= 100) return '#1a7a4a'   // verde (completo)
+  if (pct >= 50)  return '#E5502A'   // coral (en curso)
+  if (pct > 0)    return '#b07d1a'   // ámbar (iniciado)
+  return '#a0aab8'                    // gris (sin avance)
 }
 
 // Etiqueta jerárquica: 1, 1.1, 1.1.1
@@ -48,8 +49,8 @@ export default function FilaPartida(props: Props) {
   // Estilo por nivel: nivel 1 (beneficiario) destacado como título, se aclara hacia abajo
   const estiloNivel = [
     'bg-gradient-to-r from-[#eef5fd] to-white border border-[#c5ddf5]',  // nivel 1 (beneficiario)
-    'bg-[#f7f9fc] border border-[#e2e9f2]',                              // nivel 2 (subproyecto)
-    'bg-[#fafbfc] border border-[#eef1f5]',                             // nivel 3 (etapa)
+    'bg-[#F8F6F3] border border-[#e2e9f2]',                              // nivel 2 (subproyecto)
+    'bg-[#FBFAF9] border border-[#eef1f5]',                             // nivel 3 (etapa)
     'bg-transparent',                                                    // nivel 4 (partida)
   ][Math.min(nivel - 1, 3)]
 
@@ -76,14 +77,13 @@ export default function FilaPartida(props: Props) {
 
         {/* Índice jerárquico */}
         <span className={`text-[11px] font-bold flex-shrink-0 px-1.5 py-0.5 rounded ${
-          nivel === 1 ? 'text-brand bg-[#e8f1fb]' : 'text-muted bg-[#eef2f7]'}`}>
+          nivel === 1 ? 'text-brand bg-[#FCEAE3]' : 'text-muted bg-[#F1ECE6]'}`}>
           {indice(ruta)}
         </span>
 
         {/* Descripción */}
         <div className="flex-1 min-w-0">
           <div className={`${nivel === 1 ? 'text-[15px] font-extrabold' : nivel === 2 ? 'text-[13px] font-bold' : nivel === 3 ? 'text-[12px] font-semibold' : 'text-[12px]'} text-[#1a2535] truncate flex items-center gap-1.5`}>
-            {nivel === 1 && <span className="text-[13px]">👤</span>}
             {nodo.descripcion}
           </div>
           <div className="flex gap-2.5 text-[10px] text-muted mt-0.5">
@@ -100,7 +100,7 @@ export default function FilaPartida(props: Props) {
         {/* Avance: slider en hojas, barra en grupos */}
         {esGrupo ? (
           <div className="w-[80px] flex-shrink-0">
-            <div className="h-1.5 bg-[#e8edf2] rounded-[3px] overflow-hidden">
+            <div className="h-1.5 bg-[#EDE7E0] rounded-[3px] overflow-hidden">
               <div className="h-full rounded-[3px]" style={{ width: `${avance}%`, background: colorAvance(avance) }} />
             </div>
           </div>
@@ -122,14 +122,14 @@ export default function FilaPartida(props: Props) {
         {/* Ver detalle (partidas hoja) */}
         {!esGrupo && onDetalle && (
           <button onClick={e => { e.stopPropagation(); onDetalle(nodo) }} title="Ver detalle y materiales"
-            className="w-6 h-6 rounded-[5px] bg-[#eef3f9] text-brand text-[11px] font-bold flex items-center justify-center flex-shrink-0">🔍</button>
+            className="w-6 h-6 rounded-[5px] bg-brand-bg text-brand flex items-center justify-center flex-shrink-0"><IconEye className="w-3.5 h-3.5" /></button>
         )}
 
         {/* Acciones */}
         {!soloLectura && (
           <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
             <button onClick={() => onEdit(nodo)} title="Editar"
-              className="w-6 h-6 rounded-[5px] bg-canvas text-muted text-[11px] font-bold flex items-center justify-center">✎</button>
+              className="w-6 h-6 rounded-[5px] bg-canvas text-muted flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>
             <button onClick={() => onDel(nodo.id)} title="Eliminar"
               className="w-6 h-6 rounded-[5px] bg-danger-bg text-danger text-[11px] font-bold flex items-center justify-center">✕</button>
           </div>

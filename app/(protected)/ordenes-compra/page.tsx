@@ -16,8 +16,8 @@ import { UNIDADES } from '@/types/cotizaciones'
 const IVA = 0.19
 
 const ESTADO_OC: Record<string, { label: string; bg: string; color: string }> = {
-  borrador: { label: 'Borrador', bg: '#f0f4f8', color: '#6b7a8d' },
-  enviada:  { label: 'Enviada',  bg: '#e8f1fb', color: '#1e6bb8' },
+  borrador: { label: 'Borrador', bg: '#F1ECE6', color: '#6b7a8d' },
+  enviada:  { label: 'Enviada',  bg: '#FCEAE3', color: '#E5502A' },
   recibida: { label: 'Recibida', bg: '#e6f4ed', color: '#1a7a4a' },
   anulada:  { label: 'Anulada',  bg: '#fdecea', color: '#b0401a' },
 }
@@ -186,7 +186,7 @@ export default function OrdenesCompraPage() {
       </div>
 
       {/* Tabla */}
-      <div className="bg-white border border-line rounded-2xl p-5 shadow-card">
+      <div className="bg-white border border-line rounded-card p-5 shadow-card">
         {isLoading
           ? <p className="text-muted text-center p-10">Cargando...</p>
           : items.length === 0
@@ -253,7 +253,7 @@ export default function OrdenesCompraPage() {
               <strong>Precios automáticos:</strong> genera las líneas desde los rendimientos del proyecto.
             </div>
             <Btn onClick={generarDesdeProyecto} disabled={sugiriendo || !form.proyecto_id}>
-              {sugiriendo ? 'Generando…' : '⚡ Generar desde proyecto'}
+              {sugiriendo ? 'Generando…' : 'Generar desde proyecto'}
             </Btn>
           </div>
 

@@ -9,7 +9,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
         <div style={{ textAlign: 'center', padding: 24 }}>
           <h2 style={{ marginBottom: 8, color: '#1a2535' }}>Algo salió mal</h2>
           <p style={{ color: '#6b7a8d', marginBottom: 20 }}>Ocurrió un error inesperado. Intenta recargar la página.</p>
-          <button onClick={reset} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#1e6bb8', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
+          <button onClick={reset} style={{ padding: '8px 18px', borderRadius: 8, border: 'none', background: '#E5502A', color: '#fff', cursor: 'pointer', fontWeight: 700 }}>
             Reintentar
           </button>
         </div>

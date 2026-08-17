@@ -122,7 +122,7 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
       </div>
 
       {savedAt && Date.now() - savedAt < 4000 && (
-        <div className="mb-3 text-[12px] text-success font-semibold">Proyección guardada ✓</div>
+        <div className="mb-3 text-[12px] text-success font-semibold">Proyección guardada</div>
       )}
       {asignados === 0 && (
         <div className="mb-3 text-[12px] text-warning bg-warning-bg rounded-lg px-3 py-2">

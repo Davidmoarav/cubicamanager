@@ -28,13 +28,13 @@ const catMap = Object.fromEntries(CATEGORIAS_DOC.map(c => [c.value, c]))
 
 // Iconos por tipo de archivo
 const fileIcon = (tipo?: string) => {
-  if (!tipo) return '📁'
-  if (tipo.startsWith('image/')) return '🖼'
-  if (tipo === 'application/pdf') return '📕'
-  if (tipo.includes('dwg') || tipo.includes('autocad') || tipo.includes('acad')) return '📐'
-  if (tipo.includes('spreadsheet') || tipo.includes('excel') || tipo.includes('xlsx')) return '📊'
-  if (tipo.includes('word') || tipo.includes('docx')) return '📝'
-  return '📁'
+  if (!tipo) return ''
+  if (tipo.startsWith('image/')) return ''
+  if (tipo === 'application/pdf') return ''
+  if (tipo.includes('dwg') || tipo.includes('autocad') || tipo.includes('acad')) return ''
+  if (tipo.includes('spreadsheet') || tipo.includes('excel') || tipo.includes('xlsx')) return ''
+  if (tipo.includes('word') || tipo.includes('docx')) return ''
+  return ''
 }
 
 interface Props {
@@ -112,9 +112,18 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
     const safe = pendingFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const path = `${ownerId}/${proyectoId}/${ts}_${safe}`
 
+    // ArrayBuffer + contentType: evita "No content provided" con File directo
+    const buffer = await pendingFile.arrayBuffer()
+    if (buffer.byteLength === 0) {
+      alert('El archivo está vacío o no se pudo leer. Intenta con otro.')
+      setUploading(false)
+      setProgress(null)
+      return
+    }
+
     const { error: upErr } = await supabase.storage
       .from('proyecto-docs')
-      .upload(path, pendingFile, { cacheControl: '3600' })
+      .upload(path, buffer, { cacheControl: '3600', contentType: pendingFile.type || 'application/octet-stream' })
 
     if (upErr) {
       alert('Error al subir: ' + upErr.message)
@@ -207,7 +216,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
         onClick={() => fileRef.current?.click()}
         className={`rounded-[10px] px-5 py-6 text-center cursor-pointer mb-4 transition-all duration-150 border-2 border-dashed ${
           dragging
-            ? 'border-brand bg-[#e8f1fb]'
+            ? 'border-brand bg-[#FCEAE3]'
             : 'border-[#d1d9e6] bg-[#f8fafc]'
         }`}
       >
@@ -215,7 +224,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
           accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.rar"
           onChange={e => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0]); e.target.value = '' }}
         />
-        <div className="text-[28px] mb-1.5">📎</div>
+        <div className="text-[28px] mb-1.5"></div>
         <div className="text-[13px] font-semibold text-[#1a2535]">
           {dragging ? 'Suelta el archivo aquí' : 'Arrastra un archivo o haz clic para subir'}
         </div>
@@ -229,7 +238,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
         <div className="flex gap-1.5 mb-3.5 flex-wrap">
           <button
             onClick={() => setFiltro('todos')}
-            className={`px-3 py-1 rounded-2xl border text-[11px] font-semibold cursor-pointer ${
+            className={`px-3 py-1 rounded-card border text-[11px] font-semibold cursor-pointer ${
               filtro === 'todos'
                 ? 'border-brand bg-brand text-white'
                 : 'border-[#d1d9e6] bg-white text-muted'
@@ -244,7 +253,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
               <button
                 key={c.value}
                 onClick={() => setFiltro(c.value)}
-                className={`px-3 py-1 rounded-2xl border text-[11px] font-semibold cursor-pointer ${
+                className={`px-3 py-1 rounded-card border text-[11px] font-semibold cursor-pointer ${
                   filtro === c.value
                     ? 'border-brand bg-brand text-white'
                     : 'border-[#d1d9e6] bg-white text-muted'
@@ -298,7 +307,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
                   <button
                     onClick={() => descargar(doc)}
                     title="Descargar"
-                    className="w-7 h-7 rounded-[6px] border-none bg-[#e8f1fb] text-brand text-[14px] font-bold cursor-pointer flex items-center justify-center"
+                    className="w-7 h-7 rounded-[6px] border-none bg-[#FCEAE3] text-brand text-[14px] font-bold cursor-pointer flex items-center justify-center"
                   >
                     ↓
                   </button>

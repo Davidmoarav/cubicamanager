@@ -4,6 +4,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
+import { IconEdit } from '@/components/Icon'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, MetricCard } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { UNIDADES } from '@/types/cotizaciones'
@@ -95,7 +96,7 @@ export default function CatalogoPartidasPage() {
         ? <p className="text-muted text-center p-[30px]">Cargando catálogo...</p>
         : padres.length === 0
         ? <div className="bg-[#f8fafc] border border-dashed border-[#d1d9e6] rounded-[10px] p-9 text-center">
-            <div className="text-[28px] mb-2">📋</div>
+            <div className="text-[28px] mb-2"></div>
             <div className="text-sm font-semibold text-[#1a2535] mb-1.5">Tu catálogo está vacío</div>
             <div className="text-[12px] text-muted mb-3.5">
               Agrega partidas comunes como "Obra Gruesa", "Instalaciones Eléctricas", "Terminaciones", etc.
@@ -113,11 +114,11 @@ export default function CatalogoPartidasPage() {
                   {/* CABECERA PADRE */}
                   <div
                     onClick={() => toggle(padre.id)}
-                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-l-4 border-brand ${isOpen ? 'bg-[#f4f7fb]' : 'bg-white'}`}
+                    className={`flex items-center gap-3 px-4 py-3 cursor-pointer border-l-4 border-brand ${isOpen ? 'bg-[#F1ECE6]' : 'bg-white'}`}
                   >
                     <span className={`text-[12px] text-muted flex-shrink-0 transition-transform duration-150 ${isOpen ? 'rotate-90' : ''}`}>▶</span>
 
-                    <span className="text-[11px] font-bold text-brand bg-[#e8f1fb] px-2 py-0.5 rounded flex-shrink-0">
+                    <span className="text-[11px] font-bold text-brand bg-[#FCEAE3] px-2 py-0.5 rounded flex-shrink-0">
                       {idx + 1}
                     </span>
 
@@ -131,14 +132,14 @@ export default function CatalogoPartidasPage() {
                     </div>
 
                     <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => openEdit(padre)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted text-[11px] font-bold cursor-pointer flex items-center justify-center">✎</button>
+                      <button onClick={() => openEdit(padre)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted cursor-pointer flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>
                       <button onClick={() => del(padre.id)} className="w-6 h-6 rounded-[5px] border-0 bg-danger-bg text-danger text-[11px] font-bold cursor-pointer flex items-center justify-center">✕</button>
                     </div>
                   </div>
 
                   {/* SUB-PARTIDAS */}
                   {isOpen && (
-                    <div className="px-4 pt-3 pb-3.5 pl-9 bg-[#fafbfc] border-t border-[#e4e9f0]">
+                    <div className="px-4 pt-3 pb-3.5 pl-9 bg-[#FBFAF9] border-t border-[#e4e9f0]">
                       {padre.children.length === 0 && (
                         <p className="text-[12px] text-muted text-center py-1.5">
                           Sin sub-partidas definidas aún.
@@ -157,7 +158,7 @@ export default function CatalogoPartidasPage() {
                             </div>
                           </div>
                           <div className="flex gap-[3px]">
-                            <button onClick={() => openEdit(hijo)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted text-[11px] font-bold cursor-pointer flex items-center justify-center">✎</button>
+                            <button onClick={() => openEdit(hijo)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted cursor-pointer flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>
                             <button onClick={() => del(hijo.id)} className="w-6 h-6 rounded-[5px] border-0 bg-danger-bg text-danger text-[11px] font-bold cursor-pointer flex items-center justify-center">✕</button>
                           </div>
                         </div>

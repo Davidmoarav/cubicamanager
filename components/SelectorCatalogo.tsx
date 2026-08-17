@@ -32,7 +32,7 @@ export default function SelectorCatalogo({ proveedorId = '', onPick, label = '+ 
             ? <div className="px-3 py-4 text-[11px] text-muted text-center">{q.trim() ? 'Sin resultados' : (proveedorId ? 'Este proveedor no tiene catálogo cargado' : 'No hay productos en ningún catálogo')}</div>
             : productos.map(p => (
               <button key={p.id} type="button" onClick={() => onPick(p)}
-                className="w-full text-left px-3 py-2 text-[12px] hover:bg-canvas border-b border-[#f0f4f8] flex items-center justify-between gap-2">
+                className="w-full text-left px-3 py-2 text-[12px] hover:bg-canvas border-b border-[#F1ECE6] flex items-center justify-between gap-2">
                 <span className="truncate">
                   <span className="font-semibold text-ink">{p.descripcion}</span>
                   {p.codigo ? <span className="text-muted"> · {p.codigo}</span> : null}

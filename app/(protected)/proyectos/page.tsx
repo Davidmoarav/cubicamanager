@@ -29,6 +29,7 @@ export default function ProyectosPage() {
   const [form, setForm]       = useState<any>({})
   const [filtro, setFiltro]   = useState('todos')
   const [saving, setSaving]   = useState(false)
+  const [formError, setFormError] = useState('')
   const { data: kpiRes = [], mutate: mutateKpis } = useSWR<any[]>('/api/informe', fetcher)
   const kpis = useMemo(() => {
     const map: Record<string, any> = {}
@@ -43,26 +44,43 @@ export default function ProyectosPage() {
 
   const { puedeEditar, soloLectura } = usePermisos('obra')
 
-  const openNew = () => { setForm({ ...EMPTY }); setModal('nuevo') }
-  const openEdit = (p: Proyecto) => { setForm({ ...p }); setModal('editar') }
+  const openNew = () => { setForm({ ...EMPTY }); setFormError(''); setModal('nuevo') }
+  const openEdit = (p: Proyecto) => { setForm({ ...p }); setFormError(''); setModal('editar') }
   const openGestion = (p: Proyecto) => { setGestion(p); setTab('obra') }
 
   const save = async () => {
-    if (!form.nombre || !form.cliente) return
+    if (!form.nombre || !form.cliente) {
+      setFormError('Completa el nombre del proyecto y el cliente.')
+      return
+    }
+    setFormError('')
     setSaving(true)
     const method = modal === 'nuevo' ? 'POST' : 'PUT'
-    await fetch('/api/proyectos', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-      ...form,
-      valor: Number(form.valor), avance: Number(form.avance),
-      utilidad_pct: Number((form as any).utilidad_pct) || 0,
-      gg_pct: Number((form as any).gg_pct) || 0,
-      anticipo_pct: Number((form as any).anticipo_pct) || 0,
-      anticipo: Number((form as any).anticipo) || 0,
-      moneda: (form as any).moneda || 'peso',
-      valor_uf: Number((form as any).valor_uf) || 0,
-      retencion_pct: Number((form as any).retencion_pct) || 0,
-    }) })
-    await mutate(); setSaving(false); setModal(null)
+    try {
+      const res = await fetch('/api/proyectos', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        ...form,
+        valor: Number(form.valor), avance: Number(form.avance),
+        utilidad_pct: Number((form as any).utilidad_pct) || 0,
+        gg_pct: Number((form as any).gg_pct) || 0,
+        anticipo_pct: Number((form as any).anticipo_pct) || 0,
+        anticipo: Number((form as any).anticipo) || 0,
+        moneda: (form as any).moneda || 'peso',
+        valor_uf: Number((form as any).valor_uf) || 0,
+        retencion_pct: Number((form as any).retencion_pct) || 0,
+      }) })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        setFormError(data?.error || 'No se pudo guardar el proyecto.')
+        setSaving(false)
+        return
+      }
+      await mutate()
+      setSaving(false)
+      setModal(null)
+    } catch {
+      setFormError('Error de conexion al guardar. Revisa tu internet e intentalo de nuevo.')
+      setSaving(false)
+    }
   }
 
   const del = async (id: string) => {
@@ -217,10 +235,10 @@ export default function ProyectosPage() {
 
       {/* ── MODAL EDITAR/NUEVO ── */}
       {modal && (
-        <Modal title={modal === 'nuevo' ? 'Nuevo proyecto' : 'Editar proyecto'} onClose={() => setModal(null)}>
+        <Modal title={modal === 'nuevo' ? 'Nuevo proyecto' : 'Editar proyecto'} onClose={() => { setFormError(''); setModal(null) }}>
           <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2"><FormInput label="Nombre del proyecto" value={form.nombre || ''} onChange={v => upd('nombre', v)} required /></div>
-            <FormInput label="Cliente"      value={form.cliente || ''}          onChange={v => upd('cliente', v)} />
+            <div className="col-span-2"><FormInput label="Nombre del proyecto *" value={form.nombre || ''} onChange={v => upd('nombre', v)} required /></div>
+            <FormInput label="Cliente *"    value={form.cliente || ''}          onChange={v => upd('cliente', v)} required />
             <FormSelect label="Moneda del contrato" value={(form as any).moneda || 'peso'} onChange={v => upd('moneda' as any, v)}
               options={[{ value: 'peso', label: 'Pesos (CLP)' }, { value: 'uf', label: 'UF' }]} />
             <FormInput label={(form as any).moneda === 'uf' ? 'Valor contrato (UF)' : 'Valor (CLP)'}
@@ -252,8 +270,9 @@ export default function ProyectosPage() {
             <FormInput label="Anticipo recibido ($)" value={(form as any).anticipo ?? 0} onChange={v => upd('anticipo' as any, v)} type="number" />
             <FormInput label="Retención %"        value={(form as any).retencion_pct ?? 0} onChange={v => upd('retencion_pct' as any, v)} type="number" />
           </div>
+          {formError && <p className="text-[12.5px] text-danger font-semibold mt-3">{formError}</p>}
           <div className="flex gap-2 justify-end mt-3">
-            <Btn onClick={() => setModal(null)}>Cancelar</Btn>
+            <Btn onClick={() => { setFormError(''); setModal(null) }}>Cancelar</Btn>
             <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Btn>
           </div>
         </Modal>

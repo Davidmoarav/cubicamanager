@@ -8,7 +8,7 @@ import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Tab
 import { IconEdit } from '@/components/Icon'
 import type { Empleado } from '@/types'
 
-const EMPTY: Omit<Empleado,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', cargo:'', sueldo:0, horas_extra:0, estado:'activo', tipo:'planta', inicio:'' }
+const EMPTY: Omit<Empleado,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', cargo:'', sueldo:0, horas_extra:0, estado:'activo', tipo:'planta', modalidad:'mensual', inicio:'' }
 
 export default function RRHHPage() {
   const { data: items = [], isLoading, mutate } = useSWR<Empleado[]>('/api/empleados', fetcher)
@@ -16,15 +16,20 @@ export default function RRHHPage() {
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
   const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState('')
 
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
   const save = async () => {
     if (!form.nombre) return
-    setSaving(true)
+    setSaving(true); setError('')
     const method = modal === 'nuevo' ? 'POST' : 'PUT'
-    await fetch('/api/empleados', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sueldo: Number(form.sueldo), horas_extra: Number(form.horas_extra), proyecto_id: form.proyecto_id || null }) })
+    const res = await fetch('/api/empleados', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, sueldo: Number(form.sueldo), horas_extra: Number(form.horas_extra), inicio: form.inicio || null, proyecto_id: form.proyecto_id || null }) })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setError(d.error || 'No se pudo guardar el trabajador'); setSaving(false); return
+    }
     await mutate(); setSaving(false); setModal(null)
   }
 
@@ -37,11 +42,14 @@ export default function RRHHPage() {
   // Horas extra: valor hora × 1,5 (misma fórmula que la liquidación real,
   // no un valor fijo: depende del sueldo de cada trabajador)
   const totalNomina = items.reduce((s, e) => {
-    const valorHora = (Number(e.sueldo) || 0) / 30 / 8
+    const base = Number(e.sueldo) || 0
+    // Por metas: se paga el monto pactado (trato), sin horas extra.
+    if (e.modalidad === 'por_metas') return s + base
+    const valorHora = base / 30 / 8
     const extra = Math.round(valorHora * 1.5 * (Number(e.horas_extra) || 0))
-    return s + (Number(e.sueldo) || 0) + extra
+    return s + base + extra
   }, 0)
-  const totalHE     = items.reduce((s, e) => s + e.horas_extra, 0)
+  const totalHE     = items.reduce((s, e) => s + (e.modalidad === 'por_metas' ? 0 : e.horas_extra), 0)
 
   const initials = (n: string) => n.split(' ').map(x => x[0]).slice(0,2).join('')
 
@@ -75,7 +83,7 @@ export default function RRHHPage() {
                 </div>
                 <div className="flex-1">
                   <div className="text-[13px] font-semibold">{e.nombre}</div>
-                  <div className="text-[12px] text-muted">{e.cargo} · {e.tipo}</div>
+                  <div className="text-[12px] text-muted">{e.cargo} · {e.tipo} · {e.modalidad === 'por_metas' ? 'por metas' : 'mensual'}</div>
                 </div>
                 <Badge estado={e.estado} tipo="empleado" />
                 <div className="flex gap-1">
@@ -93,11 +101,12 @@ export default function RRHHPage() {
               <thead><tr><Th>Trabajador</Th><Th>Base</Th><Th>HH.EE</Th><Th>Total</Th></tr></thead>
               <tbody>
                 {items.map(e => {
-                  const he = e.horas_extra * 14000
+                  const porMetas = e.modalidad === 'por_metas'
+                  const he = porMetas ? 0 : e.horas_extra * 14000
                   return (
                     <tr key={e.id}>
                       <Td className="font-semibold">{e.nombre.split(' ')[0]} {e.nombre.split(' ')[1]?.[0]}.</Td>
-                      <Td>{fmt(e.sueldo)}</Td>
+                      <Td>{fmt(e.sueldo)}{porMetas && <span className="text-[10px] text-muted ml-1">(metas)</span>}</Td>
                       <Td className={he > 0 ? 'text-warning' : 'text-[#aaa]'}>{he>0 ? fmt(he):'—'}</Td>
                       <Td className="font-bold">{fmt(e.sueldo + he)}</Td>
                     </tr>
@@ -121,8 +130,13 @@ export default function RRHHPage() {
             <div className="col-span-2"><FormInput label="Nombre completo" value={form.nombre||''} onChange={v=>upd('nombre',v)} required /></div>
             <FormInput label="RUT"                value={form.rut||''}          onChange={v=>upd('rut',v)} />
             <FormInput label="Cargo"              value={form.cargo||''}        onChange={v=>upd('cargo',v)} />
-            <FormInput label="Sueldo base (CLP)"  value={form.sueldo||''}       onChange={v=>upd('sueldo',v)}      type="number" />
-            <FormInput label="Horas extra / mes"  value={form.horas_extra??0}   onChange={v=>upd('horas_extra',v)} type="number" />
+            <FormSelect label="Modalidad de pago" value={form.modalidad||'mensual'} onChange={v=>upd('modalidad',v)}
+              options={[{value:'mensual',label:'Mensual (sueldo fijo)'},{value:'por_metas',label:'Por metas (trato / avance)'}]} />
+            <FormInput
+              label={form.modalidad==='por_metas' ? 'Monto por metas (CLP)' : 'Sueldo base (CLP)'}
+              value={form.sueldo||''} onChange={v=>upd('sueldo',v)} type="number" />
+            {form.modalidad!=='por_metas' &&
+              <FormInput label="Horas extra / mes"  value={form.horas_extra??0}   onChange={v=>upd('horas_extra',v)} type="number" />}
             <FormSelect label="Tipo"  value={form.tipo||'planta'} onChange={v=>upd('tipo',v)}
               options={[{value:'planta',label:'Planta'},{value:'subcontrato',label:'Subcontrato'}]} />
             <FormSelect label="Estado" value={form.estado||'activo'} onChange={v=>upd('estado',v)}
@@ -133,6 +147,7 @@ export default function RRHHPage() {
                 options={[{ value: '', label: '— Sin asignar —' }, ...proyectos.map((p: any) => ({ value: p.id, label: p.nombre }))]} />
             </div>
           </div>
+          {error && <p className="text-[12px] text-danger mt-3 bg-danger-bg rounded-lg p-2.5">{error}</p>}
           <div className="flex gap-2 justify-end mt-2">
             <Btn onClick={() => setModal(null)}>Cancelar</Btn>
             <Btn variant="primary" onClick={save} disabled={saving}>{saving?'Guardando...':'Guardar'}</Btn>

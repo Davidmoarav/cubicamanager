@@ -28,6 +28,7 @@ export interface Empleado {
   horas_extra: number
   estado: string            // 'activo' | 'vacaciones' | 'inactivo'
   tipo?: string             // 'planta' | 'subcontrato'
+  modalidad?: 'mensual' | 'por_metas'   // forma de pago
   inicio?: string
   // Campos previsionales (módulo remuneraciones)
   afp_nombre?: string

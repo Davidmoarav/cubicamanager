@@ -9,6 +9,10 @@ const textoLargo = z.string().trim().max(5000)
 const dinero = z.coerce.number().finite().min(-999_999_999_999).max(999_999_999_999)
 const pct = z.coerce.number().finite().min(0).max(100)
 const fecha = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (YYYY-MM-DD)')
+// Fecha opcional: acepta '', null o undefined y los normaliza a null.
+// Evita insertar '' en columnas DATE de Postgres (que lo rechaza y hace
+// fallar el guardado en silencio).
+const fechaOpc = fecha.or(z.literal('')).nullish().transform(v => (v == null || v === '') ? null : v)
 const uuid = z.string().uuid()
 
 export const ProyectoSchema = z.object({
@@ -18,8 +22,8 @@ export const ProyectoSchema = z.object({
   valor:        dinero.optional(),
   avance:       pct.optional(),
   estado:       z.enum(['cotizacion', 'activo', 'terminado']).optional(),
-  inicio:       fecha.nullish().or(z.literal('')),
-  fin:          fecha.nullish().or(z.literal('')),
+  inicio:       fechaOpc,
+  fin:          fechaOpc,
   moneda:       z.enum(['peso', 'uf']).optional(),
   valor_uf:     dinero.optional(),
   monto_contrato: dinero.optional(),
@@ -38,8 +42,8 @@ export const ContratoSchema = z.object({
   contraparte: texto.min(1, 'Falta la contraparte'),
   tipo:        texto.optional(),
   valor:       dinero.optional(),
-  inicio:      fecha.nullish().or(z.literal('')),
-  fin:         fecha.nullish().or(z.literal('')),
+  inicio:      fechaOpc,
+  fin:         fechaOpc,
   estado:      z.enum(['ejecucion', 'liquidado', 'pendiente']).optional(),
   proyecto_id: uuid.nullish(),
   cliente_id:  uuid.nullish(),
@@ -76,7 +80,8 @@ export const EmpleadoSchema = z.object({
   horas_extra: z.coerce.number().int().min(0).max(200).optional(),
   estado:      z.enum(['activo', 'vacaciones', 'inactivo']).optional(),
   tipo:        z.enum(['planta', 'subcontrato']).optional(),
-  inicio:      fecha.nullish().or(z.literal('')),
+  modalidad:   z.enum(['mensual', 'por_metas']).optional(),
+  inicio:      fechaOpc,
   proyecto_id: uuid.nullish(),
   // Previsional
   afp_nombre:       texto.nullish(),
@@ -114,8 +119,8 @@ export const FacturaSchema = z.object({
   neto:        dinero.optional(),
   iva:         dinero.optional(),
   monto:       dinero.optional(),
-  emision:     fecha.nullish().or(z.literal('')),
-  vencimiento: fecha.nullish().or(z.literal('')),
+  emision:     fechaOpc,
+  vencimiento: fechaOpc,
   periodo:     z.string().regex(/^\d{4}-\d{2}$/).nullish().or(z.literal('')),
   estado:      z.enum(['pagada', 'pendiente', 'vencida']).optional(),
   estado_pago_id: uuid.nullish(),

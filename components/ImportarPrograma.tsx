@@ -117,9 +117,27 @@ export default function ImportarPrograma({ proyectoId, markup = 20, onImported, 
   const confirmar = async () => {
     if (!parsed) return
     setImporting(true); setError('')
+    // Aplanar la estructura anidada (soluciones → etapas → partidas) al formato
+    // plano { nombre, partidas[] } que espera la API. La categoría "Subproyecto · Etapa"
+    // se guarda en cada partida (campo notas) para agruparlas luego en el resumen.
+    const beneficiarios = parsed.map(b => ({
+      nombre: b.nombre,
+      partidas: b.soluciones.flatMap((s: any) =>
+        s.etapas.flatMap((e: any) =>
+          e.partidas.map((p: any) => ({
+            descripcion: p.descripcion,
+            unidad: p.unidad,
+            cantidad: p.cantidad,
+            material: p.material,
+            mano_obra: p.mano_obra,
+            categoria: [s.nombre, e.nombre].filter(Boolean).join(' · '),
+          }))
+        )
+      ),
+    }))
     const res = await fetch('/api/partidas-proyecto/importar-programa', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ proyecto_id: proyectoId, beneficiarios: parsed, markup, reemplazar }),
+      body: JSON.stringify({ proyecto_id: proyectoId, beneficiarios, markup, reemplazar }),
     })
     const data = await res.json()
     setImporting(false)

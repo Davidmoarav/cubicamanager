@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   if (denied) return denied
 
   const body = await req.json()
-  const email = String(body.email || '').trim().toLowerCase()
+  const email = String(body.email || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
   const rol = String(body.rol || 'jefe_obra')
 
   if (!email || !email.includes('@')) return NextResponse.json({ error: 'Email inválido' }, { status: 400 })

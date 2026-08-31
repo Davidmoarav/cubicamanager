@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "noEmit": true, "incremental": false, "skipLibCheck": true },
+  "include": [
+    "next-env.d.ts",
+    "types/**/*.ts",
+    "lib/**/*.ts",
+    "app/api/mi-rol/route.ts",
+    "app/api/miembros/route.ts"
+  ],
+  "exclude": ["node_modules"]
+}

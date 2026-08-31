@@ -10,7 +10,8 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
 
   // Si fue invitado y aún no se vincula, activar su membresía por email
-  await supabase.rpc('aceptar_invitacion')
+  const { error: errAceptar } = await supabase.rpc('aceptar_invitacion')
+  if (errAceptar) console.error('aceptar_invitacion RPC:', errAceptar.message)
 
   const info = await getRolActual(supabase)
   if (!info) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })

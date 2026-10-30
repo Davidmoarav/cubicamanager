@@ -11,6 +11,10 @@ import DocumentosPanel from '@/components/DocumentosPanel'
 import PartidasPanel from '@/components/PartidasPanel'
 import PresupuestoPanel from '@/components/PresupuestoPanel'
 import ManoObraPanel from '@/components/ManoObraPanel'
+import ParteDiarioPanel from '@/components/ParteDiarioPanel'
+import BodegaPanel from '@/components/BodegaPanel'
+import SubcontratosPanel from '@/components/SubcontratosPanel'
+import EquiposPanel from '@/components/EquiposPanel'
 import InformePanel from '@/components/InformePanel'
 
 const EMPTY: Omit<Proyecto, 'id'|'created_at'|'user_id'> = { nombre:'', cliente:'', descripcion:'', valor:0, avance:0, estado:'cotizacion', inicio:'', fin:'' }
@@ -25,7 +29,7 @@ export default function ProyectosPage() {
   const { data: items = [], isLoading, mutate } = useSWR<Proyecto[]>('/api/proyectos', fetcher)
   const [modal, setModal]     = useState<'nuevo'|'editar'|null>(null)
   const [gestion, setGestion] = useState<Proyecto | null>(null)
-  const [tab, setTab]         = useState<'obra' | 'presupuesto' | 'mano_obra' | 'informe' | 'docs'>('obra')
+  const [tab, setTab]         = useState<'obra' | 'presupuesto' | 'mano_obra' | 'parte' | 'bodega' | 'subcontratos' | 'equipos' | 'informe' | 'docs'>('obra')
   const [form, setForm]       = useState<any>({})
   const [filtro, setFiltro]   = useState('todos')
   const [saving, setSaving]   = useState(false)
@@ -293,6 +297,10 @@ export default function ProyectosPage() {
                 { key: 'obra' as const,        label: 'Control de obra' },
                 { key: 'presupuesto' as const, label: 'Presupuesto y pagos' },
                 { key: 'mano_obra' as const,   label: 'Mano de obra' },
+                { key: 'parte' as const,       label: 'Parte diario' },
+                { key: 'bodega' as const,      label: 'Bodega' },
+                { key: 'subcontratos' as const, label: 'Subcontratos' },
+                { key: 'equipos' as const,     label: 'Equipos' },
                 { key: 'informe' as const,     label: 'Informe ejecutivo' },
                 { key: 'docs' as const,        label: 'Documentos' },
               ].map(t => (
@@ -307,6 +315,10 @@ export default function ProyectosPage() {
             {tab === 'obra'        && <PartidasPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} markupGlobal={(gestion as any).markup_global ?? 20} onAvanceChange={refresh} />}
             {tab === 'presupuesto' && <PresupuestoPanel proyectoId={gestion.id} valorContrato={gestion.valor} anticipoRecibido={(gestion as any).anticipo ?? 0} proyectoNombre={gestion.nombre} proyectoCliente={gestion.cliente} proyectoDireccion={(gestion as any).direccion} />}
             {tab === 'mano_obra'   && <ManoObraPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
+            {tab === 'parte'       && <ParteDiarioPanel proyectoId={gestion.id} />}
+            {tab === 'bodega'      && <BodegaPanel proyectoId={gestion.id} />}
+            {tab === 'subcontratos' && <SubcontratosPanel proyectoId={gestion.id} />}
+            {tab === 'equipos'     && <EquiposPanel proyectoId={gestion.id} />}
             {tab === 'informe'     && <InformePanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
             {tab === 'docs'        && <DocumentosPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
           </div>

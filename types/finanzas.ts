@@ -13,6 +13,10 @@ export interface ParametrosRemuneracion {
   tope_imponible_uf: number
   tope_afc_uf?: number          // tope propio del seguro de cesantía (≠ tope AFP/salud)
   jornada_semanal?: number      // horas semanales de la jornada ordinaria (Ley 21.561)
+  afc_empleador_plazo_pct?: number   // AFC empleador en contrato a plazo o por obra
+  sis_pct?: number                   // seguro de invalidez y sobrevivencia
+  cotizacion_empleador_pct?: number  // cotización de la reforma de pensiones (Ley 21.735)
+  mutual_pct?: number                // tasa de mutual: depende de cada empresa
   gratificacion_tope: number
   colacion_default: number
   movilizacion_default: number
@@ -28,6 +32,10 @@ export const REM_DEFAULTS: ParametrosRemuneracion = {
   tope_imponible_uf: 87.80,
   tope_afc_uf: 131.90,          // tope AFC (131,9 UF en 2025)
   jornada_semanal: 42,          // 42 h desde abril 2026 (Ley 21.561)
+  afc_empleador_plazo_pct: 3.00,
+  sis_pct: 1.78,                // trimestre ago-oct 2026 (cambia cada trimestre)
+  cotizacion_empleador_pct: 3.50, // desde agosto 2026 (sube gradualmente cada agosto)
+  mutual_pct: 0.93,
   gratificacion_tope: 209396, colacion_default: 0, movilizacion_default: 0,
 }
 
@@ -191,4 +199,28 @@ export function calcularLiquidacion(
     total_descuentos: totalDescuentos,
     liquido_pagar: liquidoPagar,
   }
+}
+
+// ─── Aportes del empleador (función pura) ─────────────────
+// No se descuentan al trabajador: son costo de la empresa, además de los haberes.
+export function aportesEmpleador(
+  liq: { total_imponible?: number; total_haberes?: number; colacion?: number; movilizacion?: number },
+  contratoTipo: string | null | undefined,
+  params: ParametrosRemuneracion
+) {
+  const base = Number(liq.total_imponible) || 0   // con tope AFP/salud
+
+  // AFC tiene tope propio, y el empleador paga más en contratos a plazo o por obra
+  const imponibleBruto = (Number(liq.total_haberes) || 0) - (Number(liq.colacion) || 0) - (Number(liq.movilizacion) || 0)
+  const topeAfc = Math.round((Number(params.tope_afc_uf) || REM_DEFAULTS.tope_afc_uf!) * params.uf_valor)
+  const afcPct = contratoTipo === 'indefinido'
+    ? Number(params.afc_empleador_pct) || 0
+    : Number(params.afc_empleador_plazo_pct ?? REM_DEFAULTS.afc_empleador_plazo_pct) || 0
+
+  const afc = Math.round(Math.min(imponibleBruto, topeAfc) * afcPct / 100)
+  const sis = Math.round(base * (Number(params.sis_pct ?? REM_DEFAULTS.sis_pct) || 0) / 100)
+  const cotizacion = Math.round(base * (Number(params.cotizacion_empleador_pct ?? REM_DEFAULTS.cotizacion_empleador_pct) || 0) / 100)
+  const mutual = Math.round(base * (Number(params.mutual_pct ?? REM_DEFAULTS.mutual_pct) || 0) / 100)
+
+  return { afc, sis, cotizacion, mutual, total: afc + sis + cotizacion + mutual }
 }

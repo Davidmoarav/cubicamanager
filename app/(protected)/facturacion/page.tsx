@@ -8,8 +8,9 @@ import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Tab
 import ImportadorSII from '@/components/ImportadorSII'
 import { IconSearch } from '@/components/Icon'
 import ResumenBoletas from '@/components/ResumenBoletas'
+import { opcionesPartida } from '@/lib/costos'
 
-const EMPTY: any = { numero:'', cliente:'', proyecto:'', proyecto_id:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
+const EMPTY: any = { numero:'', cliente:'', proyecto:'', proyecto_id:'', partida_id:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
 
 export default function FacturacionPage() {
   const [periodoSel, setPeriodoSel] = useState(new Date().toISOString().slice(0, 7))
@@ -32,7 +33,14 @@ export default function FacturacionPage() {
   )
   const [mostrarOtroCliente, setMostrarOtroCliente] = useState(false)
   const [saving, setSaving]   = useState(false)
-
+  // Asignar obra y partida a documentos de compra ya cargados (p. ej. importados del SII)
+  const [soloSinObra, setSoloSinObra] = useState(false)
+  const [seleccion, setSeleccion]     = useState<string[]>([])
+  const [asignacion, setAsignacion]   = useState<{ ids: string[]; proyecto_id: string; partida_id: string } | null>(null)
+  const [asignando, setAsignando]     = useState(false)
+  const proyectoPartidas = asignacion?.proyecto_id || (modal && form.tipo === 'compra' ? form.proyecto_id : '')
+  const { data: partidasProy = [] } = useSWR<any[]>(
+    proyectoPartidas ? `/api/partidas-proyecto?proyecto_id=${proyectoPartidas}` : null, fetcher)
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
@@ -53,6 +61,7 @@ export default function FacturacionPage() {
       cliente: fac.cliente,
       proyecto: fac.proyecto || '',
       proyecto_id: fac.proyecto_id || '',
+      partida_id: fac.partida_id || '',
     }))
   }
 
@@ -75,6 +84,7 @@ export default function FacturacionPage() {
       vencimiento: form.vencimiento || null,
       proyecto: form.proyecto || null,
       proyecto_id: form.proyecto_id || null,
+      partida_id: (form.tipo === 'compra' && form.partida_id) || null,
       numero: form.numero || null,
       factura_ref: form.factura_ref || null,
       periodo,
@@ -104,9 +114,39 @@ export default function FacturacionPage() {
     await mutate()
   }
 
+  // Una nota con factura de referencia sigue a esa factura: no se asigna por separado
+  const asignable = (f: any) => f.tipo === 'compra' && !f.factura_ref
+  const sinObra   = (f: any) => asignable(f) && !f.proyecto_id && !f.proyecto
+  const nSinObra  = items.filter(sinObra).length
+
+  const toggleSeleccion = (id: string) =>
+    setSeleccion(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+
+  const guardarAsignacion = async () => {
+    if (!asignacion) return
+    setAsignando(true)
+    const res = await fetch('/api/facturas', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ids: asignacion.ids,
+        proyecto_id: asignacion.proyecto_id || null,
+        partida_id: asignacion.partida_id || null,
+      }),
+    })
+    setAsignando(false)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert('No se pudo asignar: ' + (err.error || 'error desconocido'))
+      return
+    }
+    setAsignacion(null); setSeleccion([])
+    await mutate()
+  }
+
   let filtered = items
   if (tipoFiltro !== 'todos') filtered = filtered.filter(i => (i.tipo || 'venta') === tipoFiltro)
   if (filtro !== 'todos')     filtered = filtered.filter(i => i.estado === filtro)
+  if (soloSinObra)            filtered = filtered.filter(sinObra)
   if (busqueda.trim()) {
     const q = busqueda.toLowerCase().trim()
     filtered = filtered.filter(i =>
@@ -214,10 +254,30 @@ export default function FacturacionPage() {
         )}
       </div>
 
+      {/* Compras sin obra: sin esto, su costo no llega a ningún proyecto */}
+      {(nSinObra > 0 || soloSinObra) && (
+        <div className="flex items-center justify-between gap-3 flex-wrap bg-warning-bg rounded-lg px-3.5 py-2.5 mb-3">
+          <span className="text-[12.5px] text-warning font-semibold">
+            {nSinObra} {nSinObra === 1 ? 'compra' : 'compras'} de este mes sin obra: su costo no entra al gasto real de ningún proyecto.
+          </span>
+          <button onClick={() => { setSoloSinObra(v => !v); setSeleccion([]) }}
+            className="text-[12px] font-bold text-warning underline">
+            {soloSinObra ? 'Ver todos los documentos' : 'Ver solo estas'}
+          </button>
+        </div>
+      )}
+
       {/* Contador de resultados */}
-      <div className="text-[12px] text-muted mb-2">
-        {filtered.length} {filtered.length === 1 ? 'documento' : 'documentos'}
-        {busqueda && ` · filtrando "${busqueda}"`}
+      <div className="flex items-center justify-between gap-3 mb-2 min-h-[32px]">
+        <div className="text-[12px] text-muted">
+          {filtered.length} {filtered.length === 1 ? 'documento' : 'documentos'}
+          {busqueda && ` · filtrando "${busqueda}"`}
+        </div>
+        {seleccion.length > 0 && (
+          <Btn variant="primary" onClick={() => setAsignacion({ ids: seleccion, proyecto_id: '', partida_id: '' })}>
+            Asignar obra a {seleccion.length} {seleccion.length === 1 ? 'documento' : 'documentos'}
+          </Btn>
+        )}
       </div>
 
       <div className="bg-white border border-line rounded-card p-5 shadow-card overflow-x-auto">
@@ -228,11 +288,17 @@ export default function FacturacionPage() {
           : (
           <Table>
             <thead><tr>
-              <Th>Tipo</Th><Th>N°</Th><Th>Cliente / Proveedor</Th><Th>Neto</Th><Th>IVA</Th><Th>Total</Th><Th>Emisión</Th><Th>Estado</Th><Th></Th>
+              <Th></Th><Th>Tipo</Th><Th>N°</Th><Th>Cliente / Proveedor</Th><Th>Neto</Th><Th>IVA</Th><Th>Total</Th><Th>Emisión</Th><Th>Estado</Th><Th></Th>
             </tr></thead>
             <tbody>
               {filtered.map(f => (
                 <tr key={f.id}>
+                  <Td>
+                    {asignable(f) && (
+                      <input type="checkbox" checked={seleccion.includes(f.id)} onChange={() => toggleSeleccion(f.id)}
+                        aria-label={`Seleccionar documento ${f.numero || ''}`} className="cursor-pointer" />
+                    )}
+                  </Td>
                   <Td>
                     <div className="flex flex-col gap-0.5">
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded text-center ${f.tipo === 'compra' ? 'bg-accent-bg text-accent' : 'bg-success-bg text-success'}`}>
@@ -251,6 +317,13 @@ export default function FacturacionPage() {
                   <Td>
                     <span className="font-semibold">{f.cliente}</span>
                     {f.proyecto && <div className="text-[10px] text-muted">{f.proyecto}</div>}
+                    {asignable(f) && (
+                      <button
+                        onClick={() => setAsignacion({ ids: [f.id], proyecto_id: f.proyecto_id || '', partida_id: f.partida_id || '' })}
+                        className="block text-[10.5px] font-semibold text-brand hover:underline">
+                        {f.proyecto_id || f.proyecto ? 'Cambiar obra' : 'Asignar obra'}
+                      </button>
+                    )}
                   </Td>
                   <Td>{fmt(f.neto || 0)}</Td>
                   <Td><span className="text-muted">{fmt(f.iva || 0)}</span></Td>
@@ -398,7 +471,7 @@ export default function FacturacionPage() {
                 onChange={e => {
                   const id = e.target.value
                   const pr = proyectos.find((p: any) => p.id === id)
-                  setForm((f: any) => ({ ...f, proyecto_id: id, proyecto: pr?.nombre || '' }))
+                  setForm((f: any) => ({ ...f, proyecto_id: id, proyecto: pr?.nombre || '', partida_id: '' }))
                 }}
                 className="input-base cursor-pointer">
                 <option value="">— Sin proyecto —</option>
@@ -409,7 +482,10 @@ export default function FacturacionPage() {
             </div>
 
             <FormInput label="N° Factura" value={form.numero || ''} onChange={v => upd('numero', v)} />
-            <div />
+            {form.tipo === 'compra' && form.proyecto_id
+              ? <FormSelect label="Partida (opcional)" value={form.partida_id || ''} onChange={v => upd('partida_id', v)}
+                  options={[{ value: '', label: '— Sin partida —' }, ...opcionesPartida(partidasProy)]} />
+              : <div />}
 
             <FormInput label="Monto NETO (CLP)" value={form.neto || ''} onChange={updNeto} type="number" />
             <div>
@@ -433,6 +509,28 @@ export default function FacturacionPage() {
           <div className="flex gap-2 justify-end mt-3.5">
             <Btn onClick={cerrarModal}>Cancelar</Btn>
             <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {asignacion && (
+        <Modal
+          title={asignacion.ids.length === 1 ? 'Asignar obra al documento' : `Asignar obra a ${asignacion.ids.length} documentos`}
+          onClose={() => setAsignacion(null)}>
+          <FormSelect label="Obra" value={asignacion.proyecto_id}
+            onChange={v => setAsignacion(a => a && ({ ...a, proyecto_id: v, partida_id: '' }))}
+            options={[{ value: '', label: '— Sin obra —' }, ...proyectos.map((p: any) => ({ value: p.id, label: p.nombre }))]} />
+          {asignacion.proyecto_id && (
+            <FormSelect label="Partida (opcional)" value={asignacion.partida_id}
+              onChange={v => setAsignacion(a => a && ({ ...a, partida_id: v }))}
+              options={[{ value: '', label: '— Sin partida —' }, ...opcionesPartida(partidasProy)]} />
+          )}
+          <p className="text-[11px] text-muted mb-3">
+            El neto del documento entra al gasto real de la obra. Las notas de crédito y débito asociadas siguen a su factura.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <Btn onClick={() => setAsignacion(null)}>Cancelar</Btn>
+            <Btn variant="primary" onClick={guardarAsignacion} disabled={asignando}>{asignando ? 'Guardando...' : 'Guardar'}</Btn>
           </div>
         </Modal>
       )}

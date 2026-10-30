@@ -1,8 +1,8 @@
 'use client'
 // components/InformePanel.tsx
 //
-// Informe ejecutivo del proyecto: KPIs financieros, de retenciones y de
-// mano de obra, agregados automáticamente de los módulos 1-3. Botón para
+// Informe ejecutivo del proyecto: KPIs financieros, de costo real, de retenciones
+// y de mano de obra, agregados automáticamente de los módulos 1-4. Botón para
 // exportar a PDF con diseño Cubica.
 
 import { useState, useEffect, useCallback } from 'react'
@@ -37,13 +37,14 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
   if (!data?.kpis) return <div className="text-[13px] text-muted py-8 text-center">No hay datos para generar el informe.</div>
 
   const k = data.kpis
+  const c = data.costos
 
   return (
     <div>
       <div className="flex justify-between items-start mb-4 flex-wrap gap-2">
         <div>
           <h4 className="text-[14px] font-bold text-ink">Informe ejecutivo</h4>
-          <p className="text-[12px] text-muted mt-0.5">Resumen financiero, retenciones y mano de obra al día.</p>
+          <p className="text-[12px] text-muted mt-0.5">Resumen financiero, costo real, retenciones y mano de obra al día.</p>
         </div>
         <DescargarInformeBtn data={data} proximo={proximo} />
       </div>
@@ -68,6 +69,23 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
             <div className="text-[11px] text-muted">líquido a pagar</div>
           </div>
         </div>
+      )}
+
+      {/* ─── Costo real ─── */}
+      {c && (
+        <>
+          <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Costo real y margen</div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+            <MetricCard label="Gasto real" value={fmt(c.gasto_real)} sub={`${c.pct_gastado}% del presupuesto de costo`} subColor="#b0401a" />
+            <MetricCard label="Presupuesto de costo" value={fmt(c.presupuesto_costo)} sub={`${fmt(c.costo_ejecutado)} según avance`} />
+            <MetricCard label="Desviación según avance" value={fmt(c.desviacion_ejecutada)}
+              sub={c.desviacion_ejecutada < 0 ? 'sobre lo presupuestado' : 'dentro de lo presupuestado'}
+              subColor={c.desviacion_ejecutada < 0 ? '#b0401a' : '#1a7a4a'} />
+            <MetricCard label="Margen real" value={fmt(c.ganancia_real)}
+              sub={`${c.margen_real_pct}% de lo ejecutado · esperado ${c.margen_venta_pct}%`}
+              subColor={c.ganancia_real < 0 ? '#b0401a' : '#1a7a4a'} />
+          </div>
+        </>
       )}
 
       {/* ─── Retenciones ─── */}

@@ -1,11 +1,13 @@
 // app/api/informe/route.ts
 // Informe ejecutivo por proyecto: agrega KPIs de estados de pago (módulo 1),
-// retenciones/devoluciones (módulo 2) y proyección de mano de obra (módulo 3).
+// retenciones/devoluciones (módulo 2), proyección de mano de obra (módulo 3)
+// y costo real con margen (módulo 4).
 //
 //   GET ?proyecto_id=X  → informe completo de un proyecto
 //   GET (sin proyecto)  → resumen compacto de todos (para tarjetas)
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getOwnerId } from '@/lib/roles'
+import { cargarCostosObras } from '@/lib/costos-server'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const BILLED = ['presentado', 'aprobado', 'pagado']
@@ -126,9 +128,20 @@ export async function GET(req: NextRequest) {
 
   const kpis = kpisProyecto(proyecto?.valor || 0, eps ?? [], devs ?? [], pmo ?? [], Number((proyecto as any)?.monto_contrato) || 0)
 
+  // Costo real y margen (módulo 4): mismo cálculo que Presupuesto y pagos
+  let costos: any = null
+  if (proyecto) {
+    try {
+      [costos] = await cargarCostosObras(supabase, ownerId, [proyecto])
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? 'Error calculando costos' }, { status: 500 })
+    }
+  }
+
   return NextResponse.json({
     proyecto: proyecto ? { id: proyecto.id, nombre: proyecto.nombre, cliente: proyecto.cliente, direccion: (proyecto as any).direccion } : null,
     kpis,
+    costos,
     estados_pago: eps ?? [],
     proyeccion_mo: pmo ?? [],
     devoluciones: devs ?? [],

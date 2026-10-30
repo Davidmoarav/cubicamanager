@@ -20,6 +20,10 @@ import GanttTab from '@/components/obra/GanttTab'
 import ComentariosTab from '@/components/obra/ComentariosTab'
 import { DescargarPresupuestoPDFBtn, ExportarExcelBtn } from '@/components/obra/ExportarBtns'
 import CompartirPanel from '@/components/obra/CompartirPanel'
+import ParteDiarioPanel from '@/components/ParteDiarioPanel'
+import BodegaPanel from '@/components/BodegaPanel'
+import SubcontratosPanel from '@/components/SubcontratosPanel'
+import EquiposPanel from '@/components/EquiposPanel'
 
 const IVA = 0.19
 
@@ -27,6 +31,10 @@ const TABS = [
   { id: 'presupuesto', label: 'Presupuesto' },
   { id: 'compras',     label: 'Compras' },
   { id: 'gantt',       label: 'Carta Gantt' },
+  { id: 'parte',       label: 'Parte diario' },
+  { id: 'bodega',      label: 'Bodega' },
+  { id: 'subcontratos', label: 'Subcontratos' },
+  { id: 'equipos',     label: 'Equipos' },
   { id: 'archivos',    label: 'Archivos' },
   { id: 'cobros',      label: 'Cobros' },
   { id: 'comentarios', label: 'Comentarios' },
@@ -264,6 +272,20 @@ export default function ObraProyecto() {
               partidas={Array.isArray(partidas) ? partidas : []}
               onCambio={() => { mutPartidas(); mutProyectos() }}
             />
+          )}
+
+          {tab === 'parte' && id && (
+            <div className="bg-white rounded-card border border-line shadow-card p-5">
+              <ParteDiarioPanel proyectoId={id} />
+            </div>
+          )}
+
+          {(tab === 'bodega' || tab === 'subcontratos' || tab === 'equipos') && id && (
+            <div className="bg-white rounded-card border border-line shadow-card p-5">
+              {tab === 'bodega' && <BodegaPanel proyectoId={id} />}
+              {tab === 'subcontratos' && <SubcontratosPanel proyectoId={id} />}
+              {tab === 'equipos' && <EquiposPanel proyectoId={id} />}
+            </div>
           )}
 
           {tab === 'comentarios' && id && <ComentariosTab proyectoId={id} />}

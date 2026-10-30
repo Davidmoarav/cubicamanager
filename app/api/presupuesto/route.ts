@@ -1,51 +1,9 @@
 // app/api/presupuesto/route.ts
-// Presupuesto con COSTO + MARKUP y GASTO REAL por obra.
-//
-//   presupuesto_costo  = suma de (cantidad x costo_unitario)        [lo planificado]
-//   presupuesto_venta  = suma de (cantidad x precio_unitario)       [costo + markup]
-//   ganancia_esperada  = venta - costo
-//   gasto_real         = facturas de compra del proyecto + gastos manuales  [lo REAL]
-//   desviacion         = presupuesto_costo - gasto_real  (verde si positivo)
-//   ganancia_real      = venta_ejecutada - gasto_real
+// Presupuesto con COSTO + MARKUP y GASTO REAL por obra (cálculo en lib/costos.ts).
 import { createServerSupabase } from '@/lib/supabase-server'
 import { getOwnerId } from '@/lib/roles'
+import { cargarCostosObras } from '@/lib/costos-server'
 import { NextResponse } from 'next/server'
-
-// Avance de una partida: promedio de sus subpartidas PONDERADO por valor
-// (cantidad × precio). Si las subpartidas no tienen valor, promedio simple.
-// Si no hay subpartidas, el avance propio de la partida.
-function avancePartida(padre: any, hijosPadre: any[]): number {
-  if (hijosPadre.length === 0) return Number(padre.avance) || 0
-  const pesos = hijosPadre.map(h => (Number(h.cantidad) || 0) * (Number(h.precio_unitario) || 0))
-  const totalPeso = pesos.reduce((a, b) => a + b, 0)
-  if (totalPeso > 0) {
-    return hijosPadre.reduce((s, h, i) => s + (Number(h.avance) || 0) * (pesos[i] / totalPeso), 0)
-  }
-  return hijosPadre.reduce((s, h) => s + (Number(h.avance) || 0), 0) / hijosPadre.length
-}
-
-// ─── Cálculo recursivo del árbol de partidas (N niveles) ───
-// Devuelve, para un nodo, sus totales acumulando hacia arriba desde las hojas.
-// Solo las HOJAS (partidas reales) tienen costo/venta propios; los grupos suman.
-function calcNodo(nodo: any, hijosDe: (id: string) => any[]): {
-  costo: number; venta: number; costoEjec: number; ventaEjec: number; avance: number
-} {
-  const hijos = hijosDe(nodo.id)
-  if (hijos.length === 0) {
-    const cant  = Number(nodo.cantidad) || 0
-    const costo = cant * (Number(nodo.costo_unitario) || 0)
-    const venta = cant * (Number(nodo.precio_unitario) || 0)
-    const av = Number(nodo.avance) || 0
-    return { costo, venta, costoEjec: costo * av / 100, ventaEjec: venta * av / 100, avance: av }
-  }
-  let costo = 0, venta = 0, costoEjec = 0, ventaEjec = 0
-  for (const h of hijos) {
-    const r = calcNodo(h, hijosDe)
-    costo += r.costo; venta += r.venta; costoEjec += r.costoEjec; ventaEjec += r.ventaEjec
-  }
-  const avance = venta > 0 ? (ventaEjec / venta) * 100 : 0
-  return { costo, venta, costoEjec, ventaEjec, avance }
-}
 
 export async function GET(req: Request) {
   const supabase = await createServerSupabase()
@@ -59,145 +17,10 @@ export async function GET(req: Request) {
   let proyQuery = supabase.from('proyectos').select('*').eq('user_id', ownerId)
   if (proyectoId) proyQuery = proyQuery.eq('id', proyectoId)
   const { data: proyectos } = await proyQuery
-  const arrProy = proyectos ?? []
-  if (arrProy.length === 0) return NextResponse.json([])
 
-  // Partidas / gastos / facturas acotados a las obras en juego (usan sus índices)
-  const proyIds = arrProy.map(p => p.id)
-  const proyNombres = arrProy.map(p => p.nombre).filter(Boolean)
-  const [{ data: partidas }, { data: gastos }, { data: facturas }] = await Promise.all([
-    supabase.from('partidas_proyecto').select('*').eq('user_id', ownerId).in('proyecto_id', proyIds),
-    supabase.from('gastos_obra').select('*').eq('user_id', ownerId).in('proyecto_id', proyIds),
-    // Se enlaza por proyecto_id (fiable). Se incluyen también las que solo tienen
-    // el nombre en texto (facturas antiguas aún sin migrar) para no perder gasto.
-    supabase.from('facturas')
-      .select('proyecto, proyecto_id, neto, tipo, doc_tipo')
-      .eq('user_id', ownerId).eq('tipo', 'compra')
-      .or(`proyecto_id.in.(${proyIds.join(',')}),proyecto.in.(${proyNombres.map(n => `"${String(n).replace(/"/g, '')}"`).join(',') || '"__no_match__"'})`),
-  ])
-
-  const arrPart = partidas ?? []
-  const arrGastos = gastos ?? []
-  const arrFacturas = facturas ?? []
-
-  const resumen = arrProy.map(proy => {
-    const delProy = arrPart.filter(p => p.proyecto_id === proy.id)
-    const hijosDe = (id: string) => delProy.filter(p => p.parent_id === id).sort((a, b) => (a.orden || 0) - (b.orden || 0))
-    const raices = delProy.filter(p => !p.parent_id).sort((a, b) => (a.orden || 0) - (b.orden || 0))
-
-    // Compat: para el detalle plano y la sincronización antigua
-    const padres = raices
-    const hijos  = delProy.filter(p => p.parent_id)
-
-    let presupuestoCosto = 0
-    let presupuestoVenta = 0
-    let costoEjecutado   = 0
-    let ventaEjecutada   = 0
-
-    // Suma recursiva desde las raíces (soporta 2 o 3 niveles indistintamente)
-    for (const raiz of raices) {
-      const r = calcNodo(raiz, hijosDe)
-      presupuestoCosto += r.costo
-      presupuestoVenta += r.venta
-      costoEjecutado   += r.costoEjec
-      ventaEjecutada   += r.ventaEjec
-    }
-
-    // ─── GASTO REAL: gastos manuales + facturas de compra del proyecto ───
-    const gastosProy = arrGastos.filter(g => g.proyecto_id === proy.id)
-    const gastoManual = gastosProy.reduce((s, g) => s + (Number(g.monto) || 0), 0)
-
-    // Enlace por id (fiable); si la factura aún no tiene id, se acepta el nombre exacto.
-    const facturasCompraProy = arrFacturas.filter(f =>
-      (f.tipo === 'compra') &&
-      (f.doc_tipo || 'factura') === 'factura' &&
-      (f.proyecto_id
-        ? f.proyecto_id === proy.id
-        : f.proyecto === proy.nombre)
-    )
-    const gastoFacturas = facturasCompraProy.reduce((s, f) => s + (Number(f.neto) || 0), 0)
-
-    const gastoReal = gastoManual + gastoFacturas
-
-    // Gasto real por partida (para el detalle)
-    const gastoPorPartida: Record<string, number> = {}
-    for (const g of gastosProy) {
-      if (g.partida_id) gastoPorPartida[g.partida_id] = (gastoPorPartida[g.partida_id] || 0) + (Number(g.monto) || 0)
-    }
-
-    // ─── DETALLE POR PARTIDA: presupuesto de costo vs gastado real ───
-    // El gastado de una partida padre incluye los gastos ligados a ella y a sus subpartidas.
-    const detallePartidas = padres.map(padre => {
-      const cant = Number(padre.cantidad) || 0
-      const presPart = cant * (Number(padre.costo_unitario) || 0)
-      let gastadoPart = gastoPorPartida[padre.id] || 0
-      for (const h of hijos.filter(h => h.parent_id === padre.id)) {
-        gastadoPart += gastoPorPartida[h.id] || 0
-      }
-      const pct = presPart > 0 ? Math.round((gastadoPart / presPart) * 100) : 0
-      return {
-        id: padre.id,
-        descripcion: padre.descripcion,
-        presupuesto_costo: Math.round(presPart),
-        gastado: Math.round(gastadoPart),
-        pct_gastado: pct,
-      }
-    }).sort((a, b) => b.gastado - a.gastado)   // los más tocados primero
-
-    const gananciaEsperada = presupuestoVenta - presupuestoCosto
-    const desviacion = presupuestoCosto - gastoReal       // + = holgura contra el presupuesto TOTAL
-    // Desviación REAL: compara el gasto con lo que debería haber costado el avance actual.
-    // Es la métrica que importa en obra: "para el avance que llevo, ¿voy sobre o bajo costo?"
-    const desviacionEjecutada = costoEjecutado - gastoReal   // + = vas bajo costo; − = sobregirado
-    const pctCostoEjecutado = costoEjecutado > 0 ? Math.round((gastoReal / costoEjecutado) * 100) : 0
-    const gananciaReal = ventaEjecutada - gastoReal       // utilidad real a la fecha
-    const markupReal = presupuestoCosto > 0 ? Math.round((gananciaEsperada / presupuestoCosto) * 100) : 0
-    const margenVentaPct = presupuestoVenta > 0 ? Math.round((gananciaEsperada / presupuestoVenta) * 100) : 0
-    const pctEjecutado = presupuestoVenta > 0 ? Math.round((ventaEjecutada / presupuestoVenta) * 100) : 0
-    const pctGastado = presupuestoCosto > 0 ? Math.round((gastoReal / presupuestoCosto) * 100) : 0
-
-    return {
-      proyecto_id: proy.id,
-      nombre: proy.nombre,
-      cliente: proy.cliente,
-      estado: proy.estado,
-      avance_fisico: Number(proy.avance) || 0,
-      n_partidas: padres.length,
-      // Presupuesto
-      presupuesto_costo: Math.round(presupuestoCosto),
-      presupuesto_venta: Math.round(presupuestoVenta),
-      ganancia_esperada: Math.round(gananciaEsperada),
-      markup_real: markupReal,
-      margen_venta_pct: margenVentaPct,
-      // Ejecutado teórico (avance)
-      costo_ejecutado: Math.round(costoEjecutado),
-      venta_ejecutada: Math.round(ventaEjecutada),
-      pct_ejecutado: pctEjecutado,
-      // GASTO REAL
-      gasto_real: Math.round(gastoReal),
-      gasto_manual: Math.round(gastoManual),
-      gasto_facturas: Math.round(gastoFacturas),
-      gasto_por_partida: gastoPorPartida,
-      detalle_partidas: detallePartidas,
-      desviacion: Math.round(desviacion),
-      desviacion_ejecutada: Math.round(desviacionEjecutada),
-      pct_costo_ejecutado: pctCostoEjecutado,
-      ganancia_real: Math.round(gananciaReal),
-      pct_gastado: pctGastado,
-      // Compat
-      presupuesto_partidas: Math.round(presupuestoVenta),
-      ejecutado: Math.round(ventaEjecutada),
-      valor_contrato: Number(proy.valor) || 0,
-      pct_presupuesto: pctEjecutado,
-      // Moneda del proyecto (partidas y costos SIEMPRE en pesos; contrato en su moneda)
-      moneda: proy.moneda || 'peso',
-      valor_uf: Number(proy.valor_uf) || 0,
-      // Valor del contrato convertido a pesos (para comparar con costos)
-      valor_contrato_pesos: (proy.moneda === 'uf')
-        ? Math.round((Number(proy.valor) || 0) * (Number(proy.valor_uf) || 0))
-        : Number(proy.valor) || 0,
-    }
-  })
-
-  return NextResponse.json(resumen)
+  try {
+    return NextResponse.json(await cargarCostosObras(supabase, ownerId, proyectos ?? []))
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Error calculando costos' }, { status: 500 })
+  }
 }

@@ -27,7 +27,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   const { soloLectura } = usePermisos('obra')
   const [eps, setEps]         = useState<EstadoPago[]>([])
   const [loading, setLoading] = useState(true)
-  const [resumen, setResumen] = useState({ presupuesto: 0, ejecutado: 0, cobrado: 0, costo: 0, ganancia: 0, markup_real: 0, margen_venta: 0, costo_ejecutado: 0, ganancia_ejecutada: 0, gasto_real: 0, gasto_manual: 0, gasto_facturas: 0, desviacion: 0, desviacion_ejecutada: 0, pct_costo_ejecutado: 0, pct_ejecutado: 0, ganancia_real: 0, pct_gastado: 0, moneda: 'peso', valor_uf: 0, valor_contrato_pesos: 0, gasto_por_partida: {} as Record<string, number>, detalle_partidas: [] as any[] })
+  const [resumen, setResumen] = useState({ presupuesto: 0, ejecutado: 0, cobrado: 0, costo: 0, ganancia: 0, markup_real: 0, margen_venta: 0, costo_ejecutado: 0, ganancia_ejecutada: 0, gasto_real: 0, gasto_manual: 0, gasto_ordenes: 0, gasto_sueldos: 0, gasto_subcontratos: 0, gasto_equipos: 0, gasto_traspasos: 0, gasto_facturas: 0, gasto_sin_partida: 0, desviacion: 0, desviacion_ejecutada: 0, pct_costo_ejecutado: 0, pct_ejecutado: 0, ganancia_real: 0, pct_gastado: 0, moneda: 'peso', valor_uf: 0, valor_contrato_pesos: 0, gasto_por_partida: {} as Record<string, number>, detalle_partidas: [] as any[] })
 
   // Gastos reales de la obra
   const [gastos, setGastos]     = useState<any[]>([])
@@ -90,7 +90,13 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
       ganancia_ejecutada: p?.ganancia_ejecutada || 0,
       gasto_real: p?.gasto_real || 0,
       gasto_manual: p?.gasto_manual || 0,
+      gasto_ordenes: p?.gasto_ordenes || 0,
+      gasto_sueldos: p?.gasto_sueldos || 0,
+      gasto_subcontratos: p?.gasto_subcontratos || 0,
+      gasto_equipos: p?.gasto_equipos || 0,
+      gasto_traspasos: p?.gasto_traspasos || 0,
       gasto_facturas: p?.gasto_facturas || 0,
+      gasto_sin_partida: p?.gasto_sin_partida || 0,
       desviacion: p?.desviacion || 0,
       desviacion_ejecutada: p?.desviacion_ejecutada || 0,
       pct_ejecutado: p?.pct_ejecutado || 0,
@@ -375,8 +381,13 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
         </div>
         {/* Desglose del gasto real */}
         {resumen.gasto_real > 0 && (
-          <div className="flex gap-4 mt-3 text-[11px] text-muted">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-[11px] text-muted">
             <span>Facturas proveedores: {fmt(resumen.gasto_facturas)}</span>
+            <span>Órdenes de compra: {fmt(resumen.gasto_ordenes)}</span>
+            <span>Sueldos: {fmt(resumen.gasto_sueldos)}</span>
+            {resumen.gasto_subcontratos !== 0 && <span>Subcontratos: {fmt(resumen.gasto_subcontratos)}</span>}
+            {resumen.gasto_equipos !== 0 && <span>Equipos: {fmt(resumen.gasto_equipos)}</span>}
+            {resumen.gasto_traspasos !== 0 && <span>Traspasos de bodega: {fmt(resumen.gasto_traspasos)}</span>}
             <span>Gastos manuales: {fmt(resumen.gasto_manual)}</span>
           </div>
         )}
@@ -408,6 +419,12 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                 )
               })}
           </div>
+          {resumen.gasto_sin_partida !== 0 && (
+            <div className="flex items-center justify-between text-[12px] mt-3 pt-3 border-t border-line">
+              <span className="font-semibold text-warning">Gasto sin partida asignada</span>
+              <span className="font-bold text-warning tabular-nums">{fmt(resumen.gasto_sin_partida)}</span>
+            </div>
+          )}
           <div className="text-[10px] text-muted mt-3">Gastado real vs presupuesto de costo. En rojo, las partidas que superan lo presupuestado.</div>
         </div>
       )}

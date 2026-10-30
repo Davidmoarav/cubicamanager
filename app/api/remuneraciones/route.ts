@@ -5,33 +5,8 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { guardModulo, getOwnerId } from '@/lib/roles'
 import { calcularLiquidacion, REM_DEFAULTS } from '@/types/finanzas'
+import { sincronizarGastoSueldo } from '@/lib/imputacion-sueldos'
 import { NextResponse, type NextRequest } from 'next/server'
-
-// Sincroniza el gasto de mano de obra: si el empleado está asignado a una obra,
-// su liquidación cuenta como gasto de esa obra (idempotente por liquidacion_id).
-async function syncGastoManoObra(supabase: any, userId: string, liq: any) {
-  const { data: emp } = await supabase
-    .from('empleados').select('proyecto_id, nombre').eq('id', liq.empleado_id).eq('user_id', userId).maybeSingle()
-  const { data: existing } = await supabase
-    .from('gastos_obra').select('id').eq('liquidacion_id', liq.id).eq('user_id', userId).maybeSingle()
-
-  if (emp?.proyecto_id && (Number(liq.total_haberes) || 0) > 0) {
-    const row = {
-      proyecto_id: emp.proyecto_id,
-      partida_id: null,
-      fecha: `${liq.periodo}-01`,
-      categoria: 'mano de obra',
-      descripcion: `Sueldo ${emp.nombre || ''} · ${liq.periodo}`,
-      monto: Math.round(Number(liq.total_haberes) || 0),
-      liquidacion_id: liq.id,
-      user_id: userId,
-    }
-    if (existing) await supabase.from('gastos_obra').update(row).eq('id', existing.id).eq('user_id', userId)
-    else await supabase.from('gastos_obra').insert(row)
-  } else if (existing) {
-    await supabase.from('gastos_obra').delete().eq('id', existing.id).eq('user_id', userId)
-  }
-}
 
 export async function GET(req: NextRequest) {
   const supabase = await createServerSupabase()
@@ -114,7 +89,12 @@ export async function POST(req: Request) {
     result = data
   }
 
-  await syncGastoManoObra(supabase, ownerId, result)
+  // La liquidación ya quedó guardada: si falla la imputación a obras, se avisa sin perderla
+  try {
+    await sincronizarGastoSueldo(supabase, ownerId, result)
+  } catch (e: any) {
+    return NextResponse.json({ ...result, aviso: `No se pudo imputar el sueldo a las obras: ${e?.message ?? 'error'}` })
+  }
   return NextResponse.json(result)
 }
 

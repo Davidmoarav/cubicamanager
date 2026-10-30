@@ -93,11 +93,13 @@ export default function RemuneracionesPage() {
   // El servidor recalcula desde el empleado + parámetros guardados
   // (lo que se ve en pantalla es referencial).
   const guardarLiq = async (emp: EmpleadoPrevisional, _calc: any) => {
-    await fetch('/api/remuneraciones', {
+    const res = await fetch('/api/remuneraciones', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ empleado_id: emp.id, periodo, estado: 'borrador' }),
     })
-    setMsg(`Liquidación de ${emp.nombre} guardada`)
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) { setMsg(`No se pudo guardar la liquidación de ${emp.nombre}: ${j.error || 'error desconocido'}`); return }
+    setMsg(j.aviso ? `Liquidación de ${emp.nombre} guardada. ${j.aviso}` : `Liquidación de ${emp.nombre} guardada`)
   }
 
   if (isLoading || !params) return <p className="text-muted p-5">Cargando...</p>
@@ -241,6 +243,20 @@ export default function RemuneracionesPage() {
               <FormInput label="AFC - empleador (%)" value={params.afc_empleador_pct} onChange={v => updParam('afc_empleador_pct', v)} type="number" />
               <FormInput label="Tope imponible AFC (UF)" value={params.tope_afc_uf ?? 131.9} onChange={v => updParam('tope_afc_uf', v)} type="number" />
               <FormInput label="Jornada semanal (horas)" value={params.jornada_semanal ?? 42} onChange={v => updParam('jornada_semanal', v)} type="number" />
+            </div>
+          </div>
+
+          <div className="bg-white border border-[#e4e9f0] rounded-xl p-5 mb-4">
+            <div className="text-[14px] font-bold text-[#1a2535] mb-1">Aportes del empleador</div>
+            <p className="text-[12px] text-muted mb-4">
+              Se suman a los haberes para calcular el costo de cada trabajador en las obras. No afectan su líquido.
+              Mantenlos al día con Previred; la tasa de mutual depende de tu empresa.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <FormInput label="AFC empleador, contrato a plazo u obra (%)" value={params.afc_empleador_plazo_pct ?? 3} onChange={v => updParam('afc_empleador_plazo_pct', v)} type="number" />
+              <FormInput label="SIS (%)" value={params.sis_pct ?? 1.78} onChange={v => updParam('sis_pct', v)} type="number" />
+              <FormInput label="Cotización empleador, reforma de pensiones (%)" value={params.cotizacion_empleador_pct ?? 3.5} onChange={v => updParam('cotizacion_empleador_pct', v)} type="number" />
+              <FormInput label="Mutual (%)" value={params.mutual_pct ?? 0.93} onChange={v => updParam('mutual_pct', v)} type="number" />
             </div>
           </div>
 

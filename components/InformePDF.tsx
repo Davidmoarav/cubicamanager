@@ -136,6 +136,21 @@ export function InformePDF({ data, proximo, empresa, logoUrl }: Props) {
           </View>
         )}
 
+        {/* COSTO REAL */}
+        {data.costos && (
+          <>
+            <Text style={st.sectionTitle}>Costo real y margen</Text>
+            <View style={st.kpiRow}>
+              <KPI label="Gasto real" value={fmtCL(data.costos.gasto_real)} sub={`${data.costos.pct_gastado}% del presupuesto de costo`} />
+              <KPI label="Presupuesto de costo" value={fmtCL(data.costos.presupuesto_costo)} sub={`${fmtCL(data.costos.costo_ejecutado)} según avance`} />
+              <KPI label="Desviación según avance" value={fmtCL(data.costos.desviacion_ejecutada)}
+                sub={data.costos.desviacion_ejecutada < 0 ? 'sobre lo presupuestado' : 'dentro de lo presupuestado'} />
+              <KPI label="Margen real" value={fmtCL(data.costos.ganancia_real)}
+                sub={`${data.costos.margen_real_pct}% de lo ejecutado · esperado ${data.costos.margen_venta_pct}%`} />
+            </View>
+          </>
+        )}
+
         {/* RETENCIONES */}
         <Text style={st.sectionTitle}>Retenciones y anticipos</Text>
         <View style={st.kpiRow}>

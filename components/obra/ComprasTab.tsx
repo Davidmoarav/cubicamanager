@@ -69,6 +69,7 @@ export default function ComprasTab({ proyecto, partidas }: {
             unidad: i.unidad,
             cantidad: i.cantidad,
             precio_unitario: i.precio_proveedor,
+            partida_id: i.partida_id,
           })),
         }),
       })

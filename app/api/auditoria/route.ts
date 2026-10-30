@@ -17,6 +17,9 @@ const NOMBRE_TABLA: Record<string, string> = {
   catalogo_partidas: 'Catálogo de partidas', ppm_config: 'Config. PPM',
   parametros_remuneracion: 'Parámetros de sueldos', empresa_config: 'Datos de la empresa',
   proyeccion_mo: 'Proyección mano de obra', miembros: 'Usuarios y roles',
+  parte_diario: 'Parte diario', recepciones_oc: 'Recepciones de OC',
+  bodega_movimientos: 'Bodega', subcontratos: 'Subcontratos', subcontrato_eps: 'EP de subcontratos',
+  equipos: 'Equipos', equipo_usos: 'Uso de equipos',
 }
 
 export async function GET(req: Request) {

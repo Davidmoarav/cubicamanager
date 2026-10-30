@@ -14,6 +14,9 @@ Ejecutar los archivos **en orden numérico** en Supabase > SQL Editor. Los hueco
 | 27-28 | factura.proyecto_id, partidas 3 niveles | |
 | **29** | **Seguridad multi-empresa (Fase 1): membresía única, Storage org-aware, invitación con email confirmado** | Ejecutar SIEMPRE después de la 25 |
 | **30** | Parámetros rem. Fase 2: `jornada_semanal`, `tope_afc_uf` | |
+| 31-40 | Duplicados, facturas por RUT, Gantt, portal, modalidad de pago, invitaciones | |
+| **41** | **Imputación Fase 1: partida en OC y facturas, `parte_diario`, sueldos repartidos, aportes del empleador** | Trae su propia RLS y triggers: no agregar `parte_diario` al array de la 25 (corre antes y la tabla aún no existe) |
+| **42** | **Costo real Fase 2: recepción por línea, bodega, subcontratos y equipos** | Igual que la 41: trae su propia RLS y triggers. Registra como recibidas las órdenes que ya estaban en ese estado |
 
 Reglas: nunca ejecutar 25/29 a medias (reescriben políticas); después de agregar una tabla nueva con `user_id`, agregarla al array de la 25 (RLS + trigger) y de la 26 (auditoría) y re-ejecutarlas — son idempotentes.
 

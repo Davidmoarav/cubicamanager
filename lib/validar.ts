@@ -126,6 +126,98 @@ export const FacturaSchema = z.object({
   estado_pago_id: uuid.nullish(),
 }).strip()
 
+// Asignar obra y partida a documentos de compra ya cargados (p. ej. importados del SII)
+export const AsignarFacturasSchema = z.object({
+  ids:         z.array(uuid).min(1, 'Elige al menos un documento').max(500),
+  proyecto_id: uuid.nullable(),
+  partida_id:  uuid.nullish(),
+}).strip()
+
+// Parte diario: reemplaza las horas de UN día en UNA obra
+export const ParteDiarioSchema = z.object({
+  proyecto_id: uuid,
+  fecha,
+  filas: z.array(z.object({
+    empleado_id: uuid,
+    partida_id:  uuid.nullish(),
+    horas:       z.coerce.number().positive('Las horas deben ser mayores que 0').max(24, 'Máximo 24 horas por día')
+                  .refine(h => Number.isInteger(h * 10), 'Usa como máximo un decimal en las horas'),
+    notas:       texto.nullish(),
+  }).strip()).max(500),
+}).strip()
+
+// Recepción por línea de una orden de compra
+export const RecepcionSchema = z.object({
+  orden_id:  uuid,
+  fecha,
+  documento: texto.nullish(),
+  notas:     texto.nullish(),
+  items: z.array(z.object({
+    linea_id: uuid,
+    cantidad: z.coerce.number().positive('La cantidad debe ser mayor que 0').max(99_999_999),
+    a_bodega: z.boolean().optional(),
+  }).strip()).max(500),
+}).strip()
+
+// Movimiento manual de bodega. La cantidad de consumo y traspaso va en positivo.
+export const MovimientoBodegaSchema = z.object({
+  tipo:           z.enum(['entrada', 'consumo', 'ajuste', 'traspaso']),
+  proyecto_id:    uuid,
+  material:       texto.min(1, 'Falta el material'),
+  unidad:         texto.nullish(),
+  cantidad:       z.coerce.number().finite().min(-99_999_999).max(99_999_999).refine(n => n !== 0, 'La cantidad no puede ser 0'),
+  costo_unitario: z.coerce.number().int().min(0).nullish(),
+  fecha,
+  partida_id:     uuid.nullish(),
+  destino_id:     uuid.nullish(),
+  notas:          texto.nullish(),
+}).strip()
+
+export const SubcontratoSchema = z.object({
+  proyecto_id:        uuid,
+  proveedor_id:       uuid.nullish(),
+  subcontratista:     texto.min(1, 'Falta el subcontratista'),
+  descripcion:        texto.nullish(),
+  partida_id:         uuid.nullish(),
+  monto_contrato:     z.coerce.number().int().min(0).max(999_999_999_999),
+  retencion_pct:      pct.optional(),
+  anticipo:           z.coerce.number().int().min(0).max(999_999_999_999).optional(),
+  retencion_devuelta: z.coerce.number().int().min(0).max(999_999_999_999).optional(),
+  fecha_inicio:       fechaOpc,
+  fecha_fin:          fechaOpc,
+  estado:             z.enum(['vigente', 'terminado', 'anulado']).optional(),
+  notas:              texto.nullish(),
+}).strip()
+
+export const EPSubcontratoSchema = z.object({
+  subcontrato_id:   uuid,
+  avance_acumulado: pct,
+  fecha,
+  notas:            texto.nullish(),
+}).strip()
+
+export const EquipoSchema = z.object({
+  nombre:       texto.min(1, 'Falta el nombre'),
+  codigo:       texto.nullish(),
+  tipo:         z.enum(['propio', 'arrendado']).optional(),
+  proveedor:    texto.nullish(),
+  unidad_cobro: z.enum(['hora', 'dia', 'mes']).optional(),
+  tarifa:       z.coerce.number().int().min(0).max(999_999_999_999).optional(),
+  activo:       z.boolean().optional(),
+}).strip()
+
+export const UsoEquipoSchema = z.object({
+  equipo_id:   uuid,
+  proyecto_id: uuid,
+  partida_id:  uuid.nullish(),
+  fecha_desde: fecha,
+  fecha_hasta: fechaOpc,
+  cantidad:    z.coerce.number().positive('La cantidad debe ser mayor que 0').max(99_999_999),
+  tarifa:      z.coerce.number().int().min(0).max(999_999_999_999).optional(),
+  factura_id:  uuid.nullish(),
+  notas:       texto.nullish(),
+}).strip()
+
 // ─── Helper: valida y devuelve datos limpios o un mensaje de error ───
 export function validar<T>(schema: z.ZodType<T>, body: unknown):
   { ok: true; data: T } | { ok: false; error: string } {

@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Btn } from '@/components/ui'
 import { fmt } from '@/lib/format'
+import { moRealPorMes } from '@/lib/costos'
 
 interface Props {
   proyectoId: string
@@ -34,11 +35,19 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
   const [saving, setSaving]   = useState(false)
   const [savedAt, setSavedAt] = useState<number | null>(null)
   const [asignados, setAsignados] = useState<number | null>(null)
+  const [gastos, setGastos]   = useState<any[]>([])
+  const [horasMes, setHorasMes] = useState<any[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
-    const data = await fetch(`/api/proyeccion-mo?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => null)
+    const [data, gastosData, horasData] = await Promise.all([
+      fetch(`/api/proyeccion-mo?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => null),
+      fetch(`/api/gastos-obra?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
+      fetch(`/api/parte-diario?proyecto_id=${proyectoId}&resumen=1`).then(r => r.json()).catch(() => []),
+    ])
     setFilas(Array.isArray(data?.filas) ? data.filas : [])
+    setGastos(Array.isArray(gastosData) ? gastosData : [])
+    setHorasMes(Array.isArray(horasData) ? horasData : [])
     setLoading(false)
   }, [proyectoId])
 
@@ -106,6 +115,27 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
     return { costoMo, finiquitos, total: costoMo + finiquitos, pendiente, dotActual, costoActual, maxDot }
   }, [filas])
 
+  // ─── Proyección vs costo real, mes a mes ───
+  const comparacion = useMemo(() => {
+    const real = moRealPorMes(gastos)
+    const horas = Object.fromEntries(horasMes.map(h => [h.mes, h]))
+    const proyectado = Object.fromEntries(filas.map(f => [f.mes, (f.dotacion || 0) * (f.costo_unitario || 0) + (f.finiquito || 0)]))
+    const meses = [...new Set([...Object.keys(real), ...Object.keys(horas)])].sort()
+    const conReal = meses.map(mes => ({
+      mes,
+      proyectado: proyectado[mes] || 0,
+      real: real[mes] || 0,
+      horas: horas[mes]?.horas || 0,
+      trabajadores: horas[mes]?.trabajadores || 0,
+    }))
+    return {
+      filas: conReal,
+      proyectado: conReal.reduce((s, m) => s + m.proyectado, 0),
+      real: conReal.reduce((s, m) => s + m.real, 0),
+      horas: conReal.reduce((s, m) => s + m.horas, 0),
+    }
+  }, [filas, gastos, horasMes])
+
   if (loading) return <div className="flex items-center justify-center py-16 text-muted text-[13px]">Cargando proyección…</div>
 
   return (
@@ -149,6 +179,48 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
           <div className="text-lg font-extrabold text-ink">{fmt(totales.total)}</div>
         </div>
       </div>
+
+      {/* Costo real: sueldos imputados y gastos manuales de mano de obra */}
+      {comparacion.filas.length > 0 && (
+        <div className="mb-5">
+          <div className="text-[12px] font-bold text-ink mb-2">Proyección vs costo real</div>
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr className="border-b-2 border-line2 text-left">
+                  <th className="py-2 pr-2 font-bold text-muted">Mes</th>
+                  <th className="py-2 px-2 font-bold text-muted text-right">Proyectado</th>
+                  <th className="py-2 px-2 font-bold text-muted text-right">Real</th>
+                  <th className="py-2 px-2 font-bold text-muted text-right">Diferencia</th>
+                  <th className="py-2 pl-2 font-bold text-muted text-right">Horas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {comparacion.filas.map(m => (
+                  <tr key={m.mes} className="border-b border-canvas">
+                    <td className="py-1.5 pr-2 font-semibold text-ink whitespace-nowrap">{labelMes(m.mes)}</td>
+                    <td className="py-1.5 px-2 text-right text-muted">{fmt(m.proyectado)}</td>
+                    <td className="py-1.5 px-2 text-right font-semibold text-ink">{fmt(m.real)}</td>
+                    <td className={`py-1.5 px-2 text-right font-semibold ${m.real > m.proyectado ? 'text-danger' : 'text-success'}`}>{fmt(m.proyectado - m.real)}</td>
+                    <td className="py-1.5 pl-2 text-right text-muted whitespace-nowrap">
+                      {m.horas ? `${m.horas} h · ${m.trabajadores} trab.` : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-line2">
+                  <td className="py-2 pr-2 font-extrabold text-ink">TOTAL</td>
+                  <td className="py-2 px-2 text-right font-extrabold text-ink">{fmt(comparacion.proyectado)}</td>
+                  <td className="py-2 px-2 text-right font-extrabold text-brand">{fmt(comparacion.real)}</td>
+                  <td className={`py-2 px-2 text-right font-extrabold ${comparacion.real > comparacion.proyectado ? 'text-danger' : 'text-success'}`}>{fmt(comparacion.proyectado - comparacion.real)}</td>
+                  <td className="py-2 pl-2 text-right font-extrabold text-ink">{Math.round(comparacion.horas * 10) / 10} h</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
 
       {filas.length === 0
         ? <div className="bg-canvas border border-dashed border-line2 rounded-lg p-6 text-center text-[12px] text-muted">

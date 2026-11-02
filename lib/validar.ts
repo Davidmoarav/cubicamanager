@@ -146,6 +146,14 @@ export const ParteDiarioSchema = z.object({
                   .refine(h => Number.isInteger(h * 10), 'Usa como máximo un decimal en las horas'),
     notas:       texto.nullish(),
   }).strip()).max(500),
+  // Huella de lo que se creía que había: si otra persona lo cambió, no se pisa
+  base: z.string().max(100_000).nullish(),
+}).strip()
+
+export const AvancePartidaSchema = z.object({
+  id: uuid,
+  avance: pct,
+  base_avance: z.coerce.number().finite().nullish(),
 }).strip()
 
 // Recepción por línea de una orden de compra

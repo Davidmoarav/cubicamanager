@@ -9,6 +9,7 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { createClient } from '@/lib/supabase'
 import { menuPorRol, etiquetaRol } from '@/lib/nav'
+import { limpiarAlCerrarSesion } from '@/lib/sin-conexion'
 
 export default function Sidebar({ userEmail, open = false, onClose }: {
   userEmail?: string
@@ -33,6 +34,7 @@ export default function Sidebar({ userEmail, open = false, onClose }: {
   }, [])
 
   const logout = async () => {
+    await limpiarAlCerrarSesion()
     await supabase.auth.signOut()
     router.push('/auth/login')
     router.refresh()

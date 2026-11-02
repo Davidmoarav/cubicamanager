@@ -4,12 +4,14 @@
 //
 //   GET ?proyecto_id=X&fecha=YYYY-MM-DD  → filas del día + trabajadores disponibles
 //   GET ?proyecto_id=X&resumen=1         → horas y trabajadores por mes
-//   PUT { proyecto_id, fecha, filas }    → reemplaza las horas de ese día en esa obra
+//   PUT { proyecto_id, fecha, filas, base? } → reemplaza las horas de ese día en esa obra;
+//        con base (lib/cola-terreno.ts), responde 409 si otra persona ya las cambió
 import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
 import { ParteDiarioSchema, validar } from '@/lib/validar'
 import { traerTodo } from '@/lib/costos-server'
 import { reimputarSueldos } from '@/lib/imputacion-sueldos'
+import { huellaParte } from '@/lib/cola-terreno'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/
@@ -75,7 +77,7 @@ export async function PUT(req: Request) {
 
   const v = validar(ParteDiarioSchema, await req.json())
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
-  const { proyecto_id, fecha, filas } = v.data
+  const { proyecto_id, fecha, filas, base } = v.data
 
   const clave = (empleadoId: string, partidaId?: string | null) => `${empleadoId}|${partidaId || ''}`
   const nuevas = new Map(filas.map(f => [clave(f.empleado_id, f.partida_id), f]))
@@ -105,11 +107,20 @@ export async function PUT(req: Request) {
     }
   }
 
-  // ── Un trabajador no puede sumar más de 24 horas en el día, entre todas las obras ──
   const { data: delDia, error: eDia } = await supabase
     .from('parte_diario').select('id, proyecto_id, empleado_id, partida_id, horas')
     .eq('user_id', ownerId).eq('fecha', fecha)
   if (eDia) return NextResponse.json({ error: eDia.message }, { status: 500 })
+
+  // ── Otra persona lo cambió. Si ya es igual a lo enviado, es un reintento: sigue ──
+  if (typeof base === 'string') {
+    const huella = huellaParte((delDia ?? []).filter((p: any) => p.proyecto_id === proyecto_id))
+    if (huella !== base && huella !== huellaParte(filas)) {
+      return NextResponse.json({ error: 'Otra persona cambió el parte de este día' }, { status: 409 })
+    }
+  }
+
+  // ── Un trabajador no puede sumar más de 24 horas en el día, entre todas las obras ──
 
   const horasDia: Record<string, number> = {}
   for (const f of filas) horasDia[f.empleado_id] = (horasDia[f.empleado_id] || 0) + f.horas

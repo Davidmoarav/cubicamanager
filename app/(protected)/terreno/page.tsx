@@ -1,9 +1,10 @@
 'use client'
 // app/(protected)/terreno/page.tsx
 // Lo que se hace desde la obra, pensado para el teléfono: parte diario, avance,
-// libro de obra con fotos y consumo de bodega. Requiere conexión.
+// libro de obra con fotos y consumo de bodega. Parte diario y avance funcionan sin
+// señal: quedan en el teléfono y se envían después. Libro y bodega necesitan conexión.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -12,6 +13,9 @@ import { usePermisos } from '@/lib/usePermisos'
 import ParteDiarioPanel from '@/components/ParteDiarioPanel'
 import LibroObraPanel from '@/components/LibroObraPanel'
 import BodegaPanel from '@/components/BodegaPanel'
+import { claveAvance, itemAvance, registrar } from '@/lib/cola-terreno'
+import { precargarObras } from '@/lib/sin-conexion'
+import { useColaTerreno, useEnLinea } from '@/lib/useColaTerreno'
 
 const ACCIONES = [
   { id: 'parte', label: 'Parte diario', detalle: 'Horas de la cuadrilla' },
@@ -21,13 +25,28 @@ const ACCIONES = [
 ]
 
 const CLAVE_OBRA = 'terreno.obra'
+const NECESITAN_SENAL = ['libro', 'bodega']
 
 function AvanceRapido({ proyectoId }: { proyectoId: string }) {
   const { puedeEditar } = usePermisos('obra')
-  const { data, mutate } = useSWR<any[]>(`/api/partidas-proyecto?proyecto_id=${proyectoId}`, fetcher)
+  const { data, error, mutate } = useSWR<any[]>(`/api/partidas-proyecto?proyecto_id=${proyectoId}`, fetcher)
   const [valores, setValores] = useState<Record<string, string>>({})
   const [guardando, setGuardando] = useState('')
-  const [msg, setMsg] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  const [msg, setMsg] = useState<{ tipo: 'ok' | 'aviso' | 'error'; texto: string } | null>(null)
+  const cola = useColaTerreno()
+
+  const sinEnviar = (partidaId: string) => {
+    const item = cola.find(i => i.clave === claveAvance(partidaId))
+    return item ? Number(item.cuerpo.avance) : null
+  }
+
+  // Lo que se envió sin nadie mirando: trae lo que quedó en el servidor
+  const enCola = cola.filter(i => i.tipo === 'avance').length
+  const habiaEnCola = useRef(enCola)
+  useEffect(() => {
+    if (enCola < habiaEnCola.current) mutate()
+    habiaEnCola.current = enCola
+  }, [enCola, mutate])
 
   const hojas = useMemo(() => {
     const lista = Array.isArray(data) ? data : []
@@ -40,22 +59,28 @@ function AvanceRapido({ proyectoId }: { proyectoId: string }) {
     if (!(avance >= 0 && avance <= 100)) { setMsg({ tipo: 'error', texto: 'El avance debe estar entre 0 y 100' }); return }
     setGuardando(p.id)
     setMsg(null)
-    // La API recalcula con la fila completa: mandarla parcial borraría otros campos
-    const res = await fetch('/api/partidas-proyecto', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...p, avance }),
-    })
+    const r = await registrar(itemAvance({
+      partidaId: p.id,
+      proyectoId,
+      avance,
+      avanceBase: Number(p.avance) || 0,
+      titulo: `Avance de ${p.descripcion}: ${avance}%`,
+    }))
     setGuardando('')
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}))
-      setMsg({ tipo: 'error', texto: j.error || 'No se pudo guardar el avance' })
-      return
-    }
     setValores(v => { const { [p.id]: _, ...resto } = v; return resto })
-    setMsg({ tipo: 'ok', texto: `${p.descripcion}: ${avance}%` })
-    await mutate()
+    if (r.estado === 'enviado') {
+      setMsg({ tipo: 'ok', texto: `${p.descripcion}: ${avance}%` })
+      await mutate()
+    } else if (r.estado === 'guardado') {
+      setMsg({ tipo: 'aviso', texto: `${p.descripcion}: ${avance}%. Guardado en este teléfono; se enviará solo cuando vuelva la señal.` })
+    } else if (r.estado === 'sesion') {
+      setMsg({ tipo: 'aviso', texto: `${p.descripcion}: ${avance}%. Guardado en este teléfono; entra de nuevo a tu cuenta para enviarlo.` })
+    } else {
+      setMsg({ tipo: 'error', texto: r.error || 'No se pudo guardar el avance' })
+    }
   }
 
+  if (error && !data) return <p className="text-muted text-center py-10 text-[13px]">No se pudieron cargar las partidas. Si no tienes señal, abre esta obra una vez con conexión.</p>
   if (!data) return <p className="text-muted text-center py-10 text-[13px]">Cargando partidas…</p>
   if (hojas.length === 0) return <p className="text-muted text-center py-10 text-[13px]">Esta obra no tiene partidas.</p>
 
@@ -63,24 +88,27 @@ function AvanceRapido({ proyectoId }: { proyectoId: string }) {
     <div>
       <h4 className="text-[14px] font-bold text-ink mb-3">Avance por partida</h4>
       {msg && (
-        <div className={`mb-3 text-[12px] font-semibold rounded-lg px-3 py-2 ${msg.tipo === 'ok' ? 'text-success bg-success-bg' : 'text-danger bg-danger-bg'}`}>
+        <div className={`mb-3 text-[12px] font-semibold rounded-lg px-3 py-2 ${msg.tipo === 'ok' ? 'text-success bg-success-bg' : msg.tipo === 'aviso' ? 'text-warning bg-warning-bg' : 'text-danger bg-danger-bg'}`}>
           {msg.texto}
         </div>
       )}
       <div className="flex flex-col">
         {hojas.map(p => {
-          const editado = valores[p.id] !== undefined && Number(valores[p.id]) !== Number(p.avance)
+          const pendiente = sinEnviar(p.id)
+          const vigente = pendiente ?? (Number(p.avance) || 0)
+          const editado = valores[p.id] !== undefined && Number(valores[p.id]) !== vigente
           return (
             <div key={p.id} className="grid grid-cols-[1fr_64px_72px] gap-2 items-center py-2 border-b border-canvas">
               <div className="min-w-0 text-[13px]">
                 <div className="font-semibold text-ink truncate">{p.descripcion}</div>
                 <div className="h-1.5 bg-[#EDE7E0] rounded-full overflow-hidden mt-1">
-                  <div className="h-full bg-brand rounded-full" style={{ width: `${Math.min(100, Number(p.avance) || 0)}%` }} />
+                  <div className="h-full bg-brand rounded-full" style={{ width: `${Math.min(100, vigente)}%` }} />
                 </div>
+                {pendiente !== null && <div className="text-[11px] font-semibold text-warning mt-0.5">Sin enviar</div>}
               </div>
               <input type="number" inputMode="numeric" min="0" max="100" disabled={!puedeEditar}
                 aria-label={`Avance de ${p.descripcion}, en porcentaje`}
-                value={valores[p.id] ?? String(Math.round(Number(p.avance) || 0))}
+                value={valores[p.id] ?? String(Math.round(vigente))}
                 onChange={e => setValores(v => ({ ...v, [p.id]: e.target.value }))}
                 className="w-full px-1.5 py-2 border border-line2 rounded-md text-right text-[13px]" />
               {puedeEditar && editado
@@ -95,7 +123,8 @@ function AvanceRapido({ proyectoId }: { proyectoId: string }) {
 }
 
 export default function TerrenoPage() {
-  const { data: proyectos, isLoading } = useSWR<any[]>('/api/proyectos', fetcher)
+  const { data: proyectos, error, isLoading } = useSWR<any[]>('/api/proyectos', fetcher)
+  const enLinea = useEnLinea()
   const [obra, setObra] = useState('')
   const [accion, setAccion] = useState('parte')
 
@@ -113,6 +142,11 @@ export default function TerrenoPage() {
     setObra(lista.some(p => p.id === guardada) ? (guardada as string) : lista[0].id)
   }, [lista, obra])
 
+  // Deja en el teléfono lo necesario para trabajar sin señal
+  useEffect(() => {
+    if (obra) precargarObras(obra, lista.map(p => p.id))
+  }, [obra, lista])
+
   const elegirObra = (id: string) => {
     setObra(id)
     try { localStorage.setItem(CLAVE_OBRA, id) } catch { /* sin almacenamiento */ }
@@ -125,8 +159,16 @@ export default function TerrenoPage() {
         {obra && <Link href={`/obra/${obra}`} className="text-[12.5px] font-semibold text-brand">Ver obra completa</Link>}
       </div>
 
+      {!enLinea && (
+        <div className="mb-3 text-[12.5px] font-semibold text-warning bg-warning-bg rounded-lg px-3.5 py-2.5">
+          Sin señal. Parte diario y avance se guardan en este teléfono y se envían al volver la conexión.
+        </div>
+      )}
+
       {isLoading ? (
         <p className="text-muted text-center py-10 text-[13px]">Cargando obras…</p>
+      ) : error && !proyectos ? (
+        <p className="text-muted text-center py-10 text-[13px]">No se pudieron cargar las obras. Si no tienes señal, abre Terreno una vez con conexión.</p>
       ) : lista.length === 0 ? (
         <p className="text-muted text-center py-10 text-[13px]">No tienes obras todavía.</p>
       ) : (
@@ -150,8 +192,14 @@ export default function TerrenoPage() {
             <div className="bg-white rounded-card border border-line shadow-card p-4">
               {accion === 'parte' && <ParteDiarioPanel proyectoId={obra} />}
               {accion === 'avance' && <AvanceRapido proyectoId={obra} />}
-              {accion === 'libro' && <LibroObraPanel proyectoId={obra} />}
-              {accion === 'bodega' && <BodegaPanel proyectoId={obra} />}
+              {!enLinea && NECESITAN_SENAL.includes(accion) ? (
+                <p className="text-muted text-center py-10 text-[13px]">Esto necesita conexión. Anótalo y regístralo al volver la señal.</p>
+              ) : (
+                <>
+                  {accion === 'libro' && <LibroObraPanel proyectoId={obra} />}
+                  {accion === 'bodega' && <BodegaPanel proyectoId={obra} />}
+                </>
+              )}
             </div>
           )}
         </>

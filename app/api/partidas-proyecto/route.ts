@@ -1,6 +1,7 @@
 // app/api/partidas-proyecto/route.ts
 import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
+import { AvancePartidaSchema, validar } from '@/lib/validar'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── Recalcular avances (hojas → grupos → proyecto), N niveles ────
@@ -149,6 +150,44 @@ export async function PUT(req: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (rest.proyecto_id) await recalcTodo(supabase, rest.proyecto_id, ownerId)
+  return NextResponse.json(data)
+}
+
+// ─── PATCH ─── solo el avance, desde Terreno. Puede llegar horas después de registrado:
+// no toca el resto de la partida, y con base_avance no pisa lo que otra persona cambió.
+export async function PATCH(req: Request) {
+  const supabase = await createServerSupabase()
+  const ro = await guardEscritura(supabase, 'obra')
+  if (ro) return ro
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ownerId = await getOwnerId(supabase) || user.id
+
+  const v = validar(AvancePartidaSchema, await req.json())
+  if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+  const { id, avance, base_avance } = v.data
+
+  const { data: actual, error: eActual } = await supabase.from('partidas_proyecto')
+    .select('id, proyecto_id, avance').eq('id', id).eq('user_id', ownerId).maybeSingle()
+  if (eActual) return NextResponse.json({ error: eActual.message }, { status: 500 })
+  if (!actual) return NextResponse.json({ error: 'Esta partida ya no existe' }, { status: 404 })
+
+  const { data: hijos, error: eHijos } = await supabase.from('partidas_proyecto')
+    .select('id').eq('parent_id', id).eq('user_id', ownerId).limit(1)
+  if (eHijos) return NextResponse.json({ error: eHijos.message }, { status: 500 })
+  if ((hijos ?? []).length > 0) {
+    return NextResponse.json({ error: 'Esta partida ahora tiene subpartidas: registra el avance en ellas' }, { status: 400 })
+  }
+
+  const hoy = Number(actual.avance) || 0
+  if (base_avance != null && hoy !== Number(base_avance) && hoy !== avance) {
+    return NextResponse.json({ error: `Otra persona dejó esta partida en ${hoy}%` }, { status: 409 })
+  }
+
+  const { data, error } = await supabase.from('partidas_proyecto')
+    .update({ avance }).eq('id', id).eq('user_id', ownerId).select().single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await recalcTodo(supabase, actual.proyecto_id, ownerId)
   return NextResponse.json(data)
 }
 

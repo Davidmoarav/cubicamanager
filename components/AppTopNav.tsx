@@ -13,6 +13,7 @@ import { menuPorRol, SECCIONES, etiquetaRol, type NavItem } from '@/lib/nav'
 import Sidebar from '@/components/Sidebar'
 import BuscadorGlobal from '@/components/BuscadorGlobal'
 import { IconMenu } from '@/components/Icon'
+import { limpiarAlCerrarSesion } from '@/lib/sin-conexion'
 
 export default function AppTopNav({ userEmail }: { userEmail?: string }) {
   const pathname = usePathname()
@@ -54,6 +55,7 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
   }, [])
 
   const logout = async () => {
+    await limpiarAlCerrarSesion()
     await supabase.auth.signOut()
     router.push('/auth/login')
     router.refresh()

@@ -5,6 +5,15 @@ import { NextResponse, type NextRequest } from 'next/server'
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
 export async function middleware(request: NextRequest) {
+  // Si Supabase no autoriza la dirección pedida, el link del correo cae en la raíz.
+  // Con el verificador en este navegador, el código todavía se puede canjear.
+  if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('code')
+    && request.cookies.getAll().some(c => c.name.endsWith('-code-verifier'))) {
+    const callback = new URL('/auth/callback', request.url)
+    callback.searchParams.set('code', request.nextUrl.searchParams.get('code')!)
+    return NextResponse.redirect(callback)
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -31,8 +40,8 @@ export async function middleware(request: NextRequest) {
   if (!user && !isAuthPage && !isPublic) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
-  const isUpdatePassword = request.nextUrl.pathname === '/auth/update-password'
-  if (user && isAuthPage && !isUpdatePassword) {
+  // Con sesión solo se salta el login: un link de recuperación debe seguir funcionando
+  if (user && request.nextUrl.pathname === '/auth/login') {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 

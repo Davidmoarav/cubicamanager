@@ -42,6 +42,21 @@ Estos buckets deberían existir de migraciones previas. Confírmalos en
 Si falta alguno, córrelo desde `sql/03_empresa_config.sql` (logos) y
 `sql/06_documentos.sql` (docs).
 
+### Recuperación de contraseña **[TÚ]**
+
+En **Supabase → Authentication**:
+
+1. **URL Configuration → Site URL**: la dirección pública de la app, no `localhost`.
+2. **URL Configuration → Redirect URLs**: agrega `https://TU-DOMINIO/auth/callback`.
+3. **Email Templates → Reset Password**: cambia el enlace por este. Así funciona en
+   cualquier navegador, y los antivirus de correo (como Outlook) no lo consumen:
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery">Restablecer contraseña</a>
+   ```
+4. **Correo**: el servicio incluido en Supabase solo es para pruebas, tiene un límite
+   bajo de envíos y puede no enviar a direcciones fuera de tu equipo. Para producción,
+   configura un SMTP propio en **Authentication → SMTP Settings**.
+
 ---
 
 ## 3. Variables de entorno

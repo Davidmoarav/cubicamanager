@@ -1,10 +1,11 @@
 'use client'
 // app/auth/login/page.tsx
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { mensajeLink, motivoDeHash } from '@/lib/auth-recuperacion'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,6 +18,11 @@ export default function LoginPage() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [msg, setMsg]           = useState('')
+
+  // Un link vencido puede caer aquí si Supabase no autoriza la dirección pedida
+  useEffect(() => {
+    setError(mensajeLink(motivoDeHash(window.location.hash)))
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

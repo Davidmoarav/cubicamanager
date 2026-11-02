@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { mensajeAuth, mensajeLink } from '@/lib/auth-recuperacion'
 
 function ForgotForm() {
   const supabase = createClient()
@@ -15,9 +16,8 @@ function ForgotForm() {
   const [error, setError]     = useState('')
 
   useEffect(() => {
-    if (searchParams.get('error') === 'link-invalido') {
-      setError('El link de recuperación es inválido o ya expiró. Solicita uno nuevo.')
-    }
+    const mensaje = mensajeLink(searchParams.get('error'))
+    if (mensaje) setError(mensaje)
   }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,7 +29,7 @@ function ForgotForm() {
     })
 
     setLoading(false)
-    if (error) { setError(error.message); return }
+    if (error) { setError(mensajeAuth(error)); return }
     setSent(true)
   }
 

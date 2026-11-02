@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import { mensajeAuth, motivoDeHash } from '@/lib/auth-recuperacion'
 
 export default function UpdatePasswordPage() {
   const router   = useRouter()
@@ -15,28 +16,15 @@ export default function UpdatePasswordPage() {
   const [error, setError]       = useState('')
 
   useEffect(() => {
-    let listo = false
+    // Un link vencido o ya usado llega como #error=...
+    const motivo = motivoDeHash(window.location.hash)
+    if (motivo) { router.replace(`/auth/forgot?error=${motivo}`); return }
 
-    // El token puede llegar en el hash (#access_token=...). El cliente de Supabase
-    // lo procesa de forma asíncrona y emite PASSWORD_RECOVERY / SIGNED_IN.
-    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session && (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-        listo = true
-        setChecking(false)
-      }
-    })
-
-    // Si ya hay sesión (formato ?code, procesado en el callback), seguir de inmediato
+    // La sesión ya viene lista desde /auth/callback o /auth/confirm
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) { listo = true; setChecking(false) }
+      if (session) setChecking(false)
+      else router.replace('/auth/forgot?error=link-invalido')
     })
-
-    // Margen para que el cliente procese el token del hash antes de rendirse
-    const t = setTimeout(() => {
-      if (!listo) router.replace('/auth/forgot?error=link-invalido')
-    }, 3000)
-
-    return () => { sub.subscription.unsubscribe(); clearTimeout(t) }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,7 +42,7 @@ export default function UpdatePasswordPage() {
     const { error } = await supabase.auth.updateUser({ password })
     setLoading(false)
 
-    if (error) { setError(error.message); return }
+    if (error) { setError(mensajeAuth(error)); return }
     router.push('/dashboard')
     router.refresh()
   }

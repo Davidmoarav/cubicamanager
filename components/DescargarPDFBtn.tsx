@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { Cotizacion } from '@/types/cotizaciones'
 import type { Cliente } from '@/types/cliente'
+import { avisar } from '@/lib/avisos'
 
 interface Props {
   cotizacion: Cotizacion
@@ -61,7 +62,7 @@ export default function DescargarPDFBtn({ cotizacion, cliente }: Props) {
       URL.revokeObjectURL(url)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)   // ← error real, no el síntoma
-      alert('Error al generar PDF: ' + (err?.message || err))
+      avisar('Error al generar PDF: ' + (err?.message || err))
     } finally {
       setLoading(false)
     }

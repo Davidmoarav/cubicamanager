@@ -11,6 +11,7 @@ import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, fmt } from '@/components/ui'
 import { opcionesPartida } from '@/lib/costos'
 import { usePermisos } from '@/lib/usePermisos'
+import { confirmar } from '@/lib/avisos'
 
 interface Props {
   proyectoId: string
@@ -82,7 +83,7 @@ export default function ApuPanel({ proyectoId, onCambio }: Props) {
   const aplicar = async () => {
     const c = apu?.calculo
     if (!c) return
-    if (!confirm(`¿Aplicar a la partida? Queda con costo ${fmt(c.costo_unitario)} y precio de venta ${fmt(c.precio_unitario)} por unidad.`)) return
+    if (!(await confirmar(`¿Aplicar a la partida? Queda con costo ${fmt(c.costo_unitario)} y precio de venta ${fmt(c.precio_unitario)} por unidad.`))) return
     if (await enviar('/api/apu', 'PUT', { partida_id: partidaId, aplicar: true })) {
       setMsg({ tipo: 'ok', texto: 'Costos y precio de la partida actualizados' })
       onCambio?.()
@@ -121,7 +122,7 @@ export default function ApuPanel({ proyectoId, onCambio }: Props) {
         <div className="flex items-center justify-center py-12 text-muted text-[13px]">Cargando APU…</div>
       ) : error || apu?.error ? (
         <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-          No se pudo cargar el APU. Si menciona "partida_apu_recursos", ejecuta el SQL 43_fase3_gestion_obra.sql en Supabase.
+          No se pudo cargar el análisis. Recarga la página; si sigue pasando, avisa al administrador.
         </div>
       ) : c && (
         <>

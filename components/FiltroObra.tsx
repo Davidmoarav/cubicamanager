@@ -2,6 +2,7 @@
 // components/FiltroObra.tsx
 // Filtro por obra de las vistas de empresa: todas, una obra o lo que no tiene obra.
 
+import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { SIN_OBRA } from '@/lib/consolidado'
 
@@ -14,8 +15,30 @@ interface Props {
   className?: string
 }
 
+const CLAVE = 'cubica.filtroObra'
+
+// La obra elegida sigue elegida al pasar de una pantalla a otra
+export function useObraFiltro(): [string, (v: string) => void] {
+  const [obra, setObra] = useState('')
+  useEffect(() => {
+    try { setObra(window.localStorage.getItem(CLAVE) ?? '') } catch {}
+  }, [])
+  const elegir = (v: string) => {
+    setObra(v)
+    try {
+      if (v) window.localStorage.setItem(CLAVE, v)
+      else window.localStorage.removeItem(CLAVE)
+    } catch {}
+  }
+  return [obra, elegir]
+}
+
 export default function FiltroObra({ value, onChange, proyectos, sinObra = true, className = '' }: Props) {
   const lista = Array.isArray(proyectos) ? proyectos : []
+  // Una obra recordada que ya no existe dejaría la pantalla vacía sin explicación
+  useEffect(() => {
+    if (value && value !== SIN_OBRA && lista.length > 0 && !lista.some(p => p.id === value)) onChange('')
+  }, [value, lista.length])
   return (
     <select value={value} onChange={e => onChange(e.target.value)} aria-label="Filtrar por obra"
       className={`input-base !mb-0 !py-1.5 cursor-pointer w-auto min-w-[180px] max-w-[280px] ${className}`}>

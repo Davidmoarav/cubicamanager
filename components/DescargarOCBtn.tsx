@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
+import { avisar } from '@/lib/avisos'
 
 interface Props {
   orden: any
@@ -60,7 +61,7 @@ export default function DescargarOCBtn({ orden, proveedores }: Props) {
       URL.revokeObjectURL(url)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)
-      alert('Error al generar PDF: ' + (err?.message || err))
+      avisar('Error al generar PDF: ' + (err?.message || err))
     } finally {
       setLoading(false)
     }

@@ -5,13 +5,13 @@
 import { createClient } from '@supabase/supabase-js'
 import type { SnapshotPortal } from '@/lib/portal'
 import { calcularGantt, fechaCortaCL } from '@/lib/gantt'
-import { fmt } from '@/lib/format'
+import { fmt, fmtPeriodo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
 
 const ESTADO_PROY: Record<string, { label: string; color: string; bg: string }> = {
-  cotizacion: { label: 'Cotizando', color: '#C24019', bg: '#FCEAE3' },
-  activo:     { label: 'En obra',   color: '#1a7a4a', bg: '#e6f4ed' },
+  cotizacion: { label: 'En cotización', color: '#C24019', bg: '#FCEAE3' },
+  activo:     { label: 'En curso',  color: '#1a7a4a', bg: '#e6f4ed' },
   terminado:  { label: 'Terminado', color: '#6b7a8d', bg: '#F1ECE6' },
 }
 
@@ -102,7 +102,7 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-3">
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Total presupuesto', valor: fmt(m.total), coral: false },
               { label: 'Pagado', valor: fmt(m.pagado), coral: false },
@@ -201,7 +201,7 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-ink text-[13px]">Estado de pago N°{c.numero}</div>
-                      <div className="text-[11.5px] text-muted">{c.periodo ?? (c.fecha ? fechaCortaCL(c.fecha) : '')}</div>
+                      <div className="text-[11.5px] text-muted">{c.periodo ? fmtPeriodo(c.periodo) : c.fecha ? fechaCortaCL(c.fecha) : ''}</div>
                     </div>
                     <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold" style={{ background: e.bg, color: e.color }}>
                       {e.label}

@@ -21,6 +21,24 @@ export interface TramoSueldo {
   monto: number
 }
 
+// Para quien no ve sueldos: junta los gastos de liquidaciones por mes y partida, sin nombres.
+export function ocultarSueldos<T extends Record<string, any>>(gastos: T[]): T[] {
+  const grupos = new Map<string, any>()
+  const resto: T[] = []
+  for (const g of gastos) {
+    if (!g.liquidacion_id) { resto.push(g); continue }
+    const mes = String(g.fecha || '').slice(0, 7)
+    const clave = `${mes}|${g.partida_id || ''}`
+    const previo = grupos.get(clave)
+    if (previo) previo.monto += Number(g.monto) || 0
+    else grupos.set(clave, {
+      id: `mano-obra-${clave}`, proyecto_id: g.proyecto_id, partida_id: g.partida_id ?? null, fecha: g.fecha,
+      categoria: 'mano_obra', descripcion: 'Mano de obra del mes', monto: Number(g.monto) || 0, agregado: true,
+    })
+  }
+  return [...resto, ...grupos.values()].sort((a, b) => String(b.fecha ?? '').localeCompare(String(a.fecha ?? '')))
+}
+
 // Función pura. Los tramos suman EXACTO el costo (método del mayor resto).
 export function repartirCosto(costo: number, horas: HorasObra[], obraAsignada?: string | null): TramoSueldo[] {
   const total = Math.round(Number(costo) || 0)

@@ -16,7 +16,7 @@ export const MENU: NavItem[] = [
   { href: '/cotizaciones',      label: 'Cotizaciones',      icon: '◐', section: 'Comercial' },
   { href: '/clientes',          label: 'Clientes',          icon: '◍', section: 'Comercial' },
 
-  { href: '/proyectos',         label: 'Proyectos',         icon: '◧', section: 'Obra' },
+  { href: '/proyectos',         label: 'Obras',             icon: '◧', section: 'Obra' },
   { href: '/terreno',           label: 'Terreno',           icon: '📍', section: 'Obra' },
   { href: '/catalogo-partidas', label: 'Catálogo partidas', icon: '📋', section: 'Obra' },
   { href: '/ordenes-compra',    label: 'Órdenes de compra', icon: '🛒', section: 'Obra' },
@@ -47,6 +47,30 @@ export const ACCESO: Record<string, string[]> = {
   '/rrhh':           ['admin', 'contador'],
   '/usuarios':       ['admin'],
   '/auditoria':      ['admin'],
+}
+
+// Rutas cuyos datos el servidor niega por rol: sin permiso se ven vacías, no bloqueadas.
+// Proyectos y Terreno no están: el contador las ve en solo lectura.
+const RUTAS_PROTEGIDAS = ['/reportes', '/facturacion', '/finanzas', '/remuneraciones', '/rrhh', '/usuarios', '/auditoria']
+
+const protegidaDe = (pathname: string) =>
+  RUTAS_PROTEGIDAS.find(r => pathname === r || pathname.startsWith(`${r}/`))
+
+export const rutaProtegida = (pathname: string) => !!protegidaDe(pathname)
+
+export function rutaPermitida(pathname: string, rol: string): boolean {
+  const ruta = protegidaDe(pathname)
+  return !ruta || ACCESO[ruta].includes(rol)
+}
+
+// El contador ve estas pantallas, pero el servidor le rechaza los cambios
+const SOLO_LECTURA_CONTADOR = ['/proyectos', '/obra', '/terreno', '/cotizaciones', '/clientes', '/catalogo-partidas', '/ordenes-compra', '/proveedores', '/contratos']
+
+export function avisoSoloLectura(pathname: string, rol: string): string | null {
+  const en = (r: string) => pathname === r || pathname.startsWith(`${r}/`)
+  if (rol === 'contador' && SOLO_LECTURA_CONTADOR.some(en)) return 'Tu rol puede ver esta sección, pero no modificarla.'
+  if (rol && rol !== 'admin' && en('/configuracion')) return 'Solo el administrador puede cambiar los datos de la empresa. Tu perfil sí puedes editarlo.'
+  return null
 }
 
 export function menuPorRol(rol: string): NavItem[] {

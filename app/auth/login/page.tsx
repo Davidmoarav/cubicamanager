@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { mensajeLink, motivoDeHash } from '@/lib/auth-recuperacion'
+import { mensajeAuth, mensajeLink, motivoDeHash } from '@/lib/auth-recuperacion'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -30,7 +30,7 @@ export default function LoginPage() {
 
     if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) { setError(error.message); setLoading(false); return }
+      if (error) { setError(mensajeAuth(error)); setLoading(false); return }
       router.push('/dashboard')
       router.refresh()
     } else {
@@ -38,7 +38,7 @@ export default function LoginPage() {
         email, password,
         options: { data: { nombre } }
       })
-      if (error) { setError(error.message); setLoading(false); return }
+      if (error) { setError(mensajeAuth(error)); setLoading(false); return }
 
       // Si la confirmación por correo está desactivada, Supabase ya devuelve la
       // sesión activa: se entra directo. Si está activada, sí hay que confirmar.
@@ -90,17 +90,15 @@ export default function LoginPage() {
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@empresa.cl" required className="input-base" />
           </div>
           <div className="mb-5">
-            <div className="flex justify-between items-center mb-1.5">
-              <label className="label-base !mb-0">Contraseña</label>
-              {mode === 'login' && (
-                <Link href="/auth/forgot" className="text-[12px] text-brand hover:underline">
-                  ¿Olvidaste tu contraseña?
-                </Link>
-              )}
-            </div>
+            <label className="label-base">Contraseña</label>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : 'Tu contraseña'}
               required minLength={mode === 'register' ? 8 : undefined} className="input-base" />
+            {mode === 'login' && (
+              <Link href="/auth/forgot" className="inline-block mt-1.5 text-[12px] text-brand hover:underline">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            )}
           </div>
 
           {error && <div className="bg-danger-bg text-danger text-[13px] px-[14px] py-[10px] rounded-lg mb-3.5">{error}</div>}

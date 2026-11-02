@@ -1,6 +1,7 @@
 // lib/gantt.ts
 // Motor puro de la Carta Gantt (Fase 4): posiciones de barras, fase actual,
 // días restantes y plan automático. Fechas en 'YYYY-MM-DD' (UTC, sin horas).
+import { fmtFecha } from './format'
 
 export interface EtapaGantt {
   id: string
@@ -45,13 +46,9 @@ export const deUTC = (t: number): string => new Date(t).toISOString().slice(0, 1
 
 export const sumarDias = (iso: string, dias: number): string => deUTC(aUTC(iso) + dias * DIA_MS)
 
-const MESES_CL = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+export const fechaCortaCL = fmtFecha
 
-export function fechaCortaCL(iso?: string | null): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map(Number)
-  return `${d} ${MESES_CL[(m || 1) - 1]} ${y}`
-}
+const MESES_CL = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
 export function calcularGantt(etapas: EtapaGantt[], hoyISO: string): GanttCalc {
   const conFechas = etapas.filter(e => e.fecha_inicio && e.fecha_fin)

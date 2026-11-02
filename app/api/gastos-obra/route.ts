@@ -1,6 +1,7 @@
 // app/api/gastos-obra/route.ts
 import { createServerSupabase } from '@/lib/supabase-server'
-import { guardEscritura, getOwnerId } from '@/lib/roles'
+import { guardEscritura, getOwnerId, getRolActual } from '@/lib/roles'
+import { ocultarSueldos } from '@/lib/imputacion-sueldos'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── GET: gastos de un proyecto ───────────────────────────
@@ -21,7 +22,8 @@ export async function GET(req: NextRequest) {
     .order('fecha', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+  const info = await getRolActual(supabase)
+  return NextResponse.json(info?.rol === 'jefe_obra' ? ocultarSueldos(data ?? []) : data ?? [])
 }
 
 // ─── POST: crear gasto ────────────────────────────────────

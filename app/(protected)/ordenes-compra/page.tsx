@@ -10,11 +10,13 @@ import DescargarOCBtn from '@/components/DescargarOCBtn'
 import SelectorCatalogo from '@/components/SelectorCatalogo'
 import SelectorFactura from '@/components/SelectorFactura'
 import RecepcionOC from '@/components/RecepcionOC'
-import FiltroObra from '@/components/FiltroObra'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
 import { Btn, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th } from '@/components/ui'
-import { fmt } from '@/lib/format'
+import { fmt, fmtFecha } from '@/lib/format'
 import { opcionesPartida } from '@/lib/costos'
 import { UNIDADES } from '@/types/cotizaciones'
+import { avisar, confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 const IVA = 0.19
 
@@ -25,7 +27,7 @@ const ESTADO_OC: Record<string, { label: string; bg: string; color: string }> = 
   recibida: { label: 'Recibida', bg: '#e6f4ed', color: '#1a7a4a' },
   anulada:  { label: 'Anulada',  bg: '#fdecea', color: '#b0401a' },
 }
-const ESTADOS = Object.entries(ESTADO_OC).map(([value, v]) => ({ value, label: v.label }))
+const ESTADOS = Object.entries(ESTADO_OC).map(([value, v]) => ({ value, label: value === 'recibida' ? 'Recibida (recibe todo lo pendiente)' : v.label }))
 
 function BadgeOC({ estado }: { estado: string }) {
   const s = ESTADO_OC[estado] ?? { label: estado, bg: '#eee', color: '#555' }
@@ -46,9 +48,10 @@ const CONCILIACION: Record<string, { texto: string; cls: string }> = {
 }
 
 export default function OrdenesCompraPage() {
+  const { puedeEditar } = usePermisos('obra')
   const [busqueda, setBusqueda] = useState('')
   const [limite, setLimite]     = useState(60)
-  const [obra, setObra]         = useState('')
+  const [obra, setObra] = useObraFiltro()
   const paramObra = obra ? `&obra=${obra}` : ''
   const buscando = busqueda.trim().length >= 1
   const { data: items = [], isLoading, mutate } = useSWR<any[]>(
@@ -76,7 +79,7 @@ export default function OrdenesCompraPage() {
     () => [{ value: '', label: '— Sin proveedor —' }, ...proveedores.map(p => ({ value: p.id, label: p.nombre }))],
     [proveedores])
   const proyOptions = useMemo(
-    () => [{ value: '', label: '— Sin proyecto —' }, ...proyectos.map(p => ({ value: p.id, label: p.nombre }))],
+    () => [{ value: '', label: '— Sin obra —' }, ...proyectos.map(p => ({ value: p.id, label: p.nombre }))],
     [proyectos])
 
   const totales = useMemo(() => {
@@ -93,11 +96,11 @@ export default function OrdenesCompraPage() {
     setConciliacion(null)
     setModal('nueva')
   }
-  const openEditar = async (oc: any) => {
+  const openEditar = async (oc: any, irAFactura = false) => {
     const res = await fetch(`/api/ordenes-compra?id=${oc.id}`).catch(() => null)
     const full = await res?.json().catch(() => null)
     if (!res?.ok || !full) {
-      alert('No se pudo cargar la OC' + (full?.error ? `: ${full.error}\n\nSi menciona "recepciones_oc", ejecuta el SQL 42_fase2_costo_real.sql en Supabase.` : ''))
+      avisar('No se pudo cargar la orden' + (full?.error ? `: ${full.error}` : ''))
       return
     }
     setConciliacion(full.conciliacion ?? null)
@@ -109,6 +112,7 @@ export default function OrdenesCompraPage() {
     })
     setLineas((full.lineas || []).map((l: any) => ({ ...l, partida_id: l.partida_id || '', _k: crypto.randomUUID() })))
     setModal('editar')
+    if (irAFactura) setTimeout(() => document.getElementById('oc-factura')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
   }
 
   // ─── líneas ───────────────────────────────────────────────
@@ -126,14 +130,14 @@ export default function OrdenesCompraPage() {
   const delLinea = (k: string) => setLineas(prev => prev.filter(l => l._k !== k))
 
   const generarDesdeProyecto = async () => {
-    if (!form.proyecto_id) { alert('Elige un proyecto primero para generar las líneas.'); return }
+    if (!form.proyecto_id) { avisar('Elige una obra primero para generar las líneas.'); return }
     setSugiriendo(true)
     const res = await fetch(`/api/ordenes-compra?sugerir=1&proyecto_id=${form.proyecto_id}`)
       .then(r => r.json()).catch(() => ({ lineas: [] }))
     setSugiriendo(false)
     const sug = (res.lineas || []).map((l: any) => ({ ...l, partida_id: l.partida_id || '', _k: crypto.randomUUID() }))
     if (sug.length === 0) {
-      alert('Ese proyecto no tiene materiales con rendimiento cargado. Cárgalos en la pestaña Obra → partida → Materiales.')
+      avisar('Esa obra no tiene materiales con rendimiento cargado. Cárgalos en Partidas y avance.')
       return
     }
     setLineas(sug)
@@ -142,7 +146,7 @@ export default function OrdenesCompraPage() {
   // ─── guardar / estado / borrar ────────────────────────────
   const save = async () => {
     const validas = lineas.filter(l => l.material && (Number(l.cantidad) || 0) > 0)
-    if (validas.length === 0) { alert('Agrega al menos una línea con material y cantidad.'); return }
+    if (validas.length === 0) { avisar('Agrega al menos una línea con material y cantidad.'); return }
     setSaving(true)
     const prov = proveedores.find(p => p.id === form.proveedor_id)
     const proy = proyectos.find(p => p.id === form.proyecto_id)
@@ -170,9 +174,7 @@ export default function OrdenesCompraPage() {
     setSaving(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo guardar: ' + (err.error || 'error desconocido') +
-        '\n\nSi menciona "ordenes_compra", ejecuta el SQL 15_ordenes_compra.sql en Supabase.' +
-        '\nSi menciona "partida_id", ejecuta el SQL 41_fase1_imputacion.sql.')
+      avisar('No se pudo guardar: ' + (err.error || 'error desconocido'))
       return
     }
     await mutate(); mutResumen(); setModal(null)
@@ -185,18 +187,18 @@ export default function OrdenesCompraPage() {
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo cambiar el estado: ' + (err.error || 'error desconocido'))
+      avisar('No se pudo cambiar el estado: ' + (err.error || 'error desconocido'))
     }
     await mutate(); mutResumen()
   }
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar esta orden de compra?')) return
+    if (!(await confirmar('¿Eliminar esta orden de compra?'))) return
     const res = await fetch('/api/ordenes-compra', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo eliminar: ' + (err.error || 'error desconocido'))
+      avisar('No se pudo eliminar: ' + (err.error || 'error desconocido'))
     }
     await mutate(); mutResumen()
   }
@@ -205,12 +207,12 @@ export default function OrdenesCompraPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <SectionTitle>Órdenes de compra</SectionTitle>
-        <Btn variant="primary" onClick={openNueva}>+ Nueva OC</Btn>
+        {puedeEditar && (<Btn variant="primary" onClick={openNueva}>+ Nueva orden</Btn>)}
       </div>
 
       {/* Métricas */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <MetricCard label="Total OCs" value={resumen?.total_count ?? '—'} />
+        <MetricCard label="Total órdenes" value={resumen?.total_count ?? '—'} />
         <MetricCard label="En borrador" value={resumen?.borrador ?? '—'} sub="Pendientes de enviar" />
         <MetricCard label="Monto comprometido" value={fmt(resumen?.monto_total ?? 0)} sub="Excluye anuladas" />
       </div>
@@ -232,32 +234,26 @@ export default function OrdenesCompraPage() {
           : (
             <Table>
               <thead><tr>
-                <Th>N°</Th><Th>Fecha</Th><Th>Proveedor</Th><Th>Proyecto</Th><Th>Total</Th><Th>Estado</Th><Th></Th>
+                <Th>N°</Th><Th>Fecha</Th><Th>Proveedor</Th><Th>Obra</Th><Th>Total</Th><Th>Estado</Th><Th></Th>
               </tr></thead>
               <tbody>
                 {items.map(o => (
                   <tr key={o.id}>
                     <Td className="font-bold text-brand">#{o.numero}</Td>
-                    <Td className="text-muted">{o.fecha}</Td>
+                    <Td className="text-muted">{fmtFecha(o.fecha)}</Td>
                     <Td className="font-semibold text-[#1a2535]">{o.proveedor || '—'}</Td>
                     <Td className="text-muted">{o.proyecto || '—'}</Td>
                     <Td className="font-bold tabular-nums">{fmt(o.total)}</Td>
                     <Td><BadgeOC estado={o.estado} />{o.factura_id ? <span className="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-success-bg text-success">facturada</span> : null}</Td>
                     <Td>
                       <div className="flex gap-1 items-center">
-                        <select
-                          value={o.estado}
-                          onChange={e => cambiarEstado(o, e.target.value)}
-                          className="input-base !mb-0 !py-1.5 w-[110px] cursor-pointer text-[12px]"
-                        >
-                          {ESTADOS.map(s => <option key={s.value} value={s.value} disabled={s.value === 'parcial'}>{s.label}</option>)}
-                        </select>
-                        {o.estado !== 'anulada' && o.estado !== 'borrador' && (
-                          <Btn onClick={() => setRecibiendo(o.id)} className="px-2.5 py-1.5">Recibir</Btn>
-                        )}
+                        {puedeEditar && o.estado === 'borrador' && <Btn variant="primary" onClick={() => cambiarEstado(o, 'enviada')} className="px-2.5 py-1.5 whitespace-nowrap">Marcar enviada</Btn>}
+                        {puedeEditar && (o.estado === 'enviada' || o.estado === 'parcial') && <Btn variant="primary" onClick={() => setRecibiendo(o.id)} className="px-2.5 py-1.5">Recibir</Btn>}
+                        {puedeEditar && o.estado === 'recibida' && !o.factura_id && <Btn variant="primary" onClick={() => openEditar(o, true)} className="px-2.5 py-1.5 whitespace-nowrap">Asociar factura</Btn>}
+                        {(o.estado === 'recibida' || (!puedeEditar && o.estado === 'parcial')) && <Btn onClick={() => setRecibiendo(o.id)} className="px-2.5 py-1.5">Recepciones</Btn>}
                         <DescargarOCBtn orden={o} proveedores={proveedores} />
-                        <Btn onClick={() => openEditar(o)} className="px-2.5 py-1.5">Editar</Btn>
-                        <Btn variant="danger" onClick={() => del(o.id)} className="px-2.5 py-1.5">✕</Btn>
+                        {puedeEditar && (<Btn onClick={() => openEditar(o)} className="px-2.5 py-1.5">Editar</Btn>)}
+                        {puedeEditar && (<Btn variant="danger" onClick={() => del(o.id)} className="px-2.5 py-1.5">✕</Btn>)}
                       </div>
                     </Td>
                   </tr>
@@ -281,7 +277,7 @@ export default function OrdenesCompraPage() {
           {/* Cabecera */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
             <FormSelect label="Proveedor" value={form.proveedor_id || ''} onChange={v => setForm((f: any) => ({ ...f, proveedor_id: v }))} options={provOptions} />
-            <FormSelect label="Proyecto" value={form.proyecto_id || ''}
+            <FormSelect label="Obra" value={form.proyecto_id || ''}
               onChange={v => {
                 setForm((f: any) => ({ ...f, proyecto_id: v, partida_id: '' }))
                 setLineas(prev => prev.map(l => ({ ...l, partida_id: '' })))
@@ -298,13 +294,13 @@ export default function OrdenesCompraPage() {
             </div>
           )}
 
-          {/* Generar desde proyecto */}
+          {/* Generar desde la obra */}
           <div className="flex items-center justify-between bg-brand-bg border border-[#b5d4f4] rounded-lg px-4 py-2.5 mb-3">
             <div className="text-[12px] text-[#0c447c]">
               <strong>Precios automáticos:</strong> genera las líneas desde los rendimientos del proyecto.
             </div>
             <Btn onClick={generarDesdeProyecto} disabled={sugiriendo || !form.proyecto_id}>
-              {sugiriendo ? 'Generando…' : 'Generar desde proyecto'}
+              {sugiriendo ? 'Generando…' : 'Generar desde la obra'}
             </Btn>
           </div>
 
@@ -372,7 +368,7 @@ export default function OrdenesCompraPage() {
 
           {/* Factura de compra (opción A: al asociarla, el gasto de la OC se reemplaza por el de la factura) */}
           {editId && (
-            <div className="mb-3">
+            <div id="oc-factura" className="mb-3">
               <label className="label-base">Factura de compra asociada</label>
               <SelectorFactura
                 value={form.factura_id || ''}
@@ -380,7 +376,7 @@ export default function OrdenesCompraPage() {
                 onPick={f => setForm((prev: any) => ({ ...prev, factura_id: f.id, _facturaFolio: String(f.numero) }))}
                 onClear={() => setForm((prev: any) => ({ ...prev, factura_id: '', _facturaFolio: '' }))}
               />
-              <p className="text-[11px] text-muted mt-1">Cuando llegue la factura del proveedor, asóciala aquí: el gasto de esta OC deja de contar y cuenta la factura (evita el doble conteo).</p>
+              <p className="text-[11px] text-muted mt-1">Cuando llegue la factura del proveedor, asóciala aquí: el gasto de esta orden deja de contar y cuenta la factura (evita el doble conteo).</p>
               {conciliacion && (
                 <div className="mt-2 border border-line rounded-lg px-3 py-2 text-[12px]">
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-muted">
@@ -402,7 +398,7 @@ export default function OrdenesCompraPage() {
 
           <div className="flex gap-2 justify-end mt-2">
             <Btn onClick={() => setModal(null)}>Cancelar</Btn>
-            <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar OC'}</Btn>
+            <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar orden'}</Btn>
           </div>
         </Modal>
       )}

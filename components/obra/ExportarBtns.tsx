@@ -8,6 +8,7 @@ import type { Proyecto } from '@/types'
 import type { Cliente } from '@/types/cliente'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import { filasMINVU, ANCHOS_MINVU } from '@/lib/minvu'
+import { avisar } from '@/lib/avisos'
 
 const limpiar = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)
 
@@ -88,7 +89,7 @@ export function DescargarPresupuestoPDFBtn({ proyecto, cliente, partidas }: {
       URL.revokeObjectURL(url)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)
-      alert('Error al generar PDF: ' + (err?.message || err))
+      avisar('Error al generar PDF: ' + (err?.message || err))
     } finally {
       setLoading(false)
     }
@@ -120,7 +121,7 @@ export function ExportarExcelBtn({ proyecto, partidas }: {
       XLSX.writeFile(wb, `Presupuesto_MINVU_${limpiar(proyecto.nombre)}.xlsx`)
     } catch (err: any) {
       console.error('Error al exportar Excel:', err)
-      alert('Error al exportar Excel: ' + (err?.message || err))
+      avisar('Error al exportar Excel: ' + (err?.message || err))
     } finally {
       setLoading(false)
     }

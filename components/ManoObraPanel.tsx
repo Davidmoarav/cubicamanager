@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Btn } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { moRealPorMes } from '@/lib/costos'
+import { avisar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 interface Props {
   proyectoId: string
@@ -30,6 +32,7 @@ const labelMes = (m: string) => {
 }
 
 export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props) {
+  const { puedeEditar } = usePermisos('obra')
   const [filas, setFilas]     = useState<Fila[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
@@ -57,9 +60,9 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
     const sug = await fetch(`/api/proyeccion-mo?proyecto_id=${proyectoId}&sugerir=1`).then(r => r.json()).catch(() => null)
     if (!sug) return
     setAsignados(sug.empleados_asignados ?? 0)
-    if (!sug.filas?.length) { alert('No se pudo generar una curva. Verifica las fechas de inicio/fin del proyecto.'); return }
+    if (!sug.filas?.length) { avisar('No se pudo generar una curva. Verifica las fechas de inicio y fin de la obra.'); return }
     if (sug.empleados_asignados === 0) {
-      alert('No hay empleados activos asignados a este proyecto. Se generó la curva de meses con dotación 0; asigna empleados o edita la dotación manualmente.')
+      avisar('No hay empleados activos asignados a esta obra. Se generó la curva de meses con dotación 0; asigna empleados o edita la dotación manualmente.', 'info')
     }
     setFilas(sug.filas)
   }
@@ -146,8 +149,8 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
           <p className="text-[12px] text-muted mt-0.5">Dotación mes a mes, costo con imposiciones y finiquitos.</p>
         </div>
         <div className="flex gap-2">
-          <Btn onClick={sugerir}>Sugerir curva</Btn>
-          <Btn variant="primary" onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Btn>
+          {puedeEditar && (<Btn onClick={sugerir}>Sugerir curva</Btn>)}
+          {puedeEditar && (<Btn variant="primary" onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Btn>)}
         </div>
       </div>
 
@@ -156,7 +159,7 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
       )}
       {asignados === 0 && (
         <div className="mb-3 text-[12px] text-warning bg-warning-bg rounded-lg px-3 py-2">
-          Sin empleados activos asignados a este proyecto. Asígnalos en RRHH (campo proyecto) o edita la dotación manualmente.
+          Sin empleados activos asignados a esta obra. Asígnalos en RRHH (campo obra) o edita la dotación manualmente.
         </div>
       )}
 
@@ -225,20 +228,22 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
       {filas.length === 0
         ? <div className="bg-canvas border border-dashed border-line2 rounded-lg p-6 text-center text-[12px] text-muted">
             Sin proyección. Usa "Sugerir curva" para generarla desde los empleados asignados, o agrega meses manualmente.
-            <div className="mt-3"><Btn onClick={addMes}>+ Agregar mes</Btn></div>
+            <div className="mt-3">{puedeEditar && <Btn onClick={addMes}>+ Agregar mes</Btn>}</div>
           </div>
         : (
           <>
             {/* Mini gráfico de dotación */}
-            <div className="flex items-end gap-1.5 h-24 mb-4 px-1">
+            {filas.length >= 2 && <div className="flex items-end gap-1.5 h-24 mb-4 px-1">
               {filas.map((f, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1">
-                  <div className="w-full bg-brand rounded-t transition-all"
-                    style={{ height: `${((f.dotacion || 0) / totales.maxDot) * 100}%` }} />
+                <div key={i} className="flex-1 h-full flex flex-col items-center gap-1 min-w-0">
+                  <div className="w-full flex-1 flex items-end">
+                    <div className="w-full bg-brand rounded-t transition-all"
+                      style={{ height: `${((f.dotacion || 0) / totales.maxDot) * 100}%` }} />
+                  </div>
                   <span className="text-[9px] text-muted">{f.dotacion}</span>
                 </div>
               ))}
-            </div>
+            </div>}
 
             {/* Tabla editable */}
             <div className="overflow-x-auto">
@@ -248,7 +253,7 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
                     <th className="py-2 pr-2 font-bold text-muted">Mes</th>
                     <th className="py-2 px-2 font-bold text-muted text-center">Dotación</th>
                     <th className="py-2 px-2 font-bold text-muted text-right">Costo unit. ($)</th>
-                    <th className="py-2 px-2 font-bold text-muted text-right">Costo M.O</th>
+                    <th className="py-2 px-2 font-bold text-muted text-right">Costo mano de obra</th>
                     <th className="py-2 px-2 font-bold text-muted text-right">Finiquito ($)</th>
                     <th className="py-2 px-2 font-bold text-muted text-right">Total mes</th>
                     <th className="py-2 pl-2"></th>
@@ -278,7 +283,7 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
                         </td>
                         <td className="py-1.5 px-2 text-right font-extrabold text-ink">{fmt(costoMo + (f.finiquito || 0))}</td>
                         <td className="py-1.5 pl-2 text-right">
-                          <button onClick={() => delMes(i)} className="text-danger text-[12px] bg-transparent border-none cursor-pointer">✕</button>
+                          {puedeEditar && (<button onClick={() => delMes(i)} className="text-danger text-[12px] bg-transparent border-none cursor-pointer">✕</button>)}
                         </td>
                       </tr>
                     )
@@ -299,7 +304,7 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
             </div>
 
             <div className="mt-3">
-              <Btn onClick={addMes}>+ Agregar mes</Btn>
+              {puedeEditar && <Btn onClick={addMes}>+ Agregar mes</Btn>}
             </div>
           </>
         )}

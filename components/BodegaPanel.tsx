@@ -10,6 +10,8 @@ import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, MetricCard, fmt } from '@/components/ui'
 import { opcionesPartida } from '@/lib/costos'
 import { usePermisos } from '@/lib/usePermisos'
+import { fmtFecha } from '@/lib/format'
+import { confirmar } from '@/lib/avisos'
 
 interface Props {
   proyectoId: string
@@ -80,7 +82,7 @@ export default function BodegaPanel({ proyectoId }: Props) {
   }
 
   const eliminar = async (m: any) => {
-    if (!confirm(m.traspaso_id ? '¿Eliminar el traspaso? Se revierte en ambas obras.' : '¿Eliminar este movimiento?')) return
+    if (!(await confirmar(m.traspaso_id ? '¿Eliminar el traspaso? Se revierte en ambas obras.' : '¿Eliminar este movimiento?'))) return
     setMsg('')
     const res = await fetch('/api/bodega', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id }),
@@ -94,7 +96,7 @@ export default function BodegaPanel({ proyectoId }: Props) {
   if (error || data?.error) {
     return (
       <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-        No se pudo cargar la bodega. Si menciona "bodega_movimientos", ejecuta el SQL 42_fase2_costo_real.sql en Supabase.
+        No se pudo cargar la bodega. Recarga la página; si sigue pasando, avisa al administrador.
       </div>
     )
   }
@@ -205,7 +207,7 @@ export default function BodegaPanel({ proyectoId }: Props) {
               <div key={m.id} className="flex items-center justify-between gap-3 py-2 px-3 bg-canvas rounded-lg text-[12px]">
                 <div className="min-w-0">
                   <span className="font-semibold text-ink">{ETIQUETA_MOV[m.tipo] ?? m.tipo} · {m.material}</span>
-                  <div className="text-[10px] text-muted truncate">{m.fecha}{m.notas ? ` · ${m.notas}` : ''}</div>
+                  <div className="text-[10px] text-muted truncate">{fmtFecha(m.fecha)}{m.notas ? ` · ${m.notas}` : ''}</div>
                 </div>
                 <div className={`font-bold tabular-nums whitespace-nowrap ${Number(m.cantidad) < 0 ? 'text-danger' : 'text-success'}`}>
                   {Number(m.cantidad) > 0 ? '+' : ''}{Number(m.cantidad)} {m.unidad}

@@ -19,6 +19,7 @@ Ejecutar los archivos **en orden numérico** en Supabase > SQL Editor. Los hueco
 | **42** | **Costo real Fase 2: recepción por línea, bodega, subcontratos y equipos** | Igual que la 41: trae su propia RLS y triggers. Registra como recibidas las órdenes que ya estaban en ese estado |
 | **43** | **Gestión de obra Fase 3: dependencias de Gantt, libro de obra, prevención y APU** | Igual que la 41: trae su propia RLS y triggers |
 | **44** | **Fase 4: registro de emisiones de DTE** | Igual que la 41: trae su propia RLS y triggers |
+| 45 | Opcional: marca como pagadas las facturas de estados de pago ya pagados | Solo corrige datos históricos; revisa la consulta del encabezado antes de ejecutarla |
 
 Reglas: nunca ejecutar 25/29 a medias (reescriben políticas); después de agregar una tabla nueva con `user_id`, agregarla al array de la 25 (RLS + trigger) y de la 26 (auditoría) y re-ejecutarlas — son idempotentes.
 

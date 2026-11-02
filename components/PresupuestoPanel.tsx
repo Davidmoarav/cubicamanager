@@ -8,14 +8,19 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Btn, FormInput, Modal } from '@/components/ui'
 import { usePermisos } from '@/lib/usePermisos'
-import { fmt, fmtM } from '@/lib/format'
+import { fmt, fmtFecha, fmtPeriodo } from '@/lib/format'
 import { ESTADO_EP, type EstadoPago } from '@/types/estado-pago'
 import DescargarEPBtn from '@/components/DescargarEPBtn'
+import { contratoNeto, pctCobrado } from '@/lib/informe'
+import { avisar, confirmar } from '@/lib/avisos'
 
 interface Props {
   anticipoRecibido?: number
   proyectoId: string
   valorContrato: number
+  montoContrato?: number
+  moneda?: string
+  valorUf?: number
   proyectoNombre?: string
   proyectoCliente?: string
   proyectoDireccion?: string
@@ -23,7 +28,7 @@ interface Props {
 
 const IVA = 0.19
 
-export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRecibido = 0, proyectoNombre = '', proyectoCliente = '', proyectoDireccion = '' }: Props) {
+export default function PresupuestoPanel({ proyectoId, valorContrato, montoContrato, moneda, valorUf, anticipoRecibido = 0, proyectoNombre = '', proyectoCliente = '', proyectoDireccion = '' }: Props) {
   const { soloLectura } = usePermisos('obra')
   const [eps, setEps]         = useState<EstadoPago[]>([])
   const [loading, setLoading] = useState(true)
@@ -129,8 +134,8 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   }
   const updGasto = (k: string, v: any) => setGastoForm((f: any) => ({ ...f, [k]: v }))
   const guardarGasto = async () => {
-    if (!gastoForm.descripcion) { alert('Describe el gasto'); return }
-    if (!gastoForm.monto || Number(gastoForm.monto) <= 0) { alert('El monto debe ser mayor a cero'); return }
+    if (!gastoForm.descripcion) { avisar('Describe el gasto'); return }
+    if (!gastoForm.monto || Number(gastoForm.monto) <= 0) { avisar('El monto debe ser mayor a cero'); return }
     setSavingGasto(true)
     const res = await fetch('/api/gastos-obra', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -139,14 +144,13 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
     setSavingGasto(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo guardar el gasto: ' + (err.error || 'error') +
-        '\n\nSi menciona "gastos_obra", ejecuta el SQL 15_gastos_obra.sql en Supabase.')
+      avisar('No se pudo guardar el gasto: ' + (err.error || 'error'))
       return
     }
     await load(); setModalGasto(false)
   }
   const delGasto = async (id: string) => {
-    if (!confirm('¿Eliminar este gasto?')) return
+    if (!(await confirmar('¿Eliminar este gasto?'))) return
     await fetch('/api/gastos-obra', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await load()
   }
@@ -193,7 +197,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   const totalCalc      = totalNeto + ivaCalc
 
   const guardarEP = async () => {
-    if (avanceObra <= 0) { alert('El avance de obra del período debe ser mayor a cero'); return }
+    if (avanceObra <= 0) { avisar('El avance de obra del período debe ser mayor a cero'); return }
     setSaving(true)
     // Si el EP es de un beneficiario específico, dejarlo trazado en las notas
     const nombreBenef = beneficiarioEP ? (beneficiarios.find(b => b.id === beneficiarioEP)?.descripcion || '') : ''
@@ -241,7 +245,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   }
 
   const guardarDev = async () => {
-    if (devForm.monto <= 0) { alert('El monto debe ser mayor a cero'); return }
+    if (devForm.monto <= 0) { avisar('El monto debe ser mayor a cero'); return }
     setSavingDev(true)
     await fetch('/api/devoluciones', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -251,7 +255,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   }
 
   const eliminarDev = async (id: string) => {
-    if (!confirm('¿Eliminar esta devolución?')) return
+    if (!(await confirmar('¿Eliminar esta devolución?'))) return
     await fetch('/api/devoluciones', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
@@ -265,12 +269,12 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
       body: JSON.stringify({ id: ep.id, estado, generar_factura: generarFactura }),
     })
     const data = await res.json()
-    if (data.factura_generada) alert('Factura generada en el módulo de Facturación')
+    if (data.factura_generada) avisar('Factura generada en el módulo de Facturación', 'ok')
     await load()
   }
 
   const delEP = async (id: string) => {
-    if (!confirm('¿Eliminar este estado de pago?')) return
+    if (!(await confirmar('¿Eliminar este estado de pago?'))) return
     await fetch('/api/estados-pago', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
@@ -292,7 +296,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
   const fmtPesos = (pesos: number) => esUF && ufVal > 0 ? fmt(pesos) : ''
 
   const totalCobradoConIva = eps.filter(e => e.estado === 'pagado').reduce((s, e) => s + (e.total || 0), 0)
-  const pctCobrado = valorContrato > 0 ? Math.round(totalCobradoConIva / valorContrato * 100) : 0
+  const pctCobro = Math.round(pctCobrado(eps, contratoNeto({ valor: valorContrato, monto_contrato: montoContrato, moneda, valor_uf: valorUf })))
 
   if (loading) return <p className="text-center py-5 text-muted text-[13px]">Cargando...</p>
 
@@ -306,7 +310,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
       {/* Sub-pestañas */}
       <div className="flex gap-1 mb-5 border-b border-line">
         {[
-          { k: 'presupuesto', label: 'Presupuesto' },
+          { k: 'presupuesto', label: 'Gasto real' },
           { k: 'estados',     label: 'Estados de pago' },
           { k: 'retenciones', label: 'Retenciones' },
         ].map(t => (
@@ -361,7 +365,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
               {resumen.costo_ejecutado > 0
                 ? (resumen.desviacion_ejecutada >= 0
                     ? `Bajo costo para el ${resumen.pct_ejecutado ?? 0}% de avance`
-                    : `Sobregirado para el avance actual`)
+                    : `Sobre el costo esperado para el avance actual`)
                 : 'Sin avance cargado'}
             </div>
             <div className="text-[10px] text-subtle mt-0.5">Total obra: {resumen.desviacion >= 0 ? '+' : ''}{fmt(resumen.desviacion)}</div>
@@ -441,13 +445,13 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                   <div className="flex-1">
                     <span className="font-semibold text-ink">{g.descripcion}</span>
                     <div className="text-[10px] text-muted">
-                      {CAT_LABEL[g.categoria] || g.categoria} · {g.fecha}
+                      {CAT_LABEL[g.categoria] || g.categoria} · {fmtFecha(g.fecha)}
                       {partida && ` · ${partida.descripcion}`}
                       {g.proveedor && ` · ${g.proveedor}`}
                     </div>
                   </div>
                   <div className="font-bold text-danger tabular-nums mr-3">{fmt(g.monto)}</div>
-                  <button onClick={() => delGasto(g.id)} className="text-danger text-[14px] hover:opacity-70">✕</button>
+                  {!g.agregado && <button onClick={() => delGasto(g.id)} aria-label={`Eliminar ${g.descripcion}`} className="text-danger text-[14px] hover:opacity-70">✕</button>}
                 </div>
               )
             })}
@@ -457,20 +461,20 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
 
       {/* Resumen de ganancia esperada (planificación) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
-        <ResumenCard label="Presupuesto costo" valor={fmtM(resumen.costo)} colorCls="text-warning" sub="Lo planificado" />
-        <ResumenCard label="Precio venta" valor={fmtM(resumen.presupuesto)} colorCls="text-brand" sub="Lo que cobras (neto)" />
-        <ResumenCard label="Ganancia esperada" valor={fmtM(resumen.ganancia)} colorCls="text-success" sub={`Margen ${resumen.margen_venta}%`} />
-        <ResumenCard label="Cobrado" valor={fmtM(totalCobradoConIva)} colorCls="text-accent" sub={`${pctCobrado}% del contrato`} />
+        <ResumenCard label="Presupuesto costo" valor={fmt(resumen.costo)} colorCls="text-warning" sub="Lo planificado" />
+        <ResumenCard label="Precio venta" valor={fmt(resumen.presupuesto)} colorCls="text-brand" sub="Lo que cobras (neto)" />
+        <ResumenCard label="Ganancia esperada" valor={fmt(resumen.ganancia)} colorCls="text-success" sub={`Margen ${resumen.margen_venta}%`} />
+        <ResumenCard label="Cobrado" valor={fmt(totalCobradoConIva)} colorCls="text-accent" sub={`Con IVA · ${pctCobro}% del contrato`} />
       </div>
 
       {/* Barra cobrado vs contrato */}
       <div className="mb-6">
         <div className="flex justify-between text-[11px] text-muted mb-1">
           <span>Avance de cobro</span>
-          <span className="font-bold text-success">{pctCobrado}%</span>
+          <span className="font-bold text-success">{pctCobro}%</span>
         </div>
         <div className="h-2.5 bg-[#EDE7E0] rounded-full overflow-hidden">
-          <div className="h-full bg-success rounded-full transition-all duration-500" style={{ width: `${pctCobrado}%` }} />
+          <div className="h-full bg-success rounded-full transition-all duration-500" style={{ width: `${Math.min(100, pctCobro)}%` }} />
         </div>
       </div>
       </>)}
@@ -488,11 +492,11 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                 value={beneficiarioEP}
                 onChange={e => e.target.value !== '__crear__' && setBeneficiarioEP(e.target.value)}
                 className="text-[12px] border border-line rounded-md px-2 py-[5px] bg-white">
-                <option value="">Proyecto completo</option>
+                <option value="">Obra completa</option>
                 {beneficiarios.map(b => <option key={b.id} value={b.id}>{b.descripcion}</option>)}
               </select>
               <Btn variant="primary" onClick={() => openNuevoEP(beneficiarioEP || undefined)} className="!text-[12px] !px-3 !py-[5px]">
-                + Nuevo EP
+                + Nuevo estado de pago
               </Btn>
             </div>
           ) : (
@@ -504,7 +508,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
       </div>
       {beneficiarios.length > 0 && (
         <p className="text-[11px] text-muted mb-3 -mt-1">
-          Elige el <strong>alcance</strong>: cobra el proyecto completo o solo un beneficiario específico.
+          Elige el <strong>alcance</strong>: cobra la obra completa o solo un beneficiario específico.
         </p>
       )}
 
@@ -521,12 +525,12 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-ink">EP N°{ep.numero}</span>
+                        <span className="text-sm font-bold text-ink">Estado de pago N°{ep.numero}</span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded" style={{ background: s.bg, color: s.color }} >{s.label}</span>
                         {ep.factura_id && <span className="text-[10px] text-accent font-semibold">Facturado</span>}
                       </div>
                       <div className="text-[11px] text-muted mt-0.5">
-                        {ep.periodo} · {ep.fecha}
+                        {fmtPeriodo(ep.periodo)} · {fmtFecha(ep.fecha)}
                       </div>
                     </div>
                     <div className="text-right">
@@ -545,7 +549,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                     <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-[11px] text-muted mt-2 pt-2 border-t border-[#F1ECE6]">
                       <span>Avance: {fmt(ep.avance_obra ?? ep.monto_neto)}</span>
                       {ep.utilidad_monto > 0 && <span className="text-success">+ Util. {ep.utilidad_pct}%: {fmt(ep.utilidad_monto)}</span>}
-                      {ep.gg_monto > 0 && <span className="text-success">+ GG {ep.gg_pct}%: {fmt(ep.gg_monto)}</span>}
+                      {ep.gg_monto > 0 && <span className="text-success">+ Gastos generales {ep.gg_pct}%: {fmt(ep.gg_monto)}</span>}
                       {ep.descuentos > 0 && <span className="text-danger">− Desc.: {fmt(ep.descuentos)}</span>}
                       {ep.anticipo_desc > 0 && <span className="text-danger">− Anticipo {ep.anticipo_pct}%: {fmt(ep.anticipo_desc)}</span>}
                       {ep.multas > 0 && <span className="text-danger">− Multas: {fmt(ep.multas)}</span>}
@@ -616,11 +620,11 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
               </div>
               <div className="flex flex-col gap-1.5 text-[12px]">
                 <div className="flex justify-between"><span className="text-muted">Anticipo recibido</span><span className="font-bold text-ink">{fmt(control.anticipoRecibido)}</span></div>
-                <div className="flex justify-between"><span className="text-muted">Amortizado en EEPP</span><span className="font-bold text-success">− {fmt(control.antAmortizado)}</span></div>
+                <div className="flex justify-between"><span className="text-muted">Descontado en estados de pago</span><span className="font-bold text-success">− {fmt(control.antAmortizado)}</span></div>
                 <div className="flex justify-between"><span className="text-muted">Devuelto adicional</span><span className="font-bold text-success">− {fmt(control.antDevuelto)}</span></div>
                 <div className="flex justify-between border-t border-line pt-1.5 mt-0.5"><span className="font-bold text-ink">Saldo por amortizar</span><span className={`font-extrabold ${control.antSaldo > 0 ? 'text-brand' : 'text-success'}`}>{fmt(control.antSaldo)}</span></div>
                 {control.anticipoRecibido === 0 && control.antAmortizado > 0 && (
-                  <div className="text-[10px] text-[#b0641a] mt-1">Registra el anticipo recibido en los datos del proyecto para ver el saldo real.</div>
+                  <div className="text-[10px] text-[#b0641a] mt-1">Registra el anticipo recibido en los datos de la obra para ver el saldo real.</div>
                 )}
               </div>
             </div>
@@ -636,7 +640,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${d.tipo === 'retencion' ? 'bg-accent-bg text-accent' : 'bg-brand-bg text-brand'}`}>
                       {d.tipo === 'retencion' ? 'Retención' : 'Anticipo'}
                     </span>
-                    <span className="text-muted">{d.fecha}</span>
+                    <span className="text-muted">{fmtFecha(d.fecha)}</span>
                     {d.glosa && <span className="text-muted">· {d.glosa}</span>}
                   </div>
                   <div className="flex items-center gap-3">
@@ -716,7 +720,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
                       Contrato en UF (UF = {fmt(ufVal)}). Se presenta en UF; en gris, el equivalente en pesos para control interno.
                     </div>
                   )}
-                  <Row label="Valor EEPP — avance del período" valor={fmtMoneda(bruto)} sub={fmtPesos(bruto)} bold />
+                  <Row label="Valor del avance del período" valor={fmtMoneda(bruto)} sub={fmtPesos(bruto)} bold />
                   {descuentos > 0 && <Row label="Descuentos" valor={`− ${fmtMoneda(descuentos)}`} sub={fmtPesos(descuentos)} danger />}
                   {anticipoDesc > 0 && <Row label={`Anticipo carátula ${anticipoPct}%`} valor={`− ${fmtMoneda(anticipoDesc)}`} sub={fmtPesos(anticipoDesc)} danger />}
                   {multas > 0 && <Row label="Multas" valor={`− ${fmtMoneda(multas)}`} sub={fmtPesos(multas)} danger />}
@@ -736,7 +740,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
 
                 <div className="flex gap-2 justify-end">
                   <Btn onClick={() => setModal(false)}>Cancelar</Btn>
-                  <Btn variant="primary" onClick={guardarEP} disabled={saving}>{saving ? 'Guardando...' : (beneficiarioEP ? 'Crear EP del beneficiario' : 'Crear estado de pago')}</Btn>
+                  <Btn variant="primary" onClick={guardarEP} disabled={saving}>{saving ? 'Guardando...' : (beneficiarioEP ? 'Crear estado de pago del beneficiario' : 'Crear estado de pago')}</Btn>
                 </div>
               </>
             )}
@@ -799,9 +803,9 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, anticipoRe
 
 function ResumenCard({ label, valor, colorCls, sub }: { label: string; valor: string; colorCls: string; sub?: string }) {
   return (
-    <div className="bg-white border border-line rounded-card px-3.5 py-3">
+    <div className="bg-white border border-line rounded-card px-3.5 py-3 min-w-0">
       <div className="text-[10px] text-muted uppercase tracking-wide font-bold">{label}</div>
-      <div className={`text-[17px] font-extrabold mt-1 ${colorCls}`}>{valor}</div>
+      <div className={`text-[17px] font-extrabold mt-1 [overflow-wrap:anywhere] ${colorCls}`}>{valor}</div>
       {sub && <div className="text-[10px] text-muted mt-0.5">{sub}</div>}
     </div>
   )

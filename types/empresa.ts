@@ -2,6 +2,7 @@
 
 export interface EmpresaConfig {
   id?: string
+  markup_default?: number | null
   user_id?: string
   razon_social?: string
   rut?: string

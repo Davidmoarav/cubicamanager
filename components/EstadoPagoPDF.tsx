@@ -14,6 +14,7 @@ import {
   PDF_NAVY as NAVY, PDF_GOLD as GOLD, PDF_INK as INK, PDF_MUTE as MUTE, PDF_LINE as LINE,
   fmtCL, pctCL as pct, fechaCorta as fmtFecha,
 } from './pdf-comunes'
+import { fmtPeriodo } from '../lib/format'
 
 interface Props {
   ep: EstadoPago
@@ -143,7 +144,7 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
             <Text style={st.title}>ESTADO DE PAGO</Text>
             <View style={st.titleBar} />
             <Text style={st.epNum}>N° {ep.numero}</Text>
-            <Text style={st.epMeta}>Período {ep.periodo || '—'} · Fecha {fmtFecha(ep.fecha)}</Text>
+            <Text style={st.epMeta}>Período {fmtPeriodo(ep.periodo)} · Fecha {fmtFecha(ep.fecha)}</Text>
             {proyecto.contrato_n != null && <Text style={st.epMeta}>Contrato N° {proyecto.contrato_n}</Text>}
           </View>
         </View>
@@ -222,14 +223,14 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
             <View style={st.cascRow}><Text style={st.cascLbl}>Avance de obra del período</Text><Text style={st.cascVal}>{fmtCL(ep.avance_obra)}</Text></View>
             {ep.utilidad_monto > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Utilidad ({pct(ep.utilidad_pct)})</Text><Text style={st.cascVal}>{fmtCL(ep.utilidad_monto)}</Text></View>}
             {ep.gg_monto > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Gastos Generales ({pct(ep.gg_pct)})</Text><Text style={st.cascVal}>{fmtCL(ep.gg_monto)}</Text></View>}
-            <View style={st.cascRow}><Text style={[st.cascLbl, { fontFamily: 'Helvetica-Bold' }]}>Valor EEPP (bruto)</Text><Text style={st.cascVal}>{fmtCL(ep.bruto)}</Text></View>
+            <View style={st.cascRow}><Text style={[st.cascLbl, { fontFamily: 'Helvetica-Bold' }]}>Valor del avance (bruto)</Text><Text style={st.cascVal}>{fmtCL(ep.bruto)}</Text></View>
             {ep.descuentos > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Descuentos</Text><Text style={st.cascValNeg}>− {fmtCL(ep.descuentos)}</Text></View>}
             {ep.anticipo_desc > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Anticipo carátula ({pct(ep.anticipo_pct)})</Text><Text style={st.cascValNeg}>− {fmtCL(ep.anticipo_desc)}</Text></View>}
             {ep.multas > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Multas</Text><Text style={st.cascValNeg}>− {fmtCL(ep.multas)}</Text></View>}
             {ep.retencion_monto > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Retención ({pct(ep.retencion_pct)})</Text><Text style={st.cascValNeg}>− {fmtCL(ep.retencion_monto)}</Text></View>}
             <View style={st.cascRow}><Text style={[st.cascLbl, { fontFamily: 'Helvetica-Bold' }]}>Total neto</Text><Text style={st.cascVal}>{fmtCL(ep.monto_pagar)}</Text></View>
             <View style={st.cascRow}><Text style={st.cascLbl}>IVA (19%)</Text><Text style={st.cascVal}>{fmtCL(ep.iva)}</Text></View>
-            <View style={st.cascTotal}><Text style={st.cascTotalLbl}>Líquido a pagar E.E.P.P.</Text><Text style={st.cascTotalVal}>{fmtCL(ep.total)}</Text></View>
+            <View style={st.cascTotal}><Text style={st.cascTotalLbl}>Líquido a pagar</Text><Text style={st.cascTotalVal}>{fmtCL(ep.total)}</Text></View>
           </View>
         </View>
 

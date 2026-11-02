@@ -8,6 +8,7 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { createClient } from '@/lib/supabase'
 import type { EmpresaConfig } from '@/types/empresa'
+import { confirmar } from '@/lib/avisos'
 
 export default function ConfiguracionPage() {
   const supabase = createClient()
@@ -116,7 +117,7 @@ export default function ConfiguracionPage() {
 
   const removeLogo = async () => {
     if (!form.logo_path) return
-    if (!confirm('¿Eliminar el logo actual?')) return
+    if (!(await confirmar('¿Eliminar el logo actual?'))) return
 
     await supabase.storage.from('empresa-logos').remove([form.logo_path])
     const newForm = { ...form, logo_path: '' }
@@ -191,7 +192,7 @@ export default function ConfiguracionPage() {
       <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Logo de la empresa</div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-6">
           {/* Preview */}
           <div className="w-40 h-40 border border-dashed border-[#d1d9e6] rounded-[10px] bg-[#FBFAF9] flex items-center justify-center shrink-0 overflow-hidden">
             {logoUrl
@@ -205,10 +206,10 @@ export default function ConfiguracionPage() {
               onChange={handleLogoUpload} className="hidden" />
 
             <div className="flex gap-2 mb-3 flex-wrap">
-              <Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={uploading}>
+              {esAdmin && (<Btn variant="primary" onClick={() => fileRef.current?.click()} disabled={uploading}>
                 {uploading ? 'Subiendo...' : (logoUrl ? 'Cambiar logo' : 'Subir logo')}
-              </Btn>
-              {logoUrl && <Btn variant="danger" onClick={removeLogo}>Quitar logo</Btn>}
+              </Btn>)}
+              {esAdmin && logoUrl && <Btn variant="danger" onClick={removeLogo}>Quitar logo</Btn>}
             </div>
 
             <ul className="text-[12px] text-muted pl-[18px] leading-7">
@@ -224,7 +225,7 @@ export default function ConfiguracionPage() {
       <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Datos legales y comerciales</div>
 
-        <div className="grid grid-cols-2 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           <FormInput label="Razón social"        value={form.razon_social || ''} onChange={v => upd('razon_social', v)} placeholder="Ej: Constructora Ejemplo SpA" />
           <FormInput label="RUT"                 value={form.rut || ''}          onChange={v => upd('rut', v)}          placeholder="76.123.456-7" />
           <div className="col-span-2">
@@ -247,7 +248,7 @@ export default function ConfiguracionPage() {
       <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Personalización de documentos PDF</div>
 
-        <div className="grid grid-cols-[180px_1fr] gap-3.5 items-center">
+        <div className="grid grid-cols-1 sm:grid-cols-[180px_1fr] gap-3.5 items-center">
           <label className="text-[12px] font-semibold text-muted">Color principal</label>
           <div className="flex items-center gap-[10px]">
             <input type="color" value={form.color_primario || '#E5502A'}
@@ -266,13 +267,20 @@ export default function ConfiguracionPage() {
             onChange={v => upd('notas_pdf', v)}
             placeholder="Ej: Cotización válida por 30 días. No incluye instalación salvo indicación expresa." />
         </div>
+
+        <div className="mt-3.5 max-w-[320px]">
+          <FormInput label="Margen por defecto (%)" type="number"
+            value={form.markup_default ?? 20}
+            onChange={v => upd('markup_default', v === '' ? null : Number(v))} />
+          <p className="text-[11px] text-muted -mt-1">Al convertir una cotización en obra, el costo de cada partida se calcula con este margen.</p>
+        </div>
       </div>
 
       {/* ─── ACCIONES ─── */}
       <div className="flex gap-[10px] justify-end mt-[18px]">
-        <Btn variant="primary" onClick={save} disabled={saving}>
+        {esAdmin && (<Btn variant="primary" onClick={save} disabled={saving}>
           {saving ? 'Guardando...' : 'Guardar configuración'}
-        </Btn>
+        </Btn>)}
       </div>
       </>
       )}

@@ -229,7 +229,7 @@ export default function ImportarPrograma({ proyectoId, markup = 20, onImported, 
           </p>
           <label className="flex items-center gap-2 mb-3 text-[12px] text-ink cursor-pointer bg-[#fff8e6] border border-[#f0dca8] rounded-lg px-3 py-2">
             <input type="checkbox" checked={reemplazar} onChange={e => setReemplazar(e.target.checked)} />
-            <span><strong>Reemplazar las partidas actuales</strong> de este proyecto (recomendado — evita duplicar si ya importaste antes)</span>
+            <span><strong>Reemplazar las partidas actuales</strong> de esta obra (recomendado — evita duplicar si ya importaste antes)</span>
           </label>
           {error && <p className="text-[12px] text-danger mb-2 bg-danger-bg rounded-lg p-2.5">{error}</p>}
 

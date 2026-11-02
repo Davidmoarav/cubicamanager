@@ -5,8 +5,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, MetricCard, SectionTitle } from '@/components/ui'
-import { fmt, fmtM } from '@/lib/format'
-import FiltroObra from '@/components/FiltroObra'
+import { fmt } from '@/lib/format'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
 import ConsolidadoObras from '@/components/ConsolidadoObras'
 import { filtrarPorObra, SIN_OBRA } from '@/lib/consolidado'
 
@@ -19,7 +19,7 @@ function labelPeriodo(p: string) {
 
 export default function FinanzasPage() {
   const [tab, setTab] = useState<'resumen' | 'obras' | 'iva' | 'presupuesto'>('resumen')
-  const [obra, setObra] = useState('')
+  const [obra, setObra] = useObraFiltro()
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
   const { data: consolidado } = useSWR<any>(obra ? '/api/finanzas/consolidado' : null, fetcher)
   const [periodoSel, setPeriodoSel] = useState<string>(new Date().toISOString().slice(0, 7))
@@ -102,7 +102,7 @@ export default function FinanzasPage() {
       </div>
 
       {/* TABS */}
-      <div className="inline-flex gap-1 p-1 bg-canvas rounded-xl mb-6">
+      <div className="inline-flex max-w-full overflow-x-auto gap-1 p-1 bg-canvas rounded-xl mb-6">
         {[
           { key: 'resumen' as const,     label: 'Resumen' },
           { key: 'obras' as const,       label: 'Por obra' },
@@ -110,7 +110,7 @@ export default function FinanzasPage() {
           { key: 'presupuesto' as const, label: 'Avance presupuestario' },
         ].map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition
+            className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition whitespace-nowrap shrink-0
               ${tab === t.key ? 'bg-white text-brand shadow-card' : 'text-muted hover:text-ink'}`}>
             {t.label}
           </button>
@@ -124,10 +124,10 @@ export default function FinanzasPage() {
         <div>
           <div className="mb-4"><FiltroObra value={obra} onChange={setObra} proyectos={proyectos} /></div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <MetricCard label="Ingresos cobrados" value={fmtM(resumen.cobrado)}   sub="Facturas pagadas"     subColor="#1a7a4a" />
-            <MetricCard label="CxC pendiente"     value={fmtM(resumen.pendiente)} sub="Por cobrar"           subColor="#b07d1a" />
-            <MetricCard label="CxC vencida"       value={fmtM(resumen.vencido)}   sub="Gestión urgente"      subColor="#b0401a" />
-            <MetricCard label="Nómina mensual"    value={fmtM(resumen.nomina)}    sub="Mano de obra directa" />
+            <MetricCard label="Ingresos cobrados" value={fmt(resumen.cobrado)}   sub="Facturas pagadas"     subColor="#1a7a4a" />
+            <MetricCard label="Por cobrar"     value={fmt(resumen.pendiente)} sub="Por cobrar"           subColor="#b07d1a" />
+            <MetricCard label="Vencido"       value={fmt(resumen.vencido)}   sub="Facturas vencidas"      subColor="#b0401a" />
+            <MetricCard label="Sueldos del mes"    value={fmt(resumen.nomina)}    sub="Mano de obra directa" />
           </div>
           <div className="bg-brand-bg border border-[#b5d4f4] rounded-xl px-5 py-4 text-[13px] text-[#0c447c]">
             Para el detalle de IVA a pagar al SII, revisa la pestaña <strong>Control IVA</strong>. Para ver cuánto presupuesto llevas ejecutado por obra, ve a <strong>Avance presupuestario</strong>.
@@ -149,7 +149,12 @@ export default function FinanzasPage() {
                 ))}
               </select>
             </div>
-            <span className="text-[11px] text-muted">El conteo se reinicia cada mes</span>
+            {!ivaPeriodo && periodosDisponibles.some(p => p !== periodoSel)
+              ? <button onClick={() => setPeriodoSel(periodosDisponibles.find(p => p !== periodoSel) as string)}
+                  className="text-[12px] font-semibold text-brand bg-transparent border-none cursor-pointer text-left">
+                  Sin documentos este mes. Ver {labelPeriodo(periodosDisponibles.find(p => p !== periodoSel) as string)}
+                </button>
+              : <span className="text-[11px] text-muted">El conteo se reinicia cada mes</span>}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
@@ -275,7 +280,7 @@ export default function FinanzasPage() {
             ? <div className="text-muted text-center p-10 text-[13px]">Cargando avance de las obras…</div>
             : presupuesto.length === 0
             ? <div className="bg-[#f8fafc] border border-dashed border-[#d1d9e6] rounded-[10px] p-[30px] text-center text-[13px] text-muted">
-                No hay proyectos con partidas cargadas. Agrega partidas de obra en cada proyecto para ver el avance presupuestario.
+                No hay obras con partidas cargadas. Agrégalas en cada obra para ver el avance presupuestario.
               </div>
             : (
               <div className="flex flex-col gap-3.5">
@@ -292,7 +297,7 @@ export default function FinanzasPage() {
                         </div>
                         <div className="text-right">
                           <div className="text-[11px] text-muted">Valor contrato</div>
-                          <div className="text-[15px] font-bold text-[#1a2535]">{fmtM(p.valor_contrato)}</div>
+                          <div className="text-[15px] font-bold text-[#1a2535]">{fmt(p.valor_contrato)}</div>
                         </div>
                       </div>
 

@@ -10,6 +10,7 @@ import { fetcher } from '@/lib/fetcher'
 import { Btn } from '@/components/ui'
 import { opcionesPartida } from '@/lib/costos'
 import { usePermisos } from '@/lib/usePermisos'
+import { fmtFecha } from '@/lib/format'
 
 interface Props {
   proyectoId: string
@@ -34,6 +35,8 @@ export default function ParteDiarioPanel({ proyectoId }: Props) {
   const [fecha, setFecha]   = useState(hoyLocal)
   const [filas, setFilas]   = useState<Fila[]>([])
   const [saving, setSaving] = useState(false)
+  const [copiando, setCopiando] = useState(false)
+  const [horasTodos, setHorasTodos] = useState('8')
   const [msg, setMsg]       = useState<{ tipo: 'ok' | 'aviso' | 'error'; texto: string } | null>(null)
 
   const clave = `/api/parte-diario?proyecto_id=${proyectoId}&fecha=${fecha}`
@@ -59,6 +62,33 @@ export default function ParteDiarioPanel({ proyectoId }: Props) {
 
   const upd = (k: string, campo: keyof Fila, v: string) =>
     setFilas(prev => prev.map(f => f._k === k ? { ...f, [campo]: v } : f))
+
+  // Repite el último parte de los 7 días anteriores: lo normal es que siga la misma cuadrilla
+  const copiarAnterior = async () => {
+    setCopiando(true)
+    setMsg(null)
+    for (let atras = 1; atras <= 7; atras++) {
+      const d = new Date(`${fecha}T12:00:00`)
+      d.setDate(d.getDate() - atras)
+      const dia = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      const res = await fetch(`/api/parte-diario?proyecto_id=${proyectoId}&fecha=${dia}`).catch(() => null)
+      const j = res?.ok ? await res.json().catch(() => null) : null
+      if (j?.filas?.length) {
+        setFilas(j.filas.map((f: any) => ({ ...nuevaFila(f.empleado_id), partida_id: f.partida_id || '', horas: String(f.horas) })))
+        setMsg({ tipo: 'aviso', texto: `Copiado del ${fmtFecha(dia)}. Revísalo y guarda.` })
+        setCopiando(false)
+        return
+      }
+    }
+    setCopiando(false)
+    setMsg({ tipo: 'aviso', texto: 'No hay partes en los 7 días anteriores.' })
+  }
+
+  const horasATodos = () => {
+    const h = Number(horasTodos)
+    if (!(h > 0 && h <= 24)) { setMsg({ tipo: 'error', texto: 'Las horas deben estar entre 0 y 24' }); return }
+    setFilas(prev => prev.map(f => ({ ...f, horas: String(h) })))
+  }
 
   const totalHoras = filas.reduce((s, f) => s + (Number(f.horas) || 0), 0)
 
@@ -108,11 +138,22 @@ export default function ParteDiarioPanel({ proyectoId }: Props) {
         </div>
       )}
 
+      {puedeEditar && !isLoading && !error && (
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <Btn onClick={copiarAnterior} disabled={copiando}>{copiando ? 'Buscando…' : 'Copiar último parte'}</Btn>
+          <span className="flex items-center gap-1.5">
+            <input type="number" min="0" max="24" step="0.5" value={horasTodos} onChange={e => setHorasTodos(e.target.value)}
+              aria-label="Horas para todos" className="w-[64px] px-1.5 py-1.5 border border-line2 rounded-md text-right text-[12px]" />
+            <Btn onClick={horasATodos} disabled={filas.length === 0}>Poner a todos</Btn>
+          </span>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center py-16 text-muted text-[13px]">Cargando parte diario…</div>
       ) : error || data?.error ? (
         <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-          No se pudo cargar el parte diario. Si menciona "parte_diario", ejecuta el SQL 41_fase1_imputacion.sql en Supabase.
+          No se pudo cargar el parte diario. Recarga la página; si sigue pasando, avisa al administrador.
         </div>
       ) : (
         <>

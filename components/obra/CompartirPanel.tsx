@@ -5,6 +5,8 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import type { Proyecto } from '@/types'
+import { confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 interface ShareInfo {
   token: string
@@ -21,6 +23,7 @@ const fechaHora = (iso?: string) => {
 }
 
 export default function CompartirPanel({ proyecto }: { proyecto: Proyecto }) {
+  const { puedeEditar } = usePermisos('obra')
   const { data: share, mutate } = useSWR<ShareInfo | null>(`/api/share?proyecto_id=${proyecto.id}`)
   const [trabajando, setTrabajando] = useState(false)
   const [aviso, setAviso] = useState('')
@@ -75,7 +78,7 @@ export default function CompartirPanel({ proyecto }: { proyecto: Proyecto }) {
   }
 
   const desactivar = async () => {
-    if (!confirm('¿Desactivar el link? El cliente dejará de ver el proyecto (puedes reactivarlo después).')) return
+    if (!(await confirmar('¿Desactivar el link? El cliente dejará de ver la obra (puedes reactivarlo después).'))) return
     setTrabajando(true)
     try {
       await fetch('/api/share', {
@@ -89,6 +92,8 @@ export default function CompartirPanel({ proyecto }: { proyecto: Proyecto }) {
       setTrabajando(false)
     }
   }
+
+  if (!puedeEditar) return null
 
   return (
     <div className="space-y-2.5">

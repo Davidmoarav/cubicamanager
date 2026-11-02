@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
-import { MetricCard, fmt, fmtM } from '@/components/ui'
+import { MetricCard, fmt } from '@/components/ui'
 
 interface Props {
   proyectoId: string
@@ -77,7 +77,7 @@ function Grafico({ filas }: { filas: any[] }) {
           {ticks.map(v => (
             <g key={v}>
               <line x1={m.left} x2={W - m.right} y1={y(v)} y2={y(v)} stroke={v === 0 ? '#6b7a8d' : '#e4e9f0'} strokeWidth={1} />
-              <text x={m.left - 8} y={y(v) + 3.5} textAnchor="end" fontSize={11} fill="#6b7a8d">{fmtM(v)}</text>
+              <text x={m.left - 8} y={y(v) + 3.5} textAnchor="end" fontSize={11} fill="#6b7a8d">{fmt(v)}</text>
             </g>
           ))}
 
@@ -172,7 +172,7 @@ export default function FlujoCajaPanel({ proyectoId }: Props) {
       ) : (
         <>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Saldo a hoy" value={fmt(r.saldo_actual)} sub={`Entró ${fmtM(r.entradas_reales)} · salió ${fmtM(r.salidas_reales)}`} />
+            <MetricCard label="Saldo a hoy" value={fmt(r.saldo_actual)} sub={`Entró ${fmt(r.entradas_reales)} · salió ${fmt(r.salidas_reales)}`} />
             <MetricCard label="Por entrar" value={fmt(r.entradas_proyectadas)} sub="Hasta el término" />
             <MetricCard label="Por salir" value={fmt(r.salidas_proyectadas)} sub="Hasta el término" />
             <MetricCard label="Peor saldo" value={fmt(r.saldo_minimo)}

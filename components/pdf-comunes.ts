@@ -12,7 +12,10 @@ export const PDF_LINE = '#d1d9e6'
 export const IVA_PCT = 0.19
 
 // Montos en pesos chilenos, siempre redondeados
-export const fmtCL = (n: number) => '$' + Math.round(Number(n) || 0).toLocaleString('es-CL')
+export const fmtCL = (n: number) => {
+  const v = Math.round(Number(n) || 0)
+  return (v < 0 ? '-' : '') + '$' + Math.abs(v).toLocaleString('es-CL')
+}
 
 // Porcentaje con hasta 2 decimales
 export const pctCL = (n: number) => (Number(n) || 0).toLocaleString('es-CL', { maximumFractionDigits: 2 }) + '%'

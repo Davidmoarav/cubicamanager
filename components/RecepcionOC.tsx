@@ -6,8 +6,10 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Btn, FormInput, Modal } from '@/components/ui'
-import { fmt } from '@/lib/format'
+import { fmt, fmtFecha } from '@/lib/format'
 import { recibidoPorLinea } from '@/lib/recepciones'
+import { confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 interface Props {
   ordenId: string
@@ -18,6 +20,7 @@ interface Props {
 const hoy = () => new Date().toISOString().split('T')[0]
 
 export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
+  const { puedeEditar } = usePermisos('obra')
   const [oc, setOc]             = useState<any>(null)
   const [cantidades, setCantidades] = useState<Record<string, string>>({})
   const [sinBodega, setSinBodega]   = useState<Record<string, boolean>>({})
@@ -63,7 +66,7 @@ export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
   }
 
   const revertir = async (r: any) => {
-    if (!confirm('¿Revertir esta recepción? Sale de la bodega y deja de contar como gasto.')) return
+    if (!(await confirmar('¿Revertir esta recepción? Sale de la bodega y deja de contar como gasto.'))) return
     setError('')
     const res = await fetch('/api/recepciones-oc', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }),
@@ -78,7 +81,7 @@ export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
   const hayPendiente = lineas.some(l => pendiente(l) > 0)
 
   return (
-    <Modal title={oc ? `Recepción OC #${oc.numero}` : 'Recepción'} onClose={onClose} wide>
+    <Modal title={oc ? `Recepción de la orden #${oc.numero}` : 'Recepción'} onClose={onClose} wide>
       {error && <div className="mb-3 text-[12px] font-semibold text-danger bg-danger-bg rounded-lg px-3 py-2">{error}</div>}
       {!oc ? (
         !error && <p className="text-muted text-center p-8 text-[13px]">Cargando…</p>
@@ -106,12 +109,12 @@ export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
                   </div>
                   <div className="text-muted sm:text-right whitespace-nowrap order-3 sm:order-none">Pedido {Number(l.cantidad)}</div>
                   <div className="text-muted sm:text-right whitespace-nowrap order-4 sm:order-none">Recibido {recibido[l.id] || 0}</div>
-                  <input type="number" min="0" max={pend} step="any" disabled={pend <= 0}
+                  <input type="number" min="0" max={pend} step="any" disabled={pend <= 0 || !puedeEditar}
                     aria-label={`Cantidad recibida de ${l.material}`} placeholder={pend > 0 ? String(pend) : '—'}
                     value={cantidades[l.id] ?? ''} onChange={e => setCantidades(c => ({ ...c, [l.id]: e.target.value }))}
                     className="w-full px-1.5 py-1.5 border border-line2 rounded-md text-right text-[12px] order-2 sm:order-none" />
                   <label className="flex items-center gap-1 text-[11px] text-muted cursor-pointer order-5 sm:order-none">
-                    <input type="checkbox" checked={!sinBodega[l.id]} disabled={pend <= 0 || !oc.proyecto_id}
+                    <input type="checkbox" checked={!sinBodega[l.id]} disabled={pend <= 0 || !oc.proyecto_id || !puedeEditar}
                       onChange={e => setSinBodega(s => ({ ...s, [l.id]: !e.target.checked }))} />
                     A bodega
                   </label>
@@ -120,7 +123,7 @@ export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
             })}
           </div>
 
-          {hayPendiente ? (
+          {hayPendiente ? puedeEditar && (
             <div className="flex justify-between gap-2 flex-wrap mb-4">
               <Btn onClick={recibirTodo}>Completar con lo pendiente</Btn>
               <Btn variant="primary" onClick={guardar} disabled={saving}>{saving ? 'Guardando…' : 'Registrar recepción'}</Btn>
@@ -137,9 +140,9 @@ export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
                   <div key={r.id} className="flex items-center justify-between gap-3 py-2 px-3 bg-canvas rounded-lg text-[12px]">
                     <div className="min-w-0">
                       <span className="font-semibold text-ink">{Number(r.cantidad)} · {nombreLinea(r.linea_id)}</span>
-                      <div className="text-[10px] text-muted">{r.fecha}{r.documento ? ` · ${r.documento}` : ''}</div>
+                      <div className="text-[10px] text-muted">{fmtFecha(r.fecha)}{r.documento ? ` · ${r.documento}` : ''}</div>
                     </div>
-                    <button onClick={() => revertir(r)} className="text-[11px] font-semibold text-danger whitespace-nowrap hover:underline">Revertir</button>
+                    {puedeEditar && (<button onClick={() => revertir(r)} className="text-[11px] font-semibold text-danger whitespace-nowrap hover:underline">Revertir</button>)}
                   </div>
                 ))}
               </div>

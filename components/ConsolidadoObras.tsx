@@ -7,7 +7,8 @@ import { useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
-import { fmt, fmtM } from '@/components/ui'
+import { Btn, fmt } from '@/components/ui'
+import { fmtPeriodo } from '@/lib/format'
 
 const COLUMNAS = [
   { k: 'cobrado', label: 'Cobrado' },
@@ -42,7 +43,7 @@ export default function ConsolidadoObras() {
 
       {sinObra && sinObra.costo_total + sinObra.cobrado + sinObra.por_cobrar + sinObra.vencido !== 0 && (
         <div className="mb-4 text-[12.5px] font-semibold text-warning bg-warning-bg rounded-lg px-3.5 py-2.5">
-          Hay {fmtM(sinObra.costo_total)} de costo y {fmtM(sinObra.cobrado + sinObra.por_cobrar + sinObra.vencido)} de ingresos sin obra:
+          Hay {fmt(sinObra.costo_total)} de costo y {fmt(sinObra.cobrado + sinObra.por_cobrar + sinObra.vencido)} de ingresos sin obra:
           asígnalos para que el resultado de cada obra esté completo.
         </div>
       )}
@@ -53,7 +54,10 @@ export default function ConsolidadoObras() {
         ) : error || data?.error ? (
           <p className="text-danger text-center py-10 text-[13px]">No se pudo armar el consolidado{data?.error ? `: ${data.error}` : '.'}</p>
         ) : filas.length === 0 ? (
-          <p className="text-muted text-center py-10 text-[13px]">Sin movimientos en este período.</p>
+          <div className="text-center py-10">
+            <p className="text-muted text-[13px] mb-3">Sin movimientos en {periodo ? fmtPeriodo(periodo) : 'el historial'}.</p>
+            {periodo && <Btn onClick={() => setPeriodo('')}>Ver todo el historial</Btn>}
+          </div>
         ) : (
           <table className="w-full border-collapse text-[12.5px] min-w-[960px]">
             <thead>

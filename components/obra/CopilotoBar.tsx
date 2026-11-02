@@ -67,15 +67,6 @@ export default function CopilotoBar({
           'bg-white rounded-full shadow-bar border flex items-center gap-2 pl-2 pr-2 py-1.5 transition',
           grabando ? 'border-om ring-2 ring-om/30' : 'border-line',
         ].join(' ')}>
-          <button
-            type="button"
-            title="Adjuntar (Fase 2: Archivos)"
-            onClick={() => avisar('Subida de archivos: llega con la pestaña Archivos (Fase 2).')}
-            className="w-9 h-9 shrink-0 rounded-full text-muted hover:text-ink hover:bg-canvas transition text-[20px] leading-none"
-          >
-            +
-          </button>
-
           <input
             value={texto}
             onChange={e => setTexto(e.target.value)}

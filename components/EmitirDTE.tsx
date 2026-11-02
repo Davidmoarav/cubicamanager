@@ -9,6 +9,8 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, Modal, fmt } from '@/components/ui'
 import { CODIGOS_REFERENCIA } from '@/lib/dte'
+import { fmtFecha } from '@/lib/format'
+import { confirmar } from '@/lib/avisos'
 
 export default function EmitirDTE({ facturaId, onClose, onEmitido }: {
   facturaId: string
@@ -30,7 +32,7 @@ export default function EmitirDTE({ facturaId, onClose, onEmitido }: {
   const ultimoFallo = delModo.find((e: any) => e.estado === 'error' || e.estado === 'rechazado')
 
   const emitir = async () => {
-    if (data?.ya_tiene_folio && !confirm(`Este documento ya tiene el número ${data.factura.numero}. Si ya se emitió en el SII, no lo emitas de nuevo. ¿Continuar?`)) return
+    if (data?.ya_tiene_folio && !(await confirmar(`Este documento ya tiene el número ${data.factura.numero}. Si ya se emitió en el SII, no lo emitas de nuevo. ¿Continuar?`))) return
     setEnviando(true)
     setFalla('')
     const res = await fetch('/api/dte', {
@@ -50,7 +52,7 @@ export default function EmitirDTE({ facturaId, onClose, onEmitido }: {
         <p className="text-muted text-center py-8 text-[13px]">Preparando el documento…</p>
       ) : error || data?.error ? (
         <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-          No se pudo preparar el documento{data?.error ? `: ${data.error}` : ''}. Si menciona "dte_emisiones", ejecuta el SQL 44_fase4_dte.sql en Supabase.
+          No se pudo preparar el documento{data?.error ? `: ${data.error}` : ''}. Recarga la página; si sigue pasando, avisa al administrador.
         </div>
       ) : (
         <>
@@ -97,7 +99,7 @@ export default function EmitirDTE({ facturaId, onClose, onEmitido }: {
             </div>
           ) : doc && (
             <div className="border border-line rounded-lg p-3 text-[12.5px] mb-3">
-              <div className="font-bold text-ink mb-2">{data.nombre_tipo} · {doc.fecha}</div>
+              <div className="font-bold text-ink mb-2">{data.nombre_tipo} · {fmtFecha(doc.fecha)}</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
                 {[['Emisor', doc.emisor], ['Receptor', doc.receptor]].map(([titulo, p]: any) => (
                   <div key={titulo}>

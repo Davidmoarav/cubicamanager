@@ -120,6 +120,6 @@ export async function POST(req: Request) {
     fallidas: fallidas.length,
     detalle_fallidas: fallidas.slice(0, 5),
     advertencia: tieneRut ? null
-      : 'Ejecuta sql/33_factura_rut.sql para deduplicar por RUT (dos proveedores pueden repetir folio)',
+      : 'Los duplicados se detectaron solo por folio: dos proveedores con el mismo folio se considerarían el mismo documento',
   })
 }

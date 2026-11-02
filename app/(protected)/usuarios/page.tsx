@@ -6,6 +6,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, SectionTitle, Table, Td, Th } from '@/components/ui'
+import { confirmar } from '@/lib/avisos'
 
 const ROLES = [
   { value: 'admin',     label: 'Administrador' },
@@ -63,7 +64,7 @@ export default function UsuariosPage() {
   }
 
   const quitar = async (id: string, mail: string) => {
-    if (!confirm(`¿Quitar el acceso de ${mail}? Dejará de ver los datos de la empresa.`)) return
+    if (!(await confirmar(`¿Quitar el acceso de ${mail}? Dejará de ver los datos de la empresa.`))) return
     await fetch('/api/miembros', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),

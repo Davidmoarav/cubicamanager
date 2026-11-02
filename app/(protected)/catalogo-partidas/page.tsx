@@ -9,8 +9,11 @@ import { Btn, FormInput, FormSelect, Modal, SectionTitle, MetricCard } from '@/c
 import { fmt } from '@/lib/format'
 import { UNIDADES } from '@/types/cotizaciones'
 import type { CatalogoPartida } from '@/types/catalogo-partida'
+import { avisar, confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 export default function CatalogoPartidasPage() {
+  const { puedeEditar } = usePermisos('obra')
   const { data: allItems = [], isLoading, mutate } = useSWR<CatalogoPartida[]>('/api/catalogo-partidas', fetcher)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [modal, setModal]       = useState<{ type: 'padre' | 'hijo' | 'editar'; parentId?: string } | null>(null)
@@ -32,7 +35,7 @@ export default function CatalogoPartidasPage() {
   }
 
   const save = async () => {
-    if (!form.descripcion) { alert('La descripción es obligatoria'); return }
+    if (!form.descripcion) { avisar('La descripción es obligatoria'); return }
     setSaving(true)
     const method = modal?.type === 'editar' ? 'PUT' : 'POST'
     const body = {
@@ -50,7 +53,7 @@ export default function CatalogoPartidasPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar esta partida del catálogo y todas sus sub-partidas?')) return
+    if (!(await confirmar('¿Eliminar esta partida del catálogo y todas sus sub-partidas?'))) return
     await fetch('/api/catalogo-partidas', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -79,7 +82,7 @@ export default function CatalogoPartidasPage() {
     <div className="max-w-[860px]">
       <div className="flex justify-between items-center mb-6">
         <SectionTitle>Catálogo de partidas</SectionTitle>
-        <Btn variant="primary" onClick={openNewPadre}>+ Nueva partida</Btn>
+        {puedeEditar && (<Btn variant="primary" onClick={openNewPadre}>+ Nueva partida</Btn>)}
       </div>
 
       <p className="text-[13px] text-muted mb-5">
@@ -100,9 +103,9 @@ export default function CatalogoPartidasPage() {
             <div className="text-sm font-semibold text-[#1a2535] mb-1.5">Tu catálogo está vacío</div>
             <div className="text-[12px] text-muted mb-3.5">
               Agrega partidas comunes como "Obra Gruesa", "Instalaciones Eléctricas", "Terminaciones", etc.
-              Luego podrás importarlas a cualquier cotización o proyecto con un clic.
+              Luego podrás importarlas a cualquier cotización u obra con un clic.
             </div>
-            <Btn variant="primary" onClick={openNewPadre}>+ Crear primera partida</Btn>
+            {puedeEditar && (<Btn variant="primary" onClick={openNewPadre}>+ Crear primera partida</Btn>)}
           </div>
         : (
           <div className="flex flex-col gap-2">
@@ -132,8 +135,8 @@ export default function CatalogoPartidasPage() {
                     </div>
 
                     <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                      <button onClick={() => openEdit(padre)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted cursor-pointer flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>
-                      <button onClick={() => del(padre.id)} className="w-6 h-6 rounded-[5px] border-0 bg-danger-bg text-danger text-[11px] font-bold cursor-pointer flex items-center justify-center">✕</button>
+                      {puedeEditar && (<button onClick={() => openEdit(padre)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted cursor-pointer flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>)}
+                      {puedeEditar && (<button onClick={() => del(padre.id)} className="w-6 h-6 rounded-[5px] border-0 bg-danger-bg text-danger text-[11px] font-bold cursor-pointer flex items-center justify-center">✕</button>)}
                     </div>
                   </div>
 
@@ -158,16 +161,16 @@ export default function CatalogoPartidasPage() {
                             </div>
                           </div>
                           <div className="flex gap-[3px]">
-                            <button onClick={() => openEdit(hijo)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted cursor-pointer flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>
-                            <button onClick={() => del(hijo.id)} className="w-6 h-6 rounded-[5px] border-0 bg-danger-bg text-danger text-[11px] font-bold cursor-pointer flex items-center justify-center">✕</button>
+                            {puedeEditar && (<button onClick={() => openEdit(hijo)} className="w-6 h-6 rounded-[5px] border-0 bg-canvas text-muted cursor-pointer flex items-center justify-center"><IconEdit className="w-3.5 h-3.5" /></button>)}
+                            {puedeEditar && (<button onClick={() => del(hijo.id)} className="w-6 h-6 rounded-[5px] border-0 bg-danger-bg text-danger text-[11px] font-bold cursor-pointer flex items-center justify-center">✕</button>)}
                           </div>
                         </div>
                       ))}
 
-                      <button onClick={() => openNewHijo(padre.id, padre.children.length)}
+                      {puedeEditar && (<button onClick={() => openNewHijo(padre.id, padre.children.length)}
                         className="w-full py-2 mt-2 bg-white border border-dashed border-[#d1d9e6] rounded-[6px] text-[12px] text-brand font-semibold cursor-pointer">
                         + Agregar sub-partida a "{padre.descripcion}"
-                      </button>
+                      </button>)}
                     </div>
                   )}
                 </div>

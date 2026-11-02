@@ -6,13 +6,15 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import Link from 'next/link'
 import { Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th } from '@/components/ui'
-import { fmt, fmtM } from '@/lib/format'
+import { fmt, fmtFecha } from '@/lib/format'
 import { UNIDADES, type Cotizacion, type PartidaCotizacion } from '@/types/cotizaciones'
 import type { Cliente } from '@/types/cliente'
 import type { CatalogoPartida } from '@/types/catalogo-partida'
 import DescargarPDFBtn from '@/components/DescargarPDFBtn'
 import ConvertirBtn from '@/components/ConvertirBtn'
-import FiltroObra from '@/components/FiltroObra'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
+import { avisar, confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 const IVA = 0.19
 
@@ -48,10 +50,11 @@ function BadgeCotiz({ estado }: { estado: string }) {
 }
 
 export default function CotizacionesPage() {
+  const { puedeEditar } = usePermisos('obra')
   const [filtro, setFiltro]     = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [limite, setLimite]     = useState(60)
-  const [obra, setObra]         = useState('')
+  const [obra, setObra] = useObraFiltro()
   const paramObra = obra ? `&obra=${obra}` : ''
   const buscando = busqueda.trim().length >= 1
   const { data: itemsRaw = [], isLoading, mutate } = useSWR<Cotizacion[]>(
@@ -62,7 +65,9 @@ export default function CotizacionesPage() {
   const items = Array.isArray(itemsRaw) ? itemsRaw : []
   const { data: resumen, mutate: mutResumen } = useSWR<any>(`/api/cotizaciones?resumen=1${paramObra}`, fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
-  const { data: clientes = [] } = useSWR<Cliente[]>('/api/clientes', fetcher)
+  const { data: clientes = [], mutate: mutClientes } = useSWR<Cliente[]>('/api/clientes', fetcher)
+  const [clienteNuevo, setClienteNuevo] = useState<{ razon_social: string; rut: string } | null>(null)
+  const [creandoCliente, setCreandoCliente] = useState(false)
   const [modal, setModal]       = useState<'nuevo' | 'editar' | 'ver' | null>(null)
   const [form, setForm]         = useState<any>(EMPTY_COTIZACION)
   const [saving, setSaving]     = useState(false)
@@ -76,6 +81,21 @@ export default function CotizacionesPage() {
 
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
+
+  const crearCliente = async () => {
+    if (!clienteNuevo) return
+    setCreandoCliente(true)
+    const res = await fetch('/api/clientes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ razon_social: clienteNuevo.razon_social.trim(), rut: clienteNuevo.rut.trim() || null }),
+    })
+    const creado = await res.json().catch(() => ({}))
+    setCreandoCliente(false)
+    if (!res.ok) { avisar(creado.error || 'No se pudo crear el cliente'); return }
+    await mutClientes()
+    setForm((f: any) => ({ ...f, cliente_id: creado.id, cliente: creado.razon_social }))
+    setClienteNuevo(null)
+  }
 
   const handleClienteChange = (cliente_id: string) => {
     const c = clientes.find(x => x.id === cliente_id)
@@ -134,7 +154,7 @@ export default function CotizacionesPage() {
   // se controla luego en el proyecto, no en la cotización).
   const importarSeleccion = () => {
     const seleccionados = catalogoPadres.filter(p => selected.has(p.id))
-    if (seleccionados.length === 0) { alert('Selecciona al menos una partida'); return }
+    if (seleccionados.length === 0) { avisar('Selecciona al menos una partida'); return }
 
     setForm((f: any) => {
       const base = f.partidas ?? []
@@ -169,7 +189,7 @@ export default function CotizacionesPage() {
 
   const save = async () => {
     if (!form.cliente_id && !form.cliente) {
-      alert('Debes seleccionar un cliente'); return
+      avisar('Debes seleccionar un cliente'); return
     }
     setSaving(true)
     const method = modal === 'nuevo' ? 'POST' : 'PUT'
@@ -180,14 +200,14 @@ export default function CotizacionesPage() {
     })
     if (!res.ok) {
       const { error } = await res.json()
-      alert('Error: ' + error)
+      avisar('Error: ' + error)
       setSaving(false); return
     }
     await mutate(); mutResumen(); setSaving(false); setModal(null)
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar cotización?')) return
+    if (!(await confirmar('¿Eliminar cotización?'))) return
     await fetch('/api/cotizaciones', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await mutate(); mutResumen()
   }
@@ -208,11 +228,11 @@ export default function CotizacionesPage() {
       <div className="flex justify-between items-center mb-6">
         <div>
           <SectionTitle>Cotizaciones</SectionTitle>
-          <p className="text-sm text-muted mt-1">{metricas.total} cotización{metricas.total !== 1 ? 'es' : ''} · {fmtM(metricas.monto)} en cartera</p>
+          <p className="text-sm text-muted mt-1">{metricas.total} cotización{metricas.total !== 1 ? 'es' : ''} · {fmt(metricas.monto)} en cartera</p>
         </div>
-        <Btn variant="primary" onClick={() => { setForm({ ...EMPTY_COTIZACION, partidas: [] }); setModal('nuevo') }}>
+        {puedeEditar && (<Btn variant="primary" onClick={() => { setForm({ ...EMPTY_COTIZACION, partidas: [] }); setModal('nuevo') }}>
           + Nueva cotización
-        </Btn>
+        </Btn>)}
       </div>
 
       {apiError && (
@@ -230,8 +250,8 @@ export default function CotizacionesPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard label="Total cotizaciones" value={metricas.total} />
         <MetricCard label="Aprobadas"          value={metricas.aprobadas}   sub="Listas para convertir" subColor="#1a7a4a" />
-        <MetricCard label="Convertidas"        value={metricas.convertidas} sub="Ya son proyecto"        subColor="#534ab7" />
-        <MetricCard label="Monto en cartera"   value={fmtM(metricas.monto)} sub="Excluye rechazadas" />
+        <MetricCard label="Convertidas"        value={metricas.convertidas} sub="Ya son obras"        subColor="#534ab7" />
+        <MetricCard label="Monto en cartera"   value={fmt(metricas.monto)} sub="Excluye rechazadas" />
       </div>
 
       <div className="mb-3">
@@ -264,7 +284,7 @@ export default function CotizacionesPage() {
           : (
             <Table>
               <thead><tr>
-                <Th>N°</Th><Th>Cliente</Th><Th>Proyecto</Th><Th>Fecha</Th><Th>Partidas</Th><Th>Total (con IVA)</Th><Th>Estado</Th><Th>Acciones</Th>
+                <Th>N°</Th><Th>Cliente</Th><Th>Obra</Th><Th>Fecha</Th><Th>Partidas</Th><Th>Total (con IVA)</Th><Th>Estado</Th><Th>Acciones</Th>
               </tr></thead>
               <tbody>
                 {filtered.map(c => {
@@ -278,7 +298,7 @@ export default function CotizacionesPage() {
                         {cli?.rut && <div className="text-[11px] text-muted font-mono">{cli.rut}</div>}
                       </Td>
                       <Td style={{ color: '#6b7a8d' }}>{c.proyecto_nombre || '—'}</Td>
-                      <Td style={{ color: '#6b7a8d' }}>{c.fecha || '—'}</Td>
+                      <Td style={{ color: '#6b7a8d' }}>{fmtFecha(c.fecha)}</Td>
                       <Td style={{ textAlign: 'center', color: '#6b7a8d' }}>{c.partidas?.length ?? 0}</Td>
                       <Td style={{ fontWeight: 700 }}>{fmt(calcTotal(c))}</Td>
                       <Td><BadgeCotiz estado={c.estado} /></Td>
@@ -287,11 +307,11 @@ export default function CotizacionesPage() {
                           <DescargarPDFBtn cotizacion={c} />
                           <ConvertirBtn cotizacion={c} onSuccess={mutate} />
                           <Btn
-                            onClick={() => { setForm({ ...c, partidas: c.partidas ?? [] }); setModal(bloqueada ? 'ver' : 'editar') }}
+                            onClick={() => { setForm({ ...c, partidas: c.partidas ?? [] }); setModal(bloqueada || !puedeEditar ? 'ver' : 'editar') }}
                             style={{ fontSize: 11, padding: '4px 8px' }}>
-                            {bloqueada ? 'Ver' : 'Editar'}
+                            {bloqueada || !puedeEditar ? 'Ver' : 'Editar'}
                           </Btn>
-                          {!bloqueada && (
+                          {!bloqueada && puedeEditar && (
                             <Btn variant="danger" onClick={() => del(c.id)} style={{ fontSize: 11, padding: '4px 8px' }}>✕</Btn>
                           )}
                         </div>
@@ -321,12 +341,12 @@ export default function CotizacionesPage() {
           {/* AVISO si está convertida */}
           {esConvertida || modal === 'ver' ? (
             <div className="bg-accent-bg border border-[#ccc5fc] text-accent px-3.5 py-2.5 rounded-lg mb-4 text-[13px]">
-              Esta cotización ya fue convertida a proyecto. No se puede editar para mantener la trazabilidad.
+              Esta cotización ya fue convertida en obra. No se puede editar para mantener la trazabilidad.
               {form.proyecto_id && (
                 <>
                   {' '}
-                  <Link href="/proyectos" className="text-accent underline font-bold">
-                    Ver el proyecto creado
+                  <Link href={`/obra/${form.proyecto_id}`} className="text-accent underline font-bold">
+                    Ver la obra creada
                   </Link>
                 </>
               )}
@@ -357,16 +377,28 @@ export default function CotizacionesPage() {
                     </option>
                   ))}
                 </select>
-                {modal !== 'ver' && (
-                  <div className="mt-1">
-                    <Link href="/clientes" target="_blank" className="text-[11px] text-brand underline">
-                      + Crear cliente nuevo (en otra pestaña)
-                    </Link>
+                {modal !== 'ver' && (clienteNuevo ? (
+                  <div className="mt-2 border border-line rounded-lg p-2.5 flex flex-col gap-2">
+                    <input value={clienteNuevo.razon_social} onChange={e => setClienteNuevo({ ...clienteNuevo, razon_social: e.target.value })}
+                      placeholder="Razón social *" aria-label="Razón social" className="input-base !mb-0" />
+                    <input value={clienteNuevo.rut} onChange={e => setClienteNuevo({ ...clienteNuevo, rut: e.target.value })}
+                      placeholder="RUT (opcional)" aria-label="RUT" className="input-base !mb-0" />
+                    <div className="flex gap-2 justify-end">
+                      <Btn onClick={() => setClienteNuevo(null)}>Cancelar</Btn>
+                      <Btn variant="primary" onClick={crearCliente} disabled={creandoCliente || !clienteNuevo.razon_social.trim()}>
+                        {creandoCliente ? 'Creando…' : 'Crear cliente'}
+                      </Btn>
+                    </div>
                   </div>
-                )}
+                ) : (
+                  <button type="button" onClick={() => setClienteNuevo({ razon_social: '', rut: '' })}
+                    className="mt-1 text-[11.5px] font-semibold text-brand bg-transparent border-none p-0 cursor-pointer">
+                    + Crear cliente nuevo
+                  </button>
+                ))}
               </div>
 
-              <FormInput label="Proyecto"        value={form.proyecto_nombre || ''}  onChange={v => upd('proyecto_nombre', v)} />
+              <FormInput label="Nombre de la obra"        value={form.proyecto_nombre || ''}  onChange={v => upd('proyecto_nombre', v)} />
               <FormInput label="Fecha"           value={form.fecha || ''}            onChange={v => upd('fecha', v)} type="date" />
               <FormInput label="Validez (días)"  value={form.validez_dias ?? 30}     onChange={v => upd('validez_dias', v)} type="number" />
               <FormSelect label="Estado"         value={form.estado || 'borrador'}   onChange={v => upd('estado', v)}
@@ -375,7 +407,7 @@ export default function CotizacionesPage() {
                   { value: 'enviada',    label: 'Enviada' },
                   { value: 'aprobada',   label: 'Aprobada' },
                   { value: 'rechazada',  label: 'Rechazada' },
-                  { value: 'convertida', label: 'Convertida' },
+                  ...(form.estado === 'convertida' ? [{ value: 'convertida', label: 'Convertida' }] : []),
                 ]} />
               <div className="col-span-full">
                 <FormInput label="Descripción general (aparece como intro en el PDF)" value={form.descripcion || ''} onChange={v => upd('descripcion', v)} placeholder="Junto con saludar, envío la siguiente cotización por..." />
@@ -410,7 +442,7 @@ export default function CotizacionesPage() {
                       {p.catalogo_id && (
                         <span
                           className="text-[10px] font-semibold text-accent bg-accent-bg px-2 py-[2px] rounded"
-                          title="Esta partida traerá sus sub-partidas del catálogo al convertir a proyecto"
+                          title="Esta partida traerá sus sub-partidas del catálogo al convertir en obra"
                         >
                           con desglose
                         </span>

@@ -329,6 +329,12 @@ export async function PUT(req: Request) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // El cobro es uno solo: la factura del estado de pago queda igual que él
+  if (facturaId && estado && (estado === 'pagado') !== (ep.estado === 'pagado')) {
+    await supabase.from('facturas').update({ estado: estado === 'pagado' ? 'pagada' : 'pendiente' })
+      .eq('id', facturaId).eq('user_id', ownerId)
+  }
   return NextResponse.json({ ...data, factura_generada: facturaId && !ep.factura_id })
 }
 

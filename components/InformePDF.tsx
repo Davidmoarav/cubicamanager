@@ -9,6 +9,7 @@ import { Document, Page, Text, View, StyleSheet, Image } from '@react-pdf/render
 import type { EmpresaConfig } from '@/types/empresa'
 
 import { PDF_NAVY as NAVY, PDF_GOLD as GOLD, PDF_INK as INK, PDF_MUTE as MUTE, PDF_LINE as LINE, fmtCL } from './pdf-comunes'
+import { fmtPeriodo } from '../lib/format'
 
 // Formato propio del informe: "15 de marzo de 2026" (default hoy)
 const fmtFecha = (iso?: string) => {
@@ -120,16 +121,16 @@ export function InformePDF({ data, proximo, empresa, logoUrl }: Props) {
         {/* FINANCIERO */}
         <Text style={st.sectionTitle}>Avance financiero</Text>
         <View style={st.kpiRow}>
-          <KPI label="Cobrado" value={`${k.cobrado_pct}%`} sub={fmtCL(k.total_cobrado)} />
-          <KPI label="Facturado acumulado" value={`${k.avance_financiero_pct}%`} sub={fmtCL(k.total_facturado)} />
-          <KPI label="Saldo por facturar" value={fmtCL(k.saldo_por_facturar)} sub="del contrato" />
+          <KPI label="Cobrado" value={`${k.cobrado_pct}%`} sub={`${fmtCL(k.total_cobrado)} con IVA`} />
+          <KPI label="Facturado acumulado" value={`${k.avance_financiero_pct}%`} sub={`${fmtCL(k.total_facturado)} con IVA`} />
+          <KPI label="Saldo por facturar" value={fmtCL(k.saldo_por_facturar)} sub="del contrato neto" />
           <KPI label="Valor contrato (neto)" value={fmtCL(k.valor_contrato)} sub={`${k.n_estados} estados de pago`} />
         </View>
 
         {proximo && (
           <View style={st.proxBox}>
             <View>
-              <Text style={st.proxLbl}>Próximo estado de pago (sugerido) — EP N°{proximo.numero}</Text>
+              <Text style={st.proxLbl}>Próximo estado de pago (sugerido) — N°{proximo.numero}</Text>
               <Text style={st.proxSub}>Según avance actual de obra</Text>
             </View>
             <Text style={st.proxVal}>{fmtCL(proximo.total)}</Text>
@@ -164,9 +165,9 @@ export function InformePDF({ data, proximo, empresa, logoUrl }: Props) {
         <Text style={st.sectionTitle}>Mano de obra</Text>
         <View style={st.kpiRow}>
           <KPI label="Dotación actual" value={String(k.dotacion_actual)} sub="trabajadores" />
-          <KPI label="Costo M.O mensual" value={fmtCL(k.costo_mo_mensual)} sub="incl. imposiciones" />
-          <KPI label="Gasto M.O pendiente" value={fmtCL(k.gasto_mo_pendiente)} sub="hasta cierre" />
-          <KPI label="Costo M.O total" value={fmtCL(k.costo_mo_total)} sub="proyectado" />
+          <KPI label="Costo mensual de mano de obra" value={fmtCL(k.costo_mo_mensual)} sub="incl. imposiciones" />
+          <KPI label="Mano de obra por pagar" value={fmtCL(k.gasto_mo_pendiente)} sub="hasta cierre" />
+          <KPI label="Costo total de mano de obra" value={fmtCL(k.costo_mo_total)} sub="proyectado" />
         </View>
 
         {/* TABLA ESTADOS DE PAGO */}
@@ -178,13 +179,13 @@ export function InformePDF({ data, proximo, empresa, logoUrl }: Props) {
               <Text style={[st.th, { width: '20%' }]}>Período</Text>
               <Text style={[st.th, { width: '18%', textAlign: 'right' }]}>Bruto</Text>
               <Text style={[st.th, { width: '18%', textAlign: 'right' }]}>Retención</Text>
-              <Text style={[st.th, { width: '17%', textAlign: 'right' }]}>Líquido</Text>
+              <Text style={[st.th, { width: '17%', textAlign: 'right' }]}>A pagar (con IVA)</Text>
               <Text style={[st.th, { width: '17%', textAlign: 'right' }]}>Estado</Text>
             </View>
             {eps.map((e: any, i: number) => (
               <View key={i} style={[st.tRow, ...(i % 2 ? [st.tRowAlt] : [])]}>
                 <Text style={[st.td, { width: '10%' }]}>{e.numero}</Text>
-                <Text style={[st.td, { width: '20%' }]}>{e.periodo || '—'}</Text>
+                <Text style={[st.td, { width: '20%' }]}>{fmtPeriodo(e.periodo)}</Text>
                 <Text style={[st.td, { width: '18%', textAlign: 'right' }]}>{fmtCL(e.bruto)}</Text>
                 <Text style={[st.td, { width: '18%', textAlign: 'right' }]}>{fmtCL(e.retencion_monto)}</Text>
                 <Text style={[st.td, { width: '17%', textAlign: 'right' }]}>{fmtCL(e.total)}</Text>
@@ -201,7 +202,7 @@ export function InformePDF({ data, proximo, empresa, logoUrl }: Props) {
             <View style={st.tHead}>
               <Text style={[st.th, { width: '22%' }]}>Mes</Text>
               <Text style={[st.th, { width: '18%', textAlign: 'right' }]}>Dotación</Text>
-              <Text style={[st.th, { width: '30%', textAlign: 'right' }]}>Costo M.O</Text>
+              <Text style={[st.th, { width: '30%', textAlign: 'right' }]}>Costo mano de obra</Text>
               <Text style={[st.th, { width: '30%', textAlign: 'right' }]}>Finiquito</Text>
             </View>
             {pmo.map((r: any, i: number) => (

@@ -59,11 +59,13 @@ export default function Sidebar({ userEmail, open = false, onClose }: {
       </div>
 
       {/* Acceso directo Copiloto */}
+      {rol !== 'contador' && (
       <div className="px-3 pt-3">
         <Link href="/obra" className="flex items-center gap-2 px-3 py-2 rounded-xl bg-om text-white font-bold text-[13px]">
           Copiloto de obra
         </Link>
       </div>
+      )}
 
       {/* Nav */}
       <nav className="flex-1 py-2.5 overflow-y-auto">

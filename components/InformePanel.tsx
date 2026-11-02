@@ -52,9 +52,9 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
       {/* ─── Financiero ─── */}
       <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Avance financiero</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-        <MetricCard label="Cobrado" value={`${k.cobrado_pct}%`} sub={fmt(k.total_cobrado)} subColor="#1a7a4a" />
-        <MetricCard label="Facturado acumulado" value={`${k.avance_financiero_pct}%`} sub={fmt(k.total_facturado)} subColor="#E5502A" />
-        <MetricCard label="Saldo por facturar" value={fmt(k.saldo_por_facturar)} sub="del contrato" subColor="#b0401a" />
+        <MetricCard label="Cobrado" value={`${k.cobrado_pct}%`} sub={`${fmt(k.total_cobrado)} con IVA`} subColor="#1a7a4a" />
+        <MetricCard label="Facturado acumulado" value={`${k.avance_financiero_pct}%`} sub={`${fmt(k.total_facturado)} con IVA`} subColor="#E5502A" />
+        <MetricCard label="Saldo por facturar" value={fmt(k.saldo_por_facturar)} sub="del contrato neto" subColor="#b0401a" />
         <MetricCard label="Valor contrato (neto)" value={fmt(k.valor_contrato)} sub={`${k.n_estados} estados de pago`} />
       </div>
 
@@ -62,7 +62,7 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
         <div className="mb-5 flex items-center justify-between bg-brand-bg border border-line rounded-card px-4 py-3">
           <div>
             <div className="text-[12px] font-bold text-brand">Próximo estado de pago (sugerido)</div>
-            <div className="text-[11px] text-muted mt-0.5">EP N°{proximo.numero} · según avance actual de obra</div>
+            <div className="text-[11px] text-muted mt-0.5">Estado de pago N°{proximo.numero} · según avance actual de obra</div>
           </div>
           <div className="text-right">
             <div className="text-lg font-extrabold text-ink">{fmt(proximo.total)}</div>
@@ -101,9 +101,9 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
       <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Mano de obra</div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <MetricCard label="Dotación actual" value={k.dotacion_actual} sub="trabajadores" />
-        <MetricCard label="Costo M.O mensual" value={fmt(k.costo_mo_mensual)} sub="incluye imposiciones" subColor="#b07d1a" />
-        <MetricCard label="Gasto M.O pendiente" value={fmt(k.gasto_mo_pendiente)} sub="hasta cierre" subColor="#b0401a" />
-        <MetricCard label="Costo M.O total" value={fmt(k.costo_mo_total)} sub="proyectado" />
+        <MetricCard label="Costo mensual de mano de obra" value={fmt(k.costo_mo_mensual)} sub="incluye imposiciones" subColor="#b07d1a" />
+        <MetricCard label="Mano de obra por pagar" value={fmt(k.gasto_mo_pendiente)} sub="hasta cierre" subColor="#b0401a" />
+        <MetricCard label="Costo total de mano de obra" value={fmt(k.costo_mo_total)} sub="proyectado" />
       </div>
     </div>
   )

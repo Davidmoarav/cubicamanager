@@ -3,9 +3,10 @@
 // Compara el Registro de Compras y Ventas del SII con lo cargado en el sistema.
 // No modifica nada por sí sola; importar lo que falta es una acción aparte.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Btn, Modal, fmt } from '@/components/ui'
 import { decodificarCSV, parsearRCV, type FilaRCV } from '@/lib/sii'
+import { confirmar } from '@/lib/avisos'
 
 const ESTADOS: Record<string, { label: string; cls: string }> = {
   diferencia:   { label: 'Montos distintos', cls: 'bg-danger-bg text-danger' },
@@ -16,8 +17,10 @@ const ESTADOS: Record<string, { label: string; cls: string }> = {
 }
 const ORDEN = ['diferencia', 'solo_sii', 'solo_sistema', 'otro_periodo', 'cuadra']
 
-export default function ConciliacionSII({ onImportado, periodoInicial }: { onImportado: () => void; periodoInicial: string }) {
+export default function ConciliacionSII({ onImportado, periodoInicial, abrir }: { abrir?: number; onImportado: () => void; periodoInicial: string }) {
   const [open, setOpen]       = useState(false)
+  // El menú de Facturación abre este panel sin un botón propio
+  useEffect(() => { if (abrir) setOpen(true) }, [abrir])
   const [tipo, setTipo]       = useState<'compra' | 'venta'>('compra')
   const [periodo, setPeriodo] = useState(periodoInicial)
   const [filas, setFilas]     = useState<FilaRCV[] | null>(null)
@@ -63,7 +66,7 @@ export default function ConciliacionSII({ onImportado, periodoInicial }: { onImp
 
   const importarFaltantes = async () => {
     const faltan = (resultado?.items ?? []).filter((i: any) => i.estado === 'solo_sii').map((i: any) => i.registro)
-    if (!confirm(`¿Importar ${faltan.length} ${faltan.length === 1 ? 'documento' : 'documentos'} que faltan en el sistema?`)) return
+    if (!(await confirmar(`¿Importar ${faltan.length} ${faltan.length === 1 ? 'documento' : 'documentos'} que faltan en el sistema?`))) return
     setCargando(true)
     setError('')
     const res = await fetch('/api/importar-sii', {
@@ -86,7 +89,7 @@ export default function ConciliacionSII({ onImportado, periodoInicial }: { onImp
 
   return (
     <>
-      <Btn onClick={() => setOpen(true)}>Conciliar con SII</Btn>
+      {abrir === undefined && <Btn onClick={() => setOpen(true)}>Conciliar con SII</Btn>}
       {open && (
         <Modal title="Conciliar con el Registro del SII" onClose={cerrar} wide>
           <p className="text-[12px] text-muted mb-3">

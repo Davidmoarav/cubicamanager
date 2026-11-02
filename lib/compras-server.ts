@@ -28,7 +28,7 @@ export async function sincronizarOC(supabase: any, ownerId: string, ordenId: str
     actual = data
   }
 
-  const descripcion = `OC #${actual.numero}${actual.proveedor ? ' · ' + actual.proveedor : ''}`
+  const descripcion = `Orden #${actual.numero}${actual.proveedor ? ' · ' + actual.proveedor : ''}`
   await aplicarGastos(supabase, ownerId, 'orden_compra_id', ordenId,
     gastosDeOC(actual, lineas, recepciones).map(g => ({ ...g, categoria: 'materiales', descripcion })))
   return actual
@@ -57,7 +57,7 @@ export async function registrarRecepcion(
         proyecto_id: oc.proyecto_id, material: linea.material, unidad: linea.unidad || 'un', tipo: 'entrada',
         cantidad: r.cantidad, costo_unitario: Number(linea.precio_unitario) || 0, fecha: datos.fecha,
         partida_id: linea.partida_id || oc.partida_id || null, recepcion_id: r.id,
-        notas: `OC #${oc.numero}${datos.documento ? ` · ${datos.documento}` : ''}`, user_id: ownerId,
+        notas: `Orden #${oc.numero}${datos.documento ? ` · ${datos.documento}` : ''}`, user_id: ownerId,
       }]
     })
     if (entradas.length > 0) {

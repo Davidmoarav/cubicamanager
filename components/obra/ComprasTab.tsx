@@ -10,6 +10,7 @@ import type { Proyecto, Proveedor } from '@/types'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import { fmt } from '@/lib/format'
 import { generarPlanCompra, type GrupoProveedor, type ProductoProv } from '@/lib/plancompra'
+import { usePermisos } from '@/lib/usePermisos'
 
 const IVA = 0.19
 
@@ -26,6 +27,7 @@ export default function ComprasTab({ proyecto, partidas }: {
   proyecto: Proyecto
   partidas: PartidaProyecto[]
 }) {
+  const { puedeEditar } = usePermisos('obra')
   const { data: productos } = useSWR<ProductoProv[]>('/api/proveedor-productos')
   const { data: proveedores } = useSWR<Proveedor[]>('/api/proveedores')
   const [creando, setCreando] = useState<string>('')            // proveedor_id en curso
@@ -74,7 +76,7 @@ export default function ComprasTab({ proyecto, partidas }: {
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data?.error ?? 'No se pudo crear la OC')
+      if (!res.ok) throw new Error(data?.error ?? 'No se pudo crear la orden')
       setCreadas(prev => ({ ...prev, [g.proveedor_id]: data.numero }))
     } catch (e: any) {
       setError(e?.message ?? 'Error creando la orden de compra')
@@ -139,9 +141,9 @@ export default function ComprasTab({ proyecto, partidas }: {
                   href="/ordenes-compra"
                   className="px-3.5 py-2 rounded-xl bg-success-bg text-success text-[12.5px] font-extrabold"
                 >
-                  OC N°{numeroOC} creada →
+                  Orden N°{numeroOC} creada →
                 </Link>
-              ) : (
+              ) : puedeEditar && (
                 <button
                   onClick={() => crearOC(g)}
                   disabled={creando !== ''}
@@ -150,7 +152,7 @@ export default function ComprasTab({ proyecto, partidas }: {
                     creando === g.proveedor_id ? 'bg-om/40 cursor-wait' : 'bg-om hover:bg-om-dark',
                   ].join(' ')}
                 >
-                  {creando === g.proveedor_id ? 'Creando…' : 'Crear borrador de OC'}
+                  {creando === g.proveedor_id ? 'Creando…' : 'Crear borrador de orden'}
                 </button>
               )}
             </div>

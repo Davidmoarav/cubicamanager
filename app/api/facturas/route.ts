@@ -23,6 +23,15 @@ export async function GET(req: Request) {
   const docTipo = sp.get('doc_tipo')
   const folios  = sp.get('folios')   // lista de folios a resolver (numero -> id)
 
+  // ── Último mes con documentos: para orientar cuando el mes elegido está vacío ──
+  if (sp.get('ultimo_periodo')) {
+    const { data, error } = await supabase.from('facturas').select('periodo')
+      .eq('user_id', ownerId).not('periodo', 'is', null)
+      .order('periodo', { ascending: false }).limit(1)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ periodo: data?.[0]?.periodo ?? null })
+  }
+
   // ── Resumen agregado, calculado en el servidor (no trae filas al cliente) ──
   if (resumen) {
     let q = supabase.from('facturas').select('tipo, doc_tipo, estado, monto').eq('user_id', ownerId)
@@ -151,6 +160,14 @@ export async function PUT(req: Request) {
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
   const { data, error } = await supabase.from('facturas').update(v.data).eq('id', body.id).eq('user_id', ownerId).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // El cobro es uno solo: el estado de pago de esta factura queda igual que ella
+  if (v.data.estado && data?.estado_pago_id) {
+    const pagada = v.data.estado === 'pagada'
+    await supabase.from('estados_pago').update({ estado: pagada ? 'pagado' : 'aprobado' })
+      .eq('id', data.estado_pago_id).eq('user_id', ownerId)
+      .in('estado', pagada ? ['presentado', 'aprobado'] : ['pagado'])
+  }
   return NextResponse.json(data)
 }
 

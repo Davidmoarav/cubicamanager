@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
-import { MetricCard, SectionTitle, fmt, fmtM } from '@/components/ui'
+import { MetricCard, SectionTitle, fmt } from '@/components/ui'
 
 const COLUMNAS: { k: string; label: string; alinear?: 'right' }[] = [
   { k: 'nombre', label: 'Obra' },
@@ -67,9 +67,9 @@ export default function ReportesPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <MetricCard label="Obras" value={filas.length} sub={conPerdida > 0 ? `${conPerdida} con pérdida a la fecha` : 'Ninguna con pérdida a la fecha'} subColor={conPerdida > 0 ? '#b0401a' : undefined} />
-        <MetricCard label="Gasto real" value={fmtM(suma('gasto_real'))} sub={`${sobreCosto} sobre el costo de su avance`} subColor={sobreCosto > 0 ? '#b0401a' : undefined} />
-        <MetricCard label="Margen real" value={`${margenTotal}%`} sub={`${fmtM(gananciaReal)} a la fecha`} subColor={gananciaReal < 0 ? '#b0401a' : undefined} />
-        <MetricCard label="Caja de las obras" value={fmtM(suma('saldo_caja'))} sub={`Cobrado ${fmtM(suma('cobrado'))}`} />
+        <MetricCard label="Gasto real" value={fmt(suma('gasto_real'))} sub={`${sobreCosto} sobre el costo de su avance`} subColor={sobreCosto > 0 ? '#b0401a' : undefined} />
+        <MetricCard label="Margen real" value={`${margenTotal}%`} sub={`${fmt(gananciaReal)} a la fecha`} subColor={gananciaReal < 0 ? '#b0401a' : undefined} />
+        <MetricCard label="Caja de las obras" value={fmt(suma('saldo_caja'))} sub={`Cobrado ${fmt(suma('cobrado'))}`} />
       </div>
 
       <div className="inline-flex gap-1 p-1 bg-white border border-line rounded-xl mb-4 shadow-card flex-wrap">

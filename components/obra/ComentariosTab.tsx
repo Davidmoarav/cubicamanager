@@ -4,6 +4,8 @@
 import { useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { createClient } from '@/lib/supabase'
+import { confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 interface Comentario {
   id: string
@@ -24,6 +26,7 @@ function tiempoRelativo(iso?: string): string {
 }
 
 export default function ComentariosTab({ proyectoId }: { proyectoId: string }) {
+  const { puedeEditar } = usePermisos('obra')
   const { data, error: errSWR, mutate } = useSWR<Comentario[]>(`/api/comentarios-proyecto?proyecto_id=${proyectoId}`)
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
@@ -35,7 +38,7 @@ export default function ComentariosTab({ proyectoId }: { proyectoId: string }) {
   }, [])
 
   const lista = Array.isArray(data) ? data : []
-  const faltaMigracion = (errSWR as any)?.message?.includes?.('37_gantt') ||
+  const faltaMigracion = (errSWR as any)?.message?.includes?.('no está activada') ||
     (typeof (data as any)?.error === 'string' && (data as any).error.includes('37_gantt'))
 
   const enviar = async () => {
@@ -60,7 +63,7 @@ export default function ComentariosTab({ proyectoId }: { proyectoId: string }) {
   }
 
   const eliminar = async (id: string) => {
-    if (!confirm('¿Eliminar este comentario?')) return
+    if (!(await confirmar('¿Eliminar este comentario?'))) return
     const res = await fetch('/api/comentarios-proyecto', {
       method: 'DELETE',
       headers: { 'content-type': 'application/json' },
@@ -72,7 +75,7 @@ export default function ComentariosTab({ proyectoId }: { proyectoId: string }) {
   return (
     <div className="space-y-4 max-w-[720px]">
       {/* Composer */}
-      <div className="bg-white rounded-card border border-line shadow-card p-3 flex items-start gap-2">
+      {puedeEditar && <div className="bg-white rounded-card border border-line shadow-card p-3 flex items-start gap-2">
         <textarea
           value={texto}
           onChange={e => setTexto(e.target.value)}
@@ -91,12 +94,12 @@ export default function ComentariosTab({ proyectoId }: { proyectoId: string }) {
         >
           {enviando ? '…' : 'Comentar'}
         </button>
-      </div>
+      </div>}
 
       {error && <p className="text-[12.5px] text-danger font-semibold">{error}</p>}
       {faltaMigracion && (
         <p className="text-[12.5px] text-warning font-semibold bg-warning-bg rounded-xl px-4 py-3">
-          Falta ejecutar <span className="font-mono">sql/37_gantt_comentarios.sql</span> en Supabase para activar la bitácora.
+          Esta función aún no está activada. Avisa al administrador.
         </p>
       )}
 
@@ -120,7 +123,7 @@ export default function ComentariosTab({ proyectoId }: { proyectoId: string }) {
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-ink text-[13px] truncate">{c.autor ?? 'Usuario'}</span>
                   <span className="text-[11.5px] text-subtle shrink-0">{tiempoRelativo(c.created_at)}</span>
-                  {(c.autor === miEmail || !c.autor) && (
+                  {puedeEditar && (c.autor === miEmail || !c.autor) && (
                     <button
                       onClick={() => eliminar(c.id)}
                       className="ml-auto text-subtle hover:text-danger text-[13px] opacity-0 group-hover:opacity-100 transition"

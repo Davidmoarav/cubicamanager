@@ -11,6 +11,8 @@ import { Btn, FormInput, FormSelect, MetricCard, fmt } from '@/components/ui'
 import SelectorFactura from '@/components/SelectorFactura'
 import { opcionesPartida } from '@/lib/costos'
 import { usePermisos } from '@/lib/usePermisos'
+import { fmtFecha } from '@/lib/format'
+import { confirmar } from '@/lib/avisos'
 
 interface Props {
   proyectoId: string
@@ -87,7 +89,7 @@ export default function EquiposPanel({ proyectoId }: Props) {
   }
 
   const eliminarUso = async (u: any) => {
-    if (!confirm('¿Eliminar este uso? Deja de contar como gasto de la obra.')) return
+    if (!(await confirmar('¿Eliminar este uso? Deja de contar como gasto de la obra.'))) return
     if (await enviar('/api/equipos/usos', 'DELETE', { id: u.id })) await mutUsos()
   }
 
@@ -95,7 +97,7 @@ export default function EquiposPanel({ proyectoId }: Props) {
   if (eE || eU || (equipos as any)?.error || (usos as any)?.error) {
     return (
       <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-        No se pudieron cargar los equipos. Si menciona "equipos", ejecuta el SQL 42_fase2_costo_real.sql en Supabase.
+        No se pudieron cargar los equipos. Recarga la página; si sigue pasando, avisa al administrador.
       </div>
     )
   }
@@ -191,7 +193,7 @@ export default function EquiposPanel({ proyectoId }: Props) {
                 <div className="min-w-0">
                   <span className="font-semibold text-ink">{e?.nombre ?? 'Equipo'}</span>
                   <div className="text-[10px] text-muted truncate">
-                    {u.fecha_desde}{u.fecha_hasta ? ` a ${u.fecha_hasta}` : ''} · {Number(u.cantidad)} {e ? UNIDAD_PLURAL[e.unidad_cobro] : ''} × {fmt(u.tarifa)}
+                    {fmtFecha(u.fecha_desde)}{u.fecha_hasta ? ` a ${fmtFecha(u.fecha_hasta)}` : ''} · {Number(u.cantidad)} {e ? UNIDAD_PLURAL[e.unidad_cobro] : ''} × {fmt(u.tarifa)}
                     {u.factura_id ? ' · con factura' : ''}
                   </div>
                 </div>

@@ -52,7 +52,7 @@ export async function PUT(req: Request) {
   if (error) {
     // Columna inexistente o schema cache desactualizado → falta correr la migración
     const msg = /column .* does not exist|could not find .* column|schema cache/i.test(error.message)
-      ? '⚠ Falta ejecutar sql/37_gantt_comentarios.sql en Supabase (SQL Editor → Run). Si ya lo hiciste, espera unos segundos y reintenta.'
+      ? 'Esta función aún no está activada. Avisa al administrador.'
       : error.message
     return NextResponse.json({ error: msg }, { status: 500 })
   }

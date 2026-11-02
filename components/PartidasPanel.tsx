@@ -15,6 +15,7 @@ import { fmt } from '@/lib/format'
 import { UNIDADES } from '@/types/cotizaciones'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import type { CatalogoPartida } from '@/types/catalogo-partida'
+import { avisar, confirmar } from '@/lib/avisos'
 
 const colorAvance = (pct: number) => {
   if (pct === 0) return '#d1d9e6'
@@ -157,7 +158,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   const precioVentaCalc = Math.round((Number(form.costo_unitario) || 0) * (1 + (Number(mkActual) || 0) / 100))
 
   const save = async () => {
-    if (!form.descripcion) { alert('La descripción es obligatoria'); return }
+    if (!form.descripcion) { avisar('La descripción es obligatoria'); return }
     setSaving(true)
     const method = modal?.type === 'editar' ? 'PUT' : 'POST'
     const esGrupo = !!form.es_grupo
@@ -179,8 +180,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
     setSaving(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo guardar: ' + (err.error || 'error desconocido') +
-        '\n\nSi menciona "nivel", "es_grupo" o "costo_material_unit", ejecuta el SQL 28_partidas_tres_niveles.sql en Supabase.')
+      avisar('No se pudo guardar: ' + (err.error || 'error desconocido'))
       return
     }
     await load(); onAvanceChange?.(); setModal(null)
@@ -197,7 +197,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar esta partida y todas sus sub-partidas?')) return
+    if (!(await confirmar('¿Eliminar esta partida y todas sus sub-partidas?'))) return
     await fetch('/api/partidas-proyecto', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -231,7 +231,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   }
   const saveMat = async () => {
     if (!modalMat) return
-    if (!matForm.material) { alert('El nombre del material es obligatorio'); return }
+    if (!matForm.material) { avisar('El nombre del material es obligatorio'); return }
     setSavingMat(true)
     const method = matEditId ? 'PUT' : 'POST'
     const base = {
@@ -247,14 +247,13 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
     setSavingMat(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo guardar el material: ' + (err.error || 'error desconocido') +
-        '\n\nSi menciona "partida_materiales", ejecuta el SQL 14_partida_materiales.sql en Supabase.')
+      avisar('No se pudo guardar el material: ' + (err.error || 'error desconocido'))
       return
     }
     await load(); setModalMat(null)
   }
   const delMat = async (id: string) => {
-    if (!confirm('¿Eliminar este material?')) return
+    if (!(await confirmar('¿Eliminar este material?'))) return
     await fetch('/api/partida-materiales', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
     })
@@ -263,7 +262,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   // Copia los materiales de esta partida a la misma partida de los otros beneficiarios
   const [aplicandoMat, setAplicandoMat] = useState(false)
   const aplicarMaterialesATodos = async (partida: PartidaProyecto, cuantos: number) => {
-    if (!confirm(`¿Copiar estos materiales a la partida "${partida.descripcion}" de los otros ${cuantos} beneficiarios? No se duplican los que ya existan.`)) return
+    if (!(await confirmar(`¿Copiar estos materiales a la partida "${partida.descripcion}" de los otros ${cuantos} beneficiarios? No se duplican los que ya existan.`))) return
     setAplicandoMat(true)
     const res = await fetch('/api/partida-materiales/aplicar-a-todos', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -271,9 +270,9 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
     })
     const data = await res.json()
     setAplicandoMat(false)
-    if (!res.ok) { alert('No se pudo aplicar: ' + (data.error || 'error desconocido')); return }
+    if (!res.ok) { avisar('No se pudo aplicar: ' + (data.error || 'error desconocido')); return }
     await load(); onAvanceChange?.()
-    alert(`Listo: ${data.insertados} materiales agregados en ${data.destinos} beneficiarios.`)
+    avisar(`Listo: ${data.insertados} materiales agregados en ${data.destinos} beneficiarios.`, 'ok')
   }
 
   // ═══ IMPORTAR DEL CATÁLOGO ═══
@@ -300,7 +299,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   }
 
   const doImport = async () => {
-    if (selected.size === 0) { alert('Selecciona al menos una partida'); return }
+    if (selected.size === 0) { avisar('Selecciona al menos una partida'); return }
     setImporting(true)
     const seleccionados = catalogoPadres.filter(p => selected.has(p.id))
     for (let i = 0; i < seleccionados.length; i++) {
@@ -341,7 +340,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
       <div className={soloLectura ? 'pointer-events-none opacity-95' : ''}>
       <div className="flex justify-between items-center mb-3.5">
         <div>
-          <div className="text-sm font-bold text-ink">Control de obra ({padres.length} partida{padres.length !== 1 ? 's' : ''})</div>
+          <div className="text-sm font-bold text-ink">Partidas de la obra</div>
           {padres.length > 0 && (
             <div className="text-[12px] text-muted mt-0.5">
               Avance general: <span className="font-bold" style={{ color: colorAvance(avanceGeneral) }}>{avanceGeneral}%</span>
@@ -355,7 +354,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
                 Importar de Excel
               </Btn>
               <Btn onClick={() => setShowPrograma(true)} style={{ fontSize: 12, padding: '5px 12px', background: '#FCEAE3', borderColor: '#b5d4f4', color: '#0c447c', fontWeight: 700 }}>
-               Programa (beneficiarios)
+               Importar programa
               </Btn>
               <Btn onClick={openImport} style={{ fontSize: 12, padding: '5px 12px', background: '#eeedfe', borderColor: '#ccc5fc', color: '#534ab7', fontWeight: 700 }}>
                 Del catálogo
@@ -377,16 +376,16 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
         <div className="flex gap-1 bg-canvas rounded-lg p-0.5 w-fit mb-3">
           <button onClick={() => setVista('arbol')}
             className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'arbol' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
-            Árbol por subproyecto
+            Partidas
           </button>
           <button onClick={() => setVista('resumen')}
             className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'resumen' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
-            Resumen del proyecto
+            Resumen de la obra
           </button>
           {!soloLectura && (
             <button onClick={() => setVista('matriz')}
               className={`text-[12px] font-semibold px-3 py-1.5 rounded-md ${vista === 'matriz' ? 'bg-white shadow-sm text-brand' : 'text-muted'}`}>
-             Editar distribución
+             Distribuir por beneficiario
             </button>
           )}
         </div>
@@ -577,7 +576,7 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
                       </tbody>
                       <tfoot>
                         <tr className="bg-canvas border-t-2 border-line">
-                          <td className="px-2.5 py-1.5 font-extrabold text-ink" colSpan={2}>Total materiales del proyecto</td>
+                          <td className="px-2.5 py-1.5 font-extrabold text-ink" colSpan={2}>Total materiales de la obra</td>
                           <td className="px-2.5 py-1.5 text-right font-extrabold text-brand whitespace-nowrap">{fmt(comprasProyecto.reduce((s, c) => s + c.costo, 0))}</td>
                         </tr>
                       </tfoot>

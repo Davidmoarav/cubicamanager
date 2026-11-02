@@ -58,9 +58,9 @@ export function ProgressBar({ pct }: { pct: number }) {
 // ── METRIC CARD ───────────────────────────────────────────
 export function MetricCard({ label, value, sub, subColor }: { label: string; value: string | number; sub?: string; subColor?: string }) {
   return (
-    <div className="bg-white border border-line rounded-card p-4 shadow-card">
+    <div className="bg-white border border-line rounded-card p-4 shadow-card min-w-0">
       <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted mb-1">{label}</div>
-      <div className="text-[22px] font-extrabold text-ink tabular-nums tracking-tight">{value}</div>
+      <div className={`${String(value).length > 11 ? 'text-[15px]' : 'text-[19px]'} sm:text-[22px] font-extrabold text-ink tabular-nums tracking-tight [overflow-wrap:anywhere]`}>{value}</div>
       {sub && (
         <div className="text-xs mt-0.5 text-muted" style={subColor ? { color: subColor } : undefined}>{sub}</div>
       )}
@@ -145,4 +145,4 @@ export function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 // ── FORMAT HELPERS (re-exportados desde lib/format) ───────
-export { fmt, fmtM } from '@/lib/format'
+export { fmt } from '@/lib/format'

@@ -84,9 +84,7 @@ export async function POST(req: Request) {
     }
   } catch (err: any) {
     return NextResponse.json({
-      error: 'Error al importar: ' + (err.message || 'desconocido') +
-        (String(err.message || '').includes('nivel') || String(err.message || '').includes('es_grupo')
-          ? '. Ejecuta el SQL 28_partidas_tres_niveles.sql en Supabase.' : ''),
+      error: 'Error al importar: ' + (err.message || 'desconocido'),
       creados,
     }, { status: 500 })
   }

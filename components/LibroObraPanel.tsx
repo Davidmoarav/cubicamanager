@@ -11,6 +11,7 @@ import { Btn, FormInput, FormSelect } from '@/components/ui'
 import { createClient } from '@/lib/supabase'
 import { subirDocumento } from '@/lib/subir-documento'
 import { usePermisos } from '@/lib/usePermisos'
+import { fmtFecha } from '@/lib/format'
 
 interface Props {
   proyectoId: string
@@ -108,7 +109,7 @@ export default function LibroObraPanel({ proyectoId }: Props) {
   if (error || (data as any)?.error) {
     return (
       <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-        No se pudo cargar el libro de obra. Si menciona "libro_obra", ejecuta el SQL 43_fase3_gestion_obra.sql en Supabase.
+        No se pudo cargar el libro de obra. Recarga la página; si sigue pasando, avisa al administrador.
       </div>
     )
   }
@@ -183,7 +184,7 @@ export default function LibroObraPanel({ proyectoId }: Props) {
                 <div className="flex items-start justify-between gap-2 flex-wrap">
                   <div className="text-[12px]">
                     <span className="font-extrabold text-ink">Folio {f.folio}</span>
-                    <span className="text-muted"> · {f.fecha} · {ETIQUETA_TIPO[f.tipo] ?? f.tipo}{f.clima ? ` · ${f.clima}` : ''}</span>
+                    <span className="text-muted"> · {fmtFecha(f.fecha)} · {ETIQUETA_TIPO[f.tipo] ?? f.tipo}{f.clima ? ` · ${f.clima}` : ''}</span>
                     {f.anulado && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-danger-bg text-danger text-[10px] font-bold">ANULADO</span>}
                   </div>
                   {puedeEditar && !f.anulado && (

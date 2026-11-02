@@ -10,7 +10,9 @@ import type { Cliente } from '@/types/cliente'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import type { EstadoPago } from '@/types/estado-pago'
 import { fmt } from '@/lib/format'
-import { EstadoBadge, Metrica, fechaCorta } from '@/components/obra/ui-obra'
+import { EstadoBadge } from '@/components/obra/ui-obra'
+import ResumenObra from '@/components/obra/ResumenObra'
+import { usePermisos } from '@/lib/usePermisos'
 import CopilotoBar from '@/components/obra/CopilotoBar'
 import ClienteTab from '@/components/obra/ClienteTab'
 import ComprasTab from '@/components/obra/ComprasTab'
@@ -34,22 +36,31 @@ import EquiposPanel from '@/components/EquiposPanel'
 
 const IVA = 0.19
 
-// Todo lo de la obra, en un solo lugar
+// Todo lo de la obra, en un solo lugar: parte por el resumen
 const GRUPOS = [
   {
-    id: 'costos', label: 'Presupuesto y costos',
+    id: 'resumen', label: 'Resumen',
+    tabs: [{ id: 'resumen', label: 'Resumen' }],
+  },
+  {
+    id: 'presupuesto', label: 'Presupuesto',
     tabs: [
       { id: 'presupuesto', label: 'Presupuesto' },
-      { id: 'control',     label: 'Control de obra' },
-      { id: 'pagos',       label: 'Pagos y gasto real' },
-      { id: 'apu',         label: 'APU' },
-      { id: 'compras',     label: 'Compras' },
-      { id: 'flujo',       label: 'Flujo de caja' },
-      { id: 'informe',     label: 'Informe' },
+      { id: 'control',     label: 'Partidas y avance' },
+      { id: 'apu',         label: 'Precio unitario' },
+      { id: 'compras',     label: 'Plan de compra' },
     ],
   },
   {
-    id: 'ejecucion', label: 'Ejecución',
+    id: 'costos', label: 'Costos y cobros',
+    tabs: [
+      { id: 'pagos',    label: 'Gastos y cobros' },
+      { id: 'flujo',    label: 'Flujo de caja' },
+      { id: 'informe',  label: 'Informe' },
+    ],
+  },
+  {
+    id: 'ejecucion', label: 'En terreno',
     tabs: [
       { id: 'gantt',        label: 'Carta Gantt' },
       { id: 'parte',        label: 'Parte diario' },
@@ -77,12 +88,13 @@ const GRUPOS = [
 const grupoDe = (tab: string) => GRUPOS.find(g => g.tabs.some(t => t.id === tab)) ?? GRUPOS[0]
 
 export default function ObraProyecto() {
+  const { puedeEditar } = usePermisos('obra')
   const params = useParams<{ id: string }>()
   const id = params?.id
   const searchParams = useSearchParams()
   const [tab, setTabState] = useState(() => {
     const pedido = searchParams?.get('tab') ?? ''
-    return GRUPOS.some(g => g.tabs.some(t => t.id === pedido)) ? pedido : 'presupuesto'
+    return GRUPOS.some(g => g.tabs.some(t => t.id === pedido)) ? pedido : 'resumen'
   })
   // La pestaña queda en la URL: se puede recargar o compartir sin perderla
   const setTab = (nueva: string) => {
@@ -92,7 +104,7 @@ export default function ObraProyecto() {
   const [editando, setEditando] = useState(false)
   const [respuesta, setRespuesta] = useState('')
 
-  const { data: proyectos, mutate: mutProyectos } = useSWR<Proyecto[]>('/api/proyectos')
+  const { data: proyectos, mutate: mutProyectos, isValidating: buscandoObras } = useSWR<Proyecto[]>('/api/proyectos')
   const { data: partidas, mutate: mutPartidas } = useSWR<PartidaProyecto[]>(id ? `/api/partidas-proyecto?proyecto_id=${id}` : null)
   const { data: eps } = useSWR<EstadoPago[]>(id ? `/api/estados-pago?proyecto_id=${id}` : null)
   const { data: clientes } = useSWR<Cliente[]>('/api/clientes')
@@ -154,43 +166,35 @@ export default function ObraProyecto() {
   const iva = Math.round(neto * IVA)
   const total = neto + iva
 
-  if (proyectos && !proyecto) {
+  // La lista puede venir del caché, sin una obra recién creada
+  if (proyectos && !proyecto && !buscandoObras) {
     return (
       <div className="py-16 text-center">
-        <div className="text-[15px] font-bold text-ink">Proyecto no encontrado</div>
-        <Link href="/obra" className="text-om font-semibold text-[13px] mt-2 inline-block">← Volver a proyectos</Link>
+        <div className="text-[15px] font-bold text-ink">Obra no encontrada</div>
+        <Link href="/proyectos" className="text-om font-semibold text-[13px] mt-2 inline-block">← Volver a obras</Link>
       </div>
     )
   }
 
   return (
     <div>
-      {/* Breadcrumb */}
-      <div className="text-[12.5px] text-muted mb-3">
-        <Link href="/obra" className="hover:text-om transition">Proyectos</Link>
+      {/* ─── Cabecera compacta: el detalle está en Resumen ─── */}
+      <div className="text-[12.5px] text-muted mb-2">
+        <Link href="/proyectos" className="hover:text-om transition">Obras</Link>
         <span className="mx-1.5">›</span>
         <span className="text-ink font-semibold">{proyecto?.nombre ?? '…'}</span>
       </div>
-
-      {/* ─── Header del proyecto ─── */}
-      <div className="bg-white rounded-card border border-line shadow-card overflow-hidden">
-        <div className="px-5 pt-4 pb-3 flex flex-wrap items-center gap-3">
-          <h1 className="text-[19px] font-extrabold text-ink tracking-tight">{proyecto?.nombre ?? 'Cargando…'}</h1>
-          {proyecto && <EstadoBadge estado={proyecto.estado} />}
-          {proyecto?.created_at && (
-            <span className="text-[12px] text-subtle">Creada {fechaCorta(proyecto.created_at)}</span>
-          )}
-        </div>
-        <div className="border-t border-line bg-canvas/60 flex flex-wrap divide-x divide-line">
-          <Metrica label="Monto" valor={fmt(monto)} />
-          <Metrica label="Pagado" valor={fmt(pagado)} />
-          <Metrica label="Pendiente de cobro" valor={fmt(pendiente)} coral />
-          <Metrica label="Próximo cobro" valor={proximo ? fmt(Number(proximo.total) || 0) : '—'} coral />
-        </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h1 className="text-[19px] font-extrabold text-ink tracking-tight">{proyecto?.nombre ?? 'Cargando…'}</h1>
+        {proyecto && <EstadoBadge estado={proyecto.estado} />}
+        <span className="text-[12.5px] text-muted">
+          Contrato {fmt(monto)} · Cobrado {fmt(pagado)} · Por cobrar {fmt(pendiente)}
+          {proximo ? ` · Próximo cobro ${fmt(Number(proximo.total) || 0)}` : ''} (con IVA)
+        </span>
       </div>
 
       {/* ─── Secciones y pestañas ─── */}
-      <div className="mt-5 flex gap-1 overflow-x-auto no-scrollbar">
+      <div className="mt-3 flex gap-1 overflow-x-auto no-scrollbar">
         {GRUPOS.map(g => (
           <button
             key={g.id}
@@ -225,13 +229,17 @@ export default function ObraProyecto() {
       {/* ─── Contenido ─── */}
       <div className={['mt-5 grid gap-5', tab === 'presupuesto' ? 'lg:grid-cols-[1fr_290px]' : ''].join(' ')}>
         <div className="min-w-0">
+          {tab === 'resumen' && proyecto && (
+            <ResumenObra proyecto={proyecto} partidas={Array.isArray(partidas) ? partidas : []} estadosPago={listaEps} irA={setTab} />
+          )}
+
           {tab === 'presupuesto' && (
             <div className="bg-white rounded-card border border-line shadow-card overflow-hidden">
               <div className="p-5 lg:p-6">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="text-[18px] font-extrabold text-ink">Presupuesto {proyecto?.nombre ?? ''}</h2>
-                    <div className="text-[11.5px] text-subtle mt-0.5">Generado desde tus partidas del proyecto</div>
+                    {puedeEditar && (<button onClick={() => setTab('control')} className="text-[12.5px] font-semibold text-brand bg-transparent border-none p-0 mt-1 cursor-pointer">Editar partidas →</button>)}
                   </div>
                   <div className="text-right">
                     <div className="text-[10.5px] font-bold uppercase tracking-wider text-muted">Total presupuestado</div>
@@ -294,6 +302,7 @@ export default function ObraProyecto() {
           {proyecto && tab === 'pagos' && (
             <PanelObra>
               <PresupuestoPanel proyectoId={proyecto.id} valorContrato={proyecto.valor}
+                montoContrato={(proyecto as any).monto_contrato} moneda={(proyecto as any).moneda} valorUf={(proyecto as any).valor_uf}
                 anticipoRecibido={(proyecto as any).anticipo ?? 0} proyectoNombre={proyecto.nombre}
                 proyectoCliente={proyecto.cliente} proyectoDireccion={(proyecto as any).direccion} />
             </PanelObra>
@@ -376,7 +385,6 @@ export default function ObraProyecto() {
           <div className="bg-white rounded-card border border-line shadow-card p-4">
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-extrabold uppercase tracking-wide text-ink">Plan de compra</span>
-              <span className="px-1.5 py-0.5 rounded bg-om-bg text-om text-[9.5px] font-extrabold">BETA</span>
             </div>
             <p className="text-[12px] text-muted mt-1.5 leading-snug">
               Busca precios reales en catálogos de proveedores y genera una ruta de compra optimizada.
@@ -391,7 +399,7 @@ export default function ObraProyecto() {
         </aside>}
       </div>
 
-      {(tab === 'presupuesto' || tab === 'control') && (
+      {puedeEditar && (tab === 'presupuesto' || tab === 'control') && (
         <CopilotoBar
           onSubmit={editar}
           busy={editando}
@@ -419,8 +427,7 @@ function GrupoFila({ nodo, arbol, nivel }: {
         <td className="px-5 py-2 font-extrabold text-om-dark uppercase text-[12px] tracking-wide" style={{ paddingLeft: 20 + nivel * 16 }}>
           ⌄ {nodo.descripcion}
         </td>
-        <td className="px-2 py-2 text-right text-[11.5px] text-om-dark font-bold">{hijos.length}</td>
-        <td colSpan={2} />
+        <td colSpan={3} />
         <td className="px-5 py-2 text-right font-extrabold text-om-dark">{fmt(arbol.valor(nodo))}</td>
       </tr>
       {hijos.map(h =>

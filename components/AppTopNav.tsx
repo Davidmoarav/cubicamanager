@@ -11,6 +11,7 @@ import { fetcher } from '@/lib/fetcher'
 import { createClient } from '@/lib/supabase'
 import { menuPorRol, SECCIONES, etiquetaRol, type NavItem } from '@/lib/nav'
 import Sidebar from '@/components/Sidebar'
+import BuscadorGlobal from '@/components/BuscadorGlobal'
 import { IconMenu } from '@/components/Icon'
 
 export default function AppTopNav({ userEmail }: { userEmail?: string }) {
@@ -21,6 +22,7 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
   const [abierto, setAbierto] = useState<string | null>(null) // dropdown desktop
   const [avatar, setAvatar] = useState(false)
   const [empresa, setEmpresa] = useState('')
+  const [buscando, setBuscando] = useState(false)
   const navRef = useRef<HTMLDivElement>(null)
 
   const { data: miRol } = useSWR<any>('/api/mi-rol', fetcher)
@@ -32,6 +34,14 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
 
   useEffect(() => {
     fetch('/api/empresa').then(r => r.json()).then(d => { if (d?.razon_social) setEmpresa(d.razon_social) }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const alTeclear = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setBuscando(b => !b) }
+    }
+    document.addEventListener('keydown', alTeclear)
+    return () => document.removeEventListener('keydown', alTeclear)
   }, [])
 
   // Cerrar dropdowns al hacer click fuera
@@ -50,7 +60,7 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
   }
 
   const iniciales = (empresa || userEmail || 'CM').split(/[\s@]/).filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase()
-  const activo = (href: string) => pathname === href || (href !== '/dashboard' && pathname.startsWith(href))
+  const activo = (href: string) => pathname === href || (href !== '/dashboard' && pathname.startsWith(href)) || (href === '/proyectos' && pathname.startsWith('/obra/'))
   const seccionActiva = (sec: string) => menu.some(m => m.section === sec && activo(m.href))
 
   return (
@@ -95,16 +105,21 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
 
           <div className="flex-1" />
 
+          <button onClick={() => setBuscando(true)}
+            className="inline-flex items-center gap-3 px-3 py-1.5 rounded-lg bg-white/5 border border-om-navline text-white/60 hover:text-white text-[12.5px] whitespace-nowrap cursor-pointer transition mr-1">
+            Buscar <kbd className="hidden xl:inline text-[10px] opacity-70 font-sans">Ctrl K</kbd>
+          </button>
+
           {/* Pill Copiloto */}
-          <Link
+          {rol !== 'contador' && <Link
             href="/obra"
             className={[
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-bold transition mr-1',
-              pathname.startsWith('/obra') ? 'bg-om text-white' : 'bg-om/90 text-white hover:bg-om',
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px] font-bold whitespace-nowrap transition mr-1',
+              pathname === '/obra' ? 'bg-om text-white' : 'bg-om/90 text-white hover:bg-om',
             ].join(' ')}
           >
             Copiloto de obra
-          </Link>
+          </Link>}
 
           {/* Avatar */}
           <div className="relative">
@@ -134,12 +149,14 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
         <button onClick={() => setDrawer(true)} aria-label="Abrir menú" className="p-2 -ml-2 text-white/70 hover:text-white transition"><IconMenu className="w-6 h-6" /></button>
         <img src="/logo.png" alt="" className="w-7 h-7 rounded-lg object-contain" />
         <span className="font-bold text-white text-sm">Cubica<span className="text-om">Manager</span></span>
-        <Link href="/obra" className="ml-auto text-[12px] font-bold text-white bg-om px-2.5 py-1 rounded-lg">Obra</Link>
+        <button onClick={() => setBuscando(true)} className="ml-auto text-[12.5px] font-semibold text-white/70 hover:text-white bg-transparent border-none cursor-pointer px-1">Buscar</button>
+        {rol !== 'contador' && <Link href="/obra" className="text-[12px] font-bold text-white bg-om px-2.5 py-1 rounded-lg">Copiloto</Link>}
       </header>
 
       {/* Drawer móvil = Sidebar */}
       {drawer && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={() => setDrawer(false)} />}
       <Sidebar userEmail={userEmail} open={drawer} onClose={() => setDrawer(false)} />
+      {buscando && <BuscadorGlobal rol={rol} onClose={() => setBuscando(false)} />}
     </>
   )
 }

@@ -13,6 +13,7 @@ import {
   type EstadoEtapa, type NodoCPM, type TareaGantt,
 } from '@/lib/gantt'
 import { usePermisos } from '@/lib/usePermisos'
+import { confirmar } from '@/lib/avisos'
 
 const COLOR_BARRA: Record<EstadoEtapa, string> = {
   completa: 'bg-success',
@@ -101,7 +102,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
 
   // Corre las tareas que parten antes de lo que permiten sus dependencias
   const aplicarDependencias = async () => {
-    if (!confirm(`¿Correr ${cpm.ajustes.length} ${cpm.ajustes.length === 1 ? 'tarea' : 'tareas'} para respetar las dependencias? Conservan su duración.`)) return
+    if (!(await confirmar(`¿Correr ${cpm.ajustes.length} ${cpm.ajustes.length === 1 ? 'tarea' : 'tareas'} para respetar las dependencias? Conservan su duración.`))) return
     setGuardando('auto')
     setError('')
     try {
@@ -122,7 +123,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
   }
 
   const planificarAuto = async () => {
-    if (!confirm('¿Planificar automáticamente? Asigna fechas secuenciales desde hoy, proporcionales al valor de cada tarea.')) return
+    if (!(await confirmar('¿Planificar automáticamente? Asigna fechas secuenciales desde hoy, proporcionales al valor de cada tarea.'))) return
     setGuardando('auto')
     setError('')
     try {
@@ -238,7 +239,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
       </div>
 
       {error && (
-        error.includes('sql/3')
+        error.includes('no está activada')
           ? <p className="text-[12.5px] text-warning font-semibold bg-warning-bg rounded-xl px-4 py-3">{error}</p>
           : <p className="text-[12.5px] text-danger font-semibold">{error}</p>
       )}

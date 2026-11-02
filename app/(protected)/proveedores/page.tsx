@@ -7,10 +7,13 @@ import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, Modal, SectionTitle, Table, Td, Th, fmt } from '@/components/ui'
 import CatalogoProveedor from '@/components/CatalogoProveedor'
 import type { Proveedor } from '@/types'
+import { confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 const EMPTY: Omit<Proveedor,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', rubro:'', contacto:'', telefono:'', monto3m:0, estado:'activo' }
 
 export default function ProveedoresPage() {
+  const { puedeEditar } = usePermisos('obra')
   const { data: items = [], isLoading, mutate } = useSWR<Proveedor[]>('/api/proveedores', fetcher)
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
@@ -28,7 +31,7 @@ export default function ProveedoresPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar proveedor?')) return
+    if (!(await confirmar('¿Eliminar proveedor?'))) return
     await fetch('/api/proveedores', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
     await mutate()
   }
@@ -37,7 +40,7 @@ export default function ProveedoresPage() {
     <div>
       <div className="flex justify-between items-center mb-[18px]">
         <SectionTitle>Proveedores</SectionTitle>
-        <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Agregar proveedor</Btn>
+        {puedeEditar && (<Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Agregar proveedor</Btn>)}
       </div>
 
       <div className="bg-white border border-[#e4e9f0] rounded-xl p-[18px]">
@@ -64,9 +67,9 @@ export default function ProveedoresPage() {
                   <Td><Badge estado={p.estado} tipo="proveedor" /></Td>
                   <Td>
                     <div className="flex gap-1">
-                      <Btn onClick={() => setCatalogo(p)} className="text-[11px] px-2 py-1">Catálogo</Btn>
-                      <Btn onClick={() => { setForm({ ...p }); setModal('editar') }} className="text-[11px] px-2 py-1">Editar</Btn>
-                      <Btn variant="danger" onClick={() => del(p.id)} className="text-[11px] px-2 py-1">✕</Btn>
+                      {puedeEditar && (<Btn onClick={() => setCatalogo(p)} className="text-[11px] px-2 py-1">Catálogo</Btn>)}
+                      {puedeEditar && (<Btn onClick={() => { setForm({ ...p }); setModal('editar') }} className="text-[11px] px-2 py-1">Editar</Btn>)}
+                      {puedeEditar && (<Btn variant="danger" onClick={() => del(p.id)} className="text-[11px] px-2 py-1">✕</Btn>)}
                     </div>
                   </Td>
                 </tr>

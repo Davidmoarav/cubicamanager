@@ -4,18 +4,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
-import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
-import FiltroObra from '@/components/FiltroObra'
+import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt } from '@/components/ui'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
 import { filtrarPorObra } from '@/lib/consolidado'
 import { IconEdit } from '@/components/Icon'
 import type { Empleado } from '@/types'
+import { confirmar } from '@/lib/avisos'
 
 const EMPTY: Omit<Empleado,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', cargo:'', sueldo:0, horas_extra:0, estado:'activo', tipo:'planta', modalidad:'mensual', inicio:'' }
 
 export default function RRHHPage() {
   const { data: todos = [], isLoading, mutate } = useSWR<Empleado[]>('/api/empleados', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
-  const [obra, setObra] = useState('')
+  const [obra, setObra] = useObraFiltro()
   const items = filtrarPorObra(todos as any[], obra) as Empleado[]
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
@@ -38,7 +39,7 @@ export default function RRHHPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar trabajador?')) return
+    if (!(await confirmar('¿Eliminar trabajador?'))) return
     await fetch('/api/empleados', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
     await mutate()
   }
@@ -69,7 +70,7 @@ export default function RRHHPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <MetricCard label="Total personal"  value={items.length} />
-        <MetricCard label="Nómina mensual"  value={fmtM(totalNomina)} />
+        <MetricCard label="Sueldos del mes"  value={fmt(totalNomina)} />
         <MetricCard label="Horas extra"     value={`${totalHE} h`} sub="Este mes" subColor="#b07d1a" />
         <MetricCard label="Vacaciones"      value={items.filter(e=>e.estado==='vacaciones').length} sub="trabajadores" />
       </div>
@@ -103,9 +104,9 @@ export default function RRHHPage() {
 
           {/* Liquidaciones */}
           <div className="bg-white border border-[#e4e9f0] rounded-xl p-[18px]">
-            <div className="text-sm font-bold mb-3.5 text-[#1a2535]">Liquidaciones del mes</div>
+            <div className="text-sm font-bold mb-3.5 text-[#1a2535]">Sueldos del mes</div>
             <Table>
-              <thead><tr><Th>Trabajador</Th><Th>Base</Th><Th>HH.EE</Th><Th>Total</Th></tr></thead>
+              <thead><tr><Th>Trabajador</Th><Th>Base</Th><Th>Horas extra</Th><Th>Total</Th></tr></thead>
               <tbody>
                 {items.map(e => {
                   const porMetas = e.modalidad === 'por_metas'
@@ -121,7 +122,7 @@ export default function RRHHPage() {
                 })}
                 {items.length > 0 && (
                   <tr>
-                    <Td colSpan={3} className="font-bold text-right pt-3">Total nómina</Td>
+                    <Td colSpan={3} className="font-bold text-right pt-3">Total</Td>
                     <Td className="font-bold text-brand pt-3">{fmt(totalNomina)}</Td>
                   </tr>
                 )}

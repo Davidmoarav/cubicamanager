@@ -150,7 +150,7 @@ export function PresupuestoObraPDF({ proyecto, empresa, cliente, partidas, logoU
             ) : <Text style={s.bVacio}>Sin datos del cliente</Text>}
           </View>
           <View style={s.bloque}>
-            <Text style={s.bTitulo}>UBICACIÓN DEL PROYECTO</Text>
+            <Text style={s.bTitulo}>UBICACIÓN DE LA OBRA</Text>
             {cliente?.direccion ? <Text style={s.bLinea}>{cliente.direccion}</Text> : <Text style={s.bVacio}>Dirección pendiente</Text>}
             {(cliente?.comuna || cliente?.ciudad)
               ? <Text style={s.bLinea}>{[cliente?.comuna, cliente?.ciudad].filter(Boolean).join(' / ')}</Text>

@@ -9,6 +9,8 @@ import { formatRut, isValidRut, cleanRut } from '@/lib/rut'
 import { fmt } from '@/lib/format'
 import type { Cliente } from '@/types/cliente'
 import type { Proyecto } from '@/types'
+import { avisar, confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 const EMPTY: any = {
   razon_social: '', rut: '', giro: '', contacto: '', email: '', telefono: '',
@@ -16,6 +18,7 @@ const EMPTY: any = {
 }
 
 export default function ClientesPage() {
+  const { puedeEditar } = usePermisos('obra')
   const { data: items = [], isLoading, mutate } = useSWR<Cliente[]>('/api/clientes', fetcher)
   const { data: proyectos = [] } = useSWR<Proyecto[]>('/api/proyectos', fetcher)
   const [modal, setModal]     = useState<'nuevo' | 'editar' | null>(null)
@@ -44,7 +47,7 @@ export default function ClientesPage() {
 
   // ─── Save / Delete ───────────────────────────────────────
   const save = async () => {
-    if (!form.razon_social) { alert('La razón social es obligatoria'); return }
+    if (!form.razon_social) { avisar('La razón social es obligatoria'); return }
     if (form.rut && !isValidRut(form.rut)) {
       setRutError('RUT inválido (verifica el dígito verificador)')
       return
@@ -58,7 +61,7 @@ export default function ClientesPage() {
     })
     if (!res.ok) {
       const { error } = await res.json()
-      alert('Error: ' + error)
+      avisar('Error: ' + error)
       setSaving(false)
       return
     }
@@ -68,7 +71,7 @@ export default function ClientesPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar cliente? Esto NO elimina sus cotizaciones, pero sí desvincula el cliente.')) return
+    if (!(await confirmar('¿Eliminar cliente? Esto NO elimina sus cotizaciones, pero sí desvincula el cliente.'))) return
     await fetch('/api/clientes', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -102,9 +105,9 @@ export default function ClientesPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <SectionTitle>Clientes</SectionTitle>
-        <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setRutError(null); setModal('nuevo') }}>
+        {puedeEditar && (<Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setRutError(null); setModal('nuevo') }}>
           + Nuevo cliente
-        </Btn>
+        </Btn>)}
       </div>
 
       {/* Métricas */}
@@ -136,7 +139,7 @@ export default function ClientesPage() {
           : (
             <Table>
               <thead><tr>
-                <Th>Razón social</Th><Th>RUT</Th><Th>Contacto</Th><Th>Email / Teléfono</Th><Th>Ciudad</Th><Th>Proyectos</Th><Th></Th>
+                <Th>Razón social</Th><Th>RUT</Th><Th>Contacto</Th><Th>Email / Teléfono</Th><Th>Ciudad</Th><Th>Obras</Th><Th></Th>
               </tr></thead>
               <tbody>
                 {filtered.map(c => (
@@ -160,14 +163,14 @@ export default function ClientesPage() {
                             onClick={() => setVerProyectos(c)}
                             className="px-2.5 py-1 rounded-md border border-line text-brand text-[12px] font-bold hover:bg-canvas"
                           >
-                            {proyectosDe(c).length} {proyectosDe(c).length === 1 ? 'proyecto' : 'proyectos'}
+                            {proyectosDe(c).length} {proyectosDe(c).length === 1 ? 'obra' : 'obras'}
                           </button>
                         : <span className="text-muted text-[12px]">—</span>}
                     </Td>
                     <Td>
                       <div className="flex gap-1">
-                        <Btn onClick={() => { setForm({ ...c }); setRutError(null); setModal('editar') }} className="px-2.5 py-1.5">Editar</Btn>
-                        <Btn variant="danger" onClick={() => del(c.id)} className="px-2.5 py-1.5">✕</Btn>
+                        {puedeEditar && (<Btn onClick={() => { setForm({ ...c }); setRutError(null); setModal('editar') }} className="px-2.5 py-1.5">Editar</Btn>)}
+                        {puedeEditar && (<Btn variant="danger" onClick={() => del(c.id)} className="px-2.5 py-1.5">✕</Btn>)}
                       </div>
                     </Td>
                   </tr>
@@ -226,10 +229,10 @@ export default function ClientesPage() {
 
       {/* ══════ MODAL: proyectos del cliente ══════ */}
       {verProyectos && (
-        <Modal title={`Proyectos de ${verProyectos.razon_social}`} onClose={() => setVerProyectos(null)}>
+        <Modal title={`Obras de ${verProyectos.razon_social}`} onClose={() => setVerProyectos(null)}>
           <div className="flex flex-col gap-2">
             {proyectosDe(verProyectos).length === 0
-              ? <p className="text-muted text-[13px] text-center p-4">Este cliente no tiene proyectos asociados.</p>
+              ? <p className="text-muted text-[13px] text-center p-4">Este cliente no tiene obras asociadas.</p>
               : proyectosDe(verProyectos).map(p => (
                 <div key={p.id} className="flex items-center justify-between py-2.5 px-3 bg-canvas rounded-lg">
                   <div className="flex-1 min-w-0">

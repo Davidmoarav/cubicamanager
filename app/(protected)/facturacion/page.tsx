@@ -4,24 +4,29 @@
 import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
-import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
+import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt } from '@/components/ui'
 import ImportadorSII from '@/components/ImportadorSII'
 import { IconSearch } from '@/components/Icon'
 import ResumenBoletas from '@/components/ResumenBoletas'
 import { opcionesPartida } from '@/lib/costos'
 import { filtrarPorObra } from '@/lib/consolidado'
-import FiltroObra from '@/components/FiltroObra'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
 import ConciliacionSII from '@/components/ConciliacionSII'
 import EmitirDTE from '@/components/EmitirDTE'
+import { fmtFecha, fmtPeriodo } from '@/lib/format'
+import { avisar, confirmar } from '@/lib/avisos'
 
 const EMPTY: any = { numero:'', cliente:'', proyecto:'', proyecto_id:'', partida_id:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
 
 export default function FacturacionPage() {
   const [periodoSel, setPeriodoSel] = useState(new Date().toISOString().slice(0, 7))
   const { data: todos = [], isLoading, mutate } = useSWR<any[]>(`/api/facturas?periodo=${periodoSel}`, fetcher)
+  const { data: ultimo } = useSWR<any>(!isLoading && todos.length === 0 ? '/api/facturas?ultimo_periodo=1' : null, fetcher)
   const { data: emisiones = [], mutate: mutEmisiones } = useSWR<any[]>('/api/dte', fetcher)
   const [emitiendo, setEmitiendo] = useState<string | null>(null)
-  const [obra, setObra] = useState('')
+  const [menuAcciones, setMenuAcciones] = useState(false)
+  const [abrirPanel, setAbrirPanel] = useState({ conciliar: 0, importar: 0, boletas: 0 })
+  const [obra, setObra] = useObraFiltro()
   const { data: clientes = [] } = useSWR<any[]>('/api/clientes', fetcher)
   const { data: proveedores = [] } = useSWR<any[]>('/api/proveedores', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
@@ -53,6 +58,14 @@ export default function FacturacionPage() {
   const { data: partidasProy = [] } = useSWR<any[]>(
     proyectoPartidas ? `/api/partidas-proyecto?proyecto_id=${proyectoPartidas}` : null, fetcher)
 
+  // Los pendientes del panel llegan con el mes y el filtro ya elegidos
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const mes = q.get('periodo')
+    if (mes && /^\d{4}-\d{2}$/.test(mes)) setPeriodoSel(mes)
+    if (q.get('sin_obra')) setSoloSinObra(true)
+  }, [])
+
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
 
   const updNeto = (v: any) => {
@@ -79,9 +92,9 @@ export default function FacturacionPage() {
   const cerrarModal = () => { setModal(false); setBuscarFactura(''); setRefFolio(''); setMostrarOtroCliente(false) }
 
   const save = async () => {
-    if (!form.cliente || form.cliente === '__otro__') { alert('Selecciona o escribe el nombre'); return }
+    if (!form.cliente || form.cliente === '__otro__') { avisar('Selecciona o escribe el nombre'); return }
     if (form.doc_tipo !== 'factura' && !form.factura_ref) {
-      alert('Debes seleccionar la factura que esta nota modifica')
+      avisar('Debes seleccionar la factura que esta nota modifica')
       return
     }
     setSaving(true)
@@ -107,8 +120,7 @@ export default function FacturacionPage() {
     setSaving(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo guardar: ' + (err.error || 'error desconocido') +
-        '\n\nSi menciona "doc_tipo" o "factura_ref", ejecuta el SQL 14_notas_credito_debito.sql en Supabase.')
+      avisar('No se pudo guardar: ' + (err.error || 'error desconocido'))
       return
     }
     await mutate(); cerrarModal()
@@ -120,7 +132,7 @@ export default function FacturacionPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar factura?')) return
+    if (!(await confirmar('¿Eliminar factura?'))) return
     await fetch('/api/facturas', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
     await mutate()
   }
@@ -147,7 +159,7 @@ export default function FacturacionPage() {
     setAsignando(false)
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
-      alert('No se pudo asignar: ' + (err.error || 'error desconocido'))
+      avisar('No se pudo asignar: ' + (err.error || 'error desconocido'))
       return
     }
     setAsignacion(null); setSeleccion([])
@@ -190,30 +202,47 @@ export default function FacturacionPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 mb-6">
         <div>
           <SectionTitle>Facturación</SectionTitle>
           <p className="text-sm text-muted mt-1">Ventas, compras e IVA</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <ConciliacionSII onImportado={mutate} periodoInicial={periodoSel} />
-          <ImportadorSII onImported={mutate} />
-          <ResumenBoletas onSaved={mutate} />
-          <Btn
-            onClick={() => { setForm({ ...EMPTY, doc_tipo: 'nota_credito', emision: new Date().toISOString().split('T')[0] }); setModal(true) }}
-            style={{ background: '#fdecea', borderColor: '#f5c6c2', color: '#b0401a', fontWeight: 700 }}>
-            + Nota crédito/débito
-          </Btn>
+        <div className="flex gap-2 flex-wrap items-center">
+          {/* Sin botón propio: los abre el menú */}
+          <ConciliacionSII onImportado={mutate} periodoInicial={periodoSel} abrir={abrirPanel.conciliar} />
+          <ImportadorSII onImported={mutate} abrir={abrirPanel.importar} />
+          <ResumenBoletas onSaved={mutate} abrir={abrirPanel.boletas} />
+          <div className="relative">
+            <Btn onClick={() => setMenuAcciones(v => !v)}>Más acciones ▾</Btn>
+            {menuAcciones && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setMenuAcciones(false)} aria-hidden="true" />
+                <div role="menu" className="absolute left-0 lg:left-auto lg:right-0 top-full mt-1 w-60 bg-white rounded-card shadow-pop border border-line py-1.5 z-40">
+                  {[
+                    { texto: 'Nota de crédito o débito', accion: () => { setForm({ ...EMPTY, doc_tipo: 'nota_credito', emision: new Date().toISOString().split('T')[0] }); setModal(true) } },
+                    { texto: 'Resumen de boletas', accion: () => setAbrirPanel(p => ({ ...p, boletas: p.boletas + 1 })) },
+                    { texto: 'Importar del SII', accion: () => setAbrirPanel(p => ({ ...p, importar: p.importar + 1 })) },
+                    { texto: 'Conciliar con el SII', accion: () => setAbrirPanel(p => ({ ...p, conciliar: p.conciliar + 1 })) },
+                  ].map(o => (
+                    <button key={o.texto} role="menuitem" onClick={() => { setMenuAcciones(false); o.accion() }}
+                      className="w-full text-left px-3.5 py-2 text-[13px] text-ink bg-transparent border-none cursor-pointer hover:bg-canvas transition">
+                      {o.texto}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <Btn variant="primary" onClick={() => { setForm({ ...EMPTY, emision: new Date().toISOString().split('T')[0] }); setModal(true) }}>
             + Nueva factura
           </Btn>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <MetricCard label="Ventas cobradas"  value={fmtM(cobrado)}      sub="Facturas pagadas"        subColor="#1a7a4a" />
-        <MetricCard label="Por cobrar"       value={fmtM(pendiente)}    sub="Ventas pendientes"       subColor="#b07d1a" />
-        <MetricCard label="Compras (gastos)" value={fmtM(totalCompras)} sub="Facturas de proveedores" subColor="#E5502A" />
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+        <MetricCard label="Ventas cobradas"  value={fmt(cobrado)}      sub="Facturas pagadas"        subColor="#1a7a4a" />
+        <MetricCard label="Por cobrar"       value={fmt(pendiente)}    sub="Ventas pendientes"       subColor="#b07d1a" />
+        <MetricCard label="Compras (gastos)" value={fmt(totalCompras)} sub="Facturas de proveedores" subColor="#E5502A" />
       </div>
 
       {/* Selector de período */}
@@ -271,7 +300,7 @@ export default function FacturacionPage() {
       {(nSinObra > 0 || soloSinObra) && (
         <div className="flex items-center justify-between gap-3 flex-wrap bg-warning-bg rounded-lg px-3.5 py-2.5 mb-3">
           <span className="text-[12.5px] text-warning font-semibold">
-            {nSinObra} {nSinObra === 1 ? 'compra' : 'compras'} de este mes sin obra: su costo no entra al gasto real de ningún proyecto.
+            {nSinObra} {nSinObra === 1 ? 'compra' : 'compras'} de este mes sin obra: su costo no entra al gasto real de ninguna obra.
           </span>
           <button onClick={() => { setSoloSinObra(v => !v); setSeleccion([]) }}
             className="text-[12px] font-bold text-warning underline">
@@ -297,7 +326,16 @@ export default function FacturacionPage() {
         {isLoading
           ? <p className="text-muted text-center py-10">Cargando...</p>
           : filtered.length === 0
-          ? <p className="text-muted text-center py-10">Sin facturas en este filtro</p>
+          ? (todos.length > 0
+            ? <p className="text-muted text-center py-10">Sin facturas en este filtro</p>
+            : (
+              <div className="text-center py-10">
+                <p className="text-muted mb-3">No hay documentos en {fmtPeriodo(periodoSel)}.</p>
+                {ultimo?.periodo && ultimo.periodo !== periodoSel
+                  ? <Btn onClick={() => setPeriodoSel(ultimo.periodo)}>Ver {fmtPeriodo(ultimo.periodo)}, el último mes con documentos</Btn>
+                  : !ultimo?.periodo && ultimo && <p className="text-[12.5px] text-muted">Crea una factura o importa tus documentos del SII.</p>}
+              </div>
+            ))
           : (
           <Table>
             <thead><tr>
@@ -341,7 +379,7 @@ export default function FacturacionPage() {
                   <Td>{fmt(f.neto || 0)}</Td>
                   <Td><span className="text-muted">{fmt(f.iva || 0)}</span></Td>
                   <Td><span className="font-bold">{fmt(f.monto || 0)}</span></Td>
-                  <Td><span className="text-muted text-[11px]">{f.emision || '—'}</span></Td>
+                  <Td><span className="text-muted text-[11px]">{fmtFecha(f.emision)}</span></Td>
                   <Td><Badge estado={f.estado} tipo="factura" /></Td>
                   <Td>
                     <div className="flex gap-1 items-center">
@@ -350,7 +388,7 @@ export default function FacturacionPage() {
                         return (
                           <button onClick={() => setEmitiendo(f.id)}
                             className={`text-[10.5px] font-bold px-1.5 py-1 rounded-[5px] whitespace-nowrap ${em ? 'bg-success-bg text-success' : 'bg-canvas text-brand hover:bg-brand-bg'}`}>
-                            {em ? `DTE ${em.folio ?? em.estado}` : 'Emitir DTE'}
+                            {em ? `Folio ${em.folio ?? em.estado}` : 'Emitir documento'}
                           </button>
                         )
                       })()}
@@ -425,7 +463,7 @@ export default function FacturacionPage() {
                         <button key={f.id} onClick={() => onSelectFacturaRef(f.id)}
                           className="w-full text-left px-3 py-2 hover:bg-canvas border-b border-[#F1ECE6] last:border-0 transition">
                           <div className="text-[13px] font-semibold text-ink">{f.numero || 's/n'} · {f.cliente}</div>
-                          <div className="text-[11px] text-muted">{fmt(f.monto)} · {f.tipo === 'compra' ? 'compra' : 'venta'} · {f.emision || 's/f'}</div>
+                          <div className="text-[11px] text-muted">{fmt(f.monto)} · {f.tipo === 'compra' ? 'compra' : 'venta'} · {f.emision ? fmtFecha(f.emision) : 's/f'}</div>
                         </button>
                       ))}
                   </div>
@@ -487,7 +525,7 @@ export default function FacturacionPage() {
 
             {/* Selector de proyecto */}
             <div className="mb-3">
-              <label className="label-base">Proyecto (opcional)</label>
+              <label className="label-base">Obra (opcional)</label>
               <select
                 value={form.proyecto_id || ''}
                 onChange={e => {
@@ -496,7 +534,7 @@ export default function FacturacionPage() {
                   setForm((f: any) => ({ ...f, proyecto_id: id, proyecto: pr?.nombre || '', partida_id: '' }))
                 }}
                 className="input-base cursor-pointer">
-                <option value="">— Sin proyecto —</option>
+                <option value="">— Sin obra —</option>
                 {proyectos.map((p: any) => (
                   <option key={p.id} value={p.id}>{p.nombre}</option>
                 ))}

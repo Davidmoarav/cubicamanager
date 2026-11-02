@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle } from '@/components/ui'
 import { CATEGORIAS_DOC, type Documento, type CategoriaDocumento } from '@/types/documento'
+import { avisar, confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 const MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
@@ -43,6 +45,7 @@ interface Props {
 }
 
 export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
+  const { puedeEditar } = usePermisos('obra')
   const supabase = createClient()
   const fileRef  = useRef<HTMLInputElement>(null)
 
@@ -71,7 +74,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
   // ─── Subir archivo ────────────────────────────────────────
   const handleFileSelect = (file: File) => {
     if (file.size > MAX_SIZE) {
-      alert(`Archivo demasiado grande (${fmtSize(file.size)}). Máximo 20 MB.`)
+      avisar(`Archivo demasiado grande (${fmtSize(file.size)}). Máximo 20 MB.`)
       return
     }
     // Abrir mini-modal para categoría
@@ -115,7 +118,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
     // ArrayBuffer + contentType: evita "No content provided" con File directo
     const buffer = await pendingFile.arrayBuffer()
     if (buffer.byteLength === 0) {
-      alert('El archivo está vacío o no se pudo leer. Intenta con otro.')
+      avisar('El archivo está vacío o no se pudo leer. Intenta con otro.')
       setUploading(false)
       setProgress(null)
       return
@@ -126,7 +129,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
       .upload(path, buffer, { cacheControl: '3600', contentType: pendingFile.type || 'application/octet-stream' })
 
     if (upErr) {
-      alert('Error al subir: ' + upErr.message)
+      avisar('Error al subir: ' + upErr.message)
       setUploading(false)
       setProgress(null)
       return
@@ -151,7 +154,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
 
     if (!res.ok) {
       const { error } = await res.json()
-      alert('Error al registrar: ' + error)
+      avisar('Error al registrar: ' + error)
       // Limpiar archivo huérfano
       await supabase.storage.from('proyecto-docs').remove([path])
     }
@@ -169,7 +172,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
       .createSignedUrl(doc.archivo_path, 60) // URL válida 60 segundos
 
     if (error || !data?.signedUrl) {
-      alert('Error al generar enlace de descarga')
+      avisar('Error al generar enlace de descarga')
       return
     }
 
@@ -184,7 +187,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
 
   // ─── Eliminar documento ───────────────────────────────────
   const eliminar = async (id: string) => {
-    if (!confirm('¿Eliminar este documento permanentemente?')) return
+    if (!(await confirmar('¿Eliminar este documento permanentemente?'))) return
     await fetch('/api/documentos', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
@@ -209,6 +212,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
   return (
     <div>
       {/* ─── ZONA DE SUBIDA ─── */}
+      {puedeEditar && (
       <div
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
@@ -232,6 +236,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
           PDF, DWG, imágenes, Word, Excel, ZIP — Máximo 20 MB
         </div>
       </div>
+      )}
 
       {/* ─── FILTRO POR CATEGORÍA ─── */}
       {docs.length > 0 && (
@@ -271,7 +276,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
         ? <p className="text-muted text-center p-5">Cargando documentos...</p>
         : filtered.length === 0
         ? <p className="text-muted text-center p-5 text-[13px]">
-            {docs.length === 0 ? 'Aún no hay documentos en este proyecto.' : 'Sin documentos en esta categoría.'}
+            {docs.length === 0 ? 'Aún no hay documentos en esta obra.' : 'Sin documentos en esta categoría.'}
           </p>
         : (
           <div className="flex flex-col gap-2">
@@ -311,13 +316,13 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
                   >
                     ↓
                   </button>
-                  <button
+                  {puedeEditar && (<button
                     onClick={() => eliminar(doc.id)}
                     title="Eliminar"
                     className="w-7 h-7 rounded-[6px] border-none bg-danger-bg text-danger text-[14px] font-bold cursor-pointer flex items-center justify-center"
                   >
                     ✕
-                  </button>
+                  </button>)}
                 </div>
               </div>
             ))}

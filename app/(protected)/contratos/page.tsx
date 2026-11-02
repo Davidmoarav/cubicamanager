@@ -4,17 +4,20 @@
 import { useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
-import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
-import FiltroObra from '@/components/FiltroObra'
+import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt } from '@/components/ui'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
 import { filtrarPorObra } from '@/lib/consolidado'
 import type { Contrato } from '@/types'
+import { confirmar } from '@/lib/avisos'
+import { usePermisos } from '@/lib/usePermisos'
 
 const EMPTY: Omit<Contrato,'id'|'created_at'|'user_id'> = { numero:'', contraparte:'', tipo:'Suma alzada', valor:0, inicio:'', fin:'', estado:'ejecucion' }
 
 export default function ContratosPage() {
+  const { puedeEditar } = usePermisos('obra')
   const { data: todos = [], isLoading, mutate } = useSWR<Contrato[]>('/api/contratos', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
-  const [obra, setObra] = useState('')
+  const [obra, setObra] = useObraFiltro()
   const items = filtrarPorObra(todos as any[], obra) as Contrato[]
   const { data: clientes = [] }  = useSWR<any[]>('/api/clientes', fetcher)
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
@@ -48,7 +51,7 @@ export default function ContratosPage() {
   }
 
   const del = async (id: string) => {
-    if (!confirm('¿Eliminar contrato?')) return
+    if (!(await confirmar('¿Eliminar contrato?'))) return
     await fetch('/api/contratos', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id }) })
     await mutate()
   }
@@ -61,13 +64,13 @@ export default function ContratosPage() {
         <SectionTitle>Contratos</SectionTitle>
         <div className="flex gap-2 items-center flex-wrap">
           <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
-          <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Nuevo contrato</Btn>
+          {puedeEditar && (<Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Nuevo contrato</Btn>)}
         </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-5">
         <MetricCard label="Contratos vigentes" value={items.filter(c=>c.estado==='ejecucion').length} />
-        <MetricCard label="Cartera total"       value={fmtM(totalCartera)} sub="Suma alzada + serie" />
+        <MetricCard label="Cartera total"       value={fmt(totalCartera)} sub="Suma alzada + serie" />
         <MetricCard label="Liquidados"          value={items.filter(c=>c.estado==='liquidado').length} sub="Este año" subColor="#1a7a4a" />
       </div>
 
@@ -105,8 +108,8 @@ export default function ContratosPage() {
                   <Td><Badge estado={c.estado} tipo="contrato" /></Td>
                   <Td>
                     <div className="flex gap-1">
-                      <Btn onClick={() => { setForm({ ...c }); setModal('editar') }} className="text-[11px] px-2 py-1">Editar</Btn>
-                      <Btn variant="danger" onClick={() => del(c.id)} className="text-[11px] px-2 py-1">✕</Btn>
+                      {puedeEditar && (<Btn onClick={() => { setForm({ ...c }); setModal('editar') }} className="text-[11px] px-2 py-1">Editar</Btn>)}
+                      {puedeEditar && (<Btn variant="danger" onClick={() => del(c.id)} className="text-[11px] px-2 py-1">✕</Btn>)}
                     </div>
                   </Td>
                 </tr>
@@ -120,7 +123,7 @@ export default function ContratosPage() {
         <Modal title={modal==='nuevo'?'Nuevo contrato':'Editar contrato'} onClose={() => setModal(null)}>
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <FormSelect label="Proyecto enlazado (opcional — autocompleta contraparte y valor, y muestra el avance facturado)"
+              <FormSelect label="Obra enlazada (opcional — autocompleta contraparte y valor, y muestra el avance facturado)"
                 value={form.proyecto_id || ''} onChange={pickProyecto}
                 options={[{ value: '', label: 'Sin enlazar' }, ...proyectos.map((p: any) => ({ value: p.id, label: p.nombre }))]} />
             </div>

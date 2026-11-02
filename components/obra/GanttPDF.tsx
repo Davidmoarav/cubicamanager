@@ -53,7 +53,7 @@ export function GanttPDF({ proyecto, calc }: { proyecto: Proyecto; calc: GanttCa
       <Page size="A4" orientation="landscape" style={s.page}>
         <Text style={s.titulo}>Carta Gantt · {proyecto.nombre}</Text>
         <Text style={s.sub}>
-          {calc.desde ? `${fechaCortaCL(calc.desde)} → ${fechaCortaCL(calc.hasta)} · ${calc.totalDias} días` : 'Sin planificación'}
+          {calc.desde ? `${fechaCortaCL(calc.desde)} a ${fechaCortaCL(calc.hasta)} · ${calc.totalDias} días` : 'Sin planificación'}
         </Text>
 
         <View style={s.stats}>

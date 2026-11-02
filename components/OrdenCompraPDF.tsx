@@ -137,7 +137,7 @@ export function OrdenCompraPDF({ orden, proveedor, empresa, logoUrl }: Props) {
         {/* PROYECTO (si aplica) */}
         {orden?.proyecto && (
           <View style={styles.proyectoBar}>
-            <Text>Obra / proyecto: <Text style={{ fontFamily: 'Helvetica-Bold', color: '#1a2535' }}>{orden.proyecto}</Text></Text>
+            <Text>Obra: <Text style={{ fontFamily: 'Helvetica-Bold', color: '#1a2535' }}>{orden.proyecto}</Text></Text>
           </View>
         )}
 

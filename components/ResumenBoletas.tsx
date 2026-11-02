@@ -3,15 +3,17 @@
 // Registra el TOTAL de boletas/comprobantes de un período (no detalle).
 // Las boletas afectas traen el IVA incluido → se calcula neto e IVA hacia atrás.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Btn, Modal, fmt } from '@/components/ui'
 
 interface Props {
   onSaved?: () => void
 }
 
-export default function ResumenBoletas({ onSaved }: Props) {
+export default function ResumenBoletas({ onSaved, abrir }: Props & { abrir?: number }) {
   const [open, setOpen] = useState(false)
+  // El menú de Facturación abre este panel sin un botón propio
+  useEffect(() => { if (abrir) setOpen(true) }, [abrir])
   const [periodo, setPeriodo] = useState(new Date().toISOString().slice(0, 7))
   const [tipo, setTipo] = useState<'afecto' | 'exento'>('afecto')
   const [monto, setMonto] = useState('')
@@ -66,9 +68,9 @@ export default function ResumenBoletas({ onSaved }: Props) {
 
   return (
     <>
-      <Btn onClick={() => setOpen(true)} className="!bg-[#fff7e6] !border-[#f0d9a8] !text-warning font-bold">
-        Resumen boletas
-      </Btn>
+      {abrir === undefined && (
+        <Btn onClick={() => setOpen(true)}>Resumen boletas</Btn>
+      )}
 
       {open && (
         <Modal title="Resumen de boletas / comprobantes" onClose={() => setOpen(false)}>

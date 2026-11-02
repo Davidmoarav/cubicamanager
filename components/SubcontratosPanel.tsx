@@ -11,6 +11,8 @@ import { Btn, FormInput, FormSelect, MetricCard, fmt } from '@/components/ui'
 import SelectorFactura from '@/components/SelectorFactura'
 import { opcionesPartida } from '@/lib/costos'
 import { usePermisos } from '@/lib/usePermisos'
+import { fmtFecha } from '@/lib/format'
+import { confirmar } from '@/lib/avisos'
 
 interface Props {
   proyectoId: string
@@ -89,7 +91,7 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
   if (error || (data as any)?.error) {
     return (
       <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-        No se pudieron cargar los subcontratos. Si menciona "subcontratos", ejecuta el SQL 42_fase2_costo_real.sql en Supabase.
+        No se pudieron cargar los subcontratos. Recarga la página; si sigue pasando, avisa al administrador.
       </div>
     )
   }
@@ -195,18 +197,18 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
                         <div key={ep.id} className="bg-canvas rounded-lg px-3 py-2 text-[12px]">
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div>
-                              <span className="font-bold text-ink">EP N°{ep.numero}</span>
-                              <span className="text-muted"> · {ep.fecha} · acumulado {Number(ep.avance_acumulado)}%</span>
+                              <span className="font-bold text-ink">Estado de pago N°{ep.numero}</span>
+                              <span className="text-muted"> · {fmtFecha(ep.fecha)} · acumulado {Number(ep.avance_acumulado)}%</span>
                             </div>
                             <div className="flex items-center gap-2">
-                              <select value={ep.estado} disabled={!puedeEditar} aria-label={`Estado del EP N°${ep.numero}`}
+                              <select value={ep.estado} disabled={!puedeEditar} aria-label={`Estado del estado de pago N°${ep.numero}`}
                                 onChange={e => pedir('/api/subcontratos/ep', 'PUT', { id: ep.id, estado: e.target.value })}
                                 className="text-[11px] px-1.5 py-0.5 border border-line2 rounded-[5px] cursor-pointer bg-white">
                                 {ESTADOS_EP.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                               </select>
                               {puedeEditar && i === s.eps.length - 1 && ep.estado !== 'pagado' && (
-                                <button aria-label={`Eliminar EP N°${ep.numero}`} className="text-danger text-[12px] hover:opacity-70"
-                                  onClick={() => confirm('¿Eliminar este estado de pago?') && pedir('/api/subcontratos/ep', 'DELETE', { id: ep.id })}>✕</button>
+                                <button aria-label={`Eliminar estado de pago N°${ep.numero}`} className="text-danger text-[12px] hover:opacity-70"
+                                  onClick={async () => (await confirmar('¿Eliminar este estado de pago?')) && pedir('/api/subcontratos/ep', 'DELETE', { id: ep.id })}>✕</button>
                               )}
                             </div>
                           </div>
@@ -242,7 +244,7 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
 
                   {puedeEditar && s.eps.every((e: any) => e.estado === 'borrador') && (
                     <button className="text-[11px] font-semibold text-danger hover:underline"
-                      onClick={() => confirm(`¿Eliminar el subcontrato de ${s.subcontratista}?`) && pedir('/api/subcontratos', 'DELETE', { id: s.id })}>
+                      onClick={async () => (await confirmar(`¿Eliminar el subcontrato de ${s.subcontratista}?`)) && pedir('/api/subcontratos', 'DELETE', { id: s.id })}>
                       Eliminar subcontrato
                     </button>
                   )}

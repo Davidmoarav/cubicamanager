@@ -11,6 +11,8 @@ import { Btn, FormInput, FormSelect, MetricCard } from '@/components/ui'
 import { createClient } from '@/lib/supabase'
 import { subirDocumento } from '@/lib/subir-documento'
 import { usePermisos } from '@/lib/usePermisos'
+import { fmtFecha } from '@/lib/format'
+import { confirmar } from '@/lib/avisos'
 
 interface Props {
   proyectoId: string
@@ -93,7 +95,7 @@ export default function PrevencionPanel({ proyectoId }: Props) {
   }
 
   const eliminar = async (r: any) => {
-    if (!confirm(`¿Eliminar "${r.titulo}"?`)) return
+    if (!(await confirmar(`¿Eliminar "${r.titulo}"?`))) return
     setMsg('')
     const res = await fetch('/api/prevencion', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id }),
@@ -106,7 +108,7 @@ export default function PrevencionPanel({ proyectoId }: Props) {
   if (error || (data as any)?.error) {
     return (
       <div className="text-[12px] text-danger bg-danger-bg rounded-lg px-3 py-2">
-        No se pudo cargar prevención. Si menciona "prevencion_registros", ejecuta el SQL 43_fase3_gestion_obra.sql en Supabase.
+        No se pudo cargar prevención. Recarga la página; si sigue pasando, avisa al administrador.
       </div>
     )
   }
@@ -176,7 +178,7 @@ export default function PrevencionPanel({ proyectoId }: Props) {
               <div className="min-w-0">
                 <span className="font-semibold text-ink">{r.titulo}</span>
                 <div className="text-[10.5px] text-muted">
-                  {ETIQUETA[r.tipo] ?? r.tipo} · {r.fecha}
+                  {ETIQUETA[r.tipo] ?? r.tipo} · {fmtFecha(r.fecha)}
                   {r.responsable ? ` · ${r.responsable}` : ''}
                   {r.tipo === 'incidente' ? ` · ${r.gravedad ?? 'leve'} · ${r.dias_perdidos || 0} días perdidos` : r.asistentes ? ` · ${r.asistentes} personas` : ''}
                   {r.adjuntos ? ` · ${r.adjuntos} respaldo${r.adjuntos === 1 ? '' : 's'}` : ''}

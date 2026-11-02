@@ -3,11 +3,11 @@
 // Sube el CSV del Registro de Compras y Ventas del SII, lo parsea,
 // detecta columnas por nombre, identifica tipo de documento y previsualiza.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useSWR from 'swr'
 import { Btn, Modal } from '@/components/ui'
 import { fetcher } from '@/lib/fetcher'
-import { fmt } from '@/lib/format'
+import { fmt, fmtFecha } from '@/lib/format'
 import { decodificarCSV, parsearRCV } from '@/lib/sii'
 
 interface FilaSII {
@@ -56,7 +56,7 @@ function BuscadorFactura({ tipo, value, label, onChange }: { tipo: string; value
               <button type="button" key={f.id} onClick={() => { onChange(f); setOpen(false); setQ('') }}
                 className="w-full text-left px-2.5 py-2 text-[11px] hover:bg-canvas border-b border-[#F1ECE6] leading-tight">
                 <span className="font-bold text-ink">N° {f.numero}</span>
-                <span className="text-muted"> · {f.emision || '—'}</span><br />
+                <span className="text-muted"> · {fmtFecha(f.emision)}</span><br />
                 <span className="truncate">{f.cliente}</span>
               </button>
             ))}
@@ -66,8 +66,10 @@ function BuscadorFactura({ tipo, value, label, onChange }: { tipo: string; value
   )
 }
 
-export default function ImportadorSII({ onImported }: Props) {
+export default function ImportadorSII({ onImported, abrir }: Props & { abrir?: number }) {
   const [open, setOpen]       = useState(false)
+  // El menú de Facturación abre este panel sin un botón propio
+  useEffect(() => { if (abrir) setOpen(true) }, [abrir])
   const [tipo, setTipo]       = useState<'compra' | 'venta'>('compra')
   const [filas, setFilas]     = useState<FilaSII[]>([])
   const [nombreArchivo, setNombreArchivo] = useState('')
@@ -194,9 +196,9 @@ export default function ImportadorSII({ onImported }: Props) {
 
   return (
     <>
-      <Btn onClick={() => setOpen(true)} className="!bg-success-bg !border-[#b9e0c9] !text-success font-bold">
-        Importar del SII
-      </Btn>
+      {abrir === undefined && (
+        <Btn onClick={() => setOpen(true)}>Importar del SII</Btn>
+      )}
 
       {open && (
         <Modal title="Importar Registro de Compras/Ventas (SII)" onClose={() => { setOpen(false); reset() }}>

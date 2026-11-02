@@ -63,11 +63,15 @@ export async function POST(req: Request) {
   // Verificar si ya existe liquidación para ese empleado+periodo
   const { data: existing } = await supabase
     .from('liquidaciones')
-    .select('id')
+    .select('id, estado')
     .eq('empleado_id', body.empleado_id)
     .eq('periodo', body.periodo)
     .eq('user_id', ownerId)
     .maybeSingle()
+
+  if (existing?.estado === 'pagada') {
+    return NextResponse.json({ error: 'La liquidación ya está pagada: deshaz el pago antes de modificarla' }, { status: 400 })
+  }
 
   let result
   if (existing) {
@@ -108,6 +112,7 @@ export async function PUT(req: Request) {
   const ownerId = await getOwnerId(supabase) || user.id
 
   const { id, estado } = await req.json()
+  if (estado !== 'pagada' && estado !== 'borrador') return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
   const { data, error } = await supabase
     .from('liquidaciones')
     .update({ estado })

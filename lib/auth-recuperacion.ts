@@ -30,6 +30,10 @@ export function destinoTrasCodigo(redirectType: string | null | undefined): stri
 }
 
 const MENSAJES_AUTH: Record<string, string> = {
+  invalid_credentials: 'El correo o la contraseña no son correctos.',
+  email_not_confirmed: 'Falta confirmar tu correo. Revisa tu bandeja de entrada.',
+  user_already_exists: 'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
+  email_exists: 'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
   over_email_send_rate_limit: 'Se enviaron demasiados correos. Espera un rato antes de pedir otro.',
   over_request_rate_limit: 'Demasiados intentos. Espera un rato y vuelve a intentar.',
   email_address_not_authorized: 'El servicio de correo no está autorizado para enviar a esta dirección. Avisa al administrador.',

@@ -4,6 +4,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Cotizacion } from '@/types/cotizaciones'
+import { avisar, confirmar } from '@/lib/avisos'
+import { mutate } from 'swr'
+import { usePermisos } from '@/lib/usePermisos'
 
 interface Props {
   cotizacion: Cotizacion
@@ -11,6 +14,7 @@ interface Props {
 }
 
 export default function ConvertirBtn({ cotizacion, onSuccess }: Props) {
+  const { puedeEditar } = usePermisos('obra')
   const router = useRouter()
   const [loading, setLoading] = useState(false)
 
@@ -19,14 +23,16 @@ export default function ConvertirBtn({ cotizacion, onSuccess }: Props) {
   const sinPartidas  = !cotizacion.partidas || cotizacion.partidas.length === 0
   const sinCliente   = !cotizacion.cliente_id && !cotizacion.cliente
 
-  // Si ya está convertida, mostrar link al proyecto
+  if (!puedeEditar && !yaConvertida) return null
+
+  // Si ya está convertida, mostrar link a la obra
   if (yaConvertida && cotizacion.proyecto_id) {
     return (
       <button
-        onClick={() => router.push('/proyectos')}
-        title="Ver proyecto creado"
+        onClick={() => router.push(`/obra/${cotizacion.proyecto_id}`)}
+        title="Ver la obra creada"
         className="inline-flex items-center gap-1 px-[10px] py-1 bg-accent-bg text-accent border border-[#ccc5fc] rounded-[5px] text-[11px] font-bold cursor-pointer">
-        → Proyecto
+        → Ver obra
       </button>
     )
   }
@@ -44,12 +50,12 @@ export default function ConvertirBtn({ cotizacion, onSuccess }: Props) {
 
   const convertir = async () => {
     const partidas = cotizacion.partidas?.length ?? 0
-    const ok = confirm(
-      `¿Convertir esta cotización en proyecto?\n\n` +
+    const ok = (await confirmar(
+      `¿Convertir esta cotización en obra?\n\n` +
       `Cliente: ${cotizacion.cliente}\n` +
       `Partidas: ${partidas}\n\n` +
-      `Se creará un proyecto activo con avance 0% y la cotización quedará bloqueada en estado "convertida".`
-    )
+      `Se creará una obra en curso con avance 0% y la cotización quedará bloqueada en estado "convertida".`
+    ))
     if (!ok) return
 
     setLoading(true)
@@ -61,20 +67,23 @@ export default function ConvertirBtn({ cotizacion, onSuccess }: Props) {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert('Error: ' + data.error)
+        avisar('Error: ' + data.error)
         setLoading(false)
         return
       }
 
       // Éxito: refrescar lista y ofrecer ir al proyecto
       onSuccess?.()
-      const irAlProyecto = confirm(
-        'Proyecto creado correctamente.\n\n' +
-        '¿Quieres ir al módulo de Proyectos para verlo?'
-      )
-      if (irAlProyecto) router.push('/proyectos')
+      const irAlProyecto = (await confirmar(
+        'Obra creada correctamente.\n\n' +
+        '¿Quieres ir a verla?'
+      ))
+      if (irAlProyecto) {
+        await mutate('/api/proyectos')
+        router.push(`/obra/${data.proyecto_id}`)
+      }
     } catch (err: any) {
-      alert('Error de red: ' + (err?.message || err))
+      avisar('Error de red: ' + (err?.message || err))
     } finally {
       setLoading(false)
     }
@@ -84,7 +93,7 @@ export default function ConvertirBtn({ cotizacion, onSuccess }: Props) {
     <button
       onClick={convertir}
       disabled={loading}
-      title="Convertir esta cotización en proyecto activo"
+      title="Convertir esta cotización en obra"
       className={`inline-flex items-center gap-1 px-[10px] py-1 border-none rounded-[5px] text-[11px] font-bold text-white
         ${loading ? 'bg-[#a0aab8] cursor-default opacity-70' : 'bg-accent cursor-pointer opacity-100'}`}>
       {loading ? '...' : '↗ Convertir'}

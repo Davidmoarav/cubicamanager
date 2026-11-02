@@ -9,6 +9,7 @@ import Link from 'next/link'
 import type { Proyecto } from '@/types'
 import type { Cliente } from '@/types/cliente'
 import type { EmpresaConfig } from '@/types/empresa'
+import { usePermisos } from '@/lib/usePermisos'
 
 function Campo({ v, placeholder }: { v?: string | null; placeholder: string }) {
   return v
@@ -31,6 +32,7 @@ export default function ClienteTab({ proyecto, onCambio }: {
   proyecto: Proyecto
   onCambio: () => void
 }) {
+  const { puedeEditar } = usePermisos('obra')
   const { data: clientes } = useSWR<Cliente[]>('/api/clientes')
   const { data: empresa } = useSWR<EmpresaConfig>('/api/empresa')
   const [guardando, setGuardando] = useState(false)
@@ -81,36 +83,36 @@ export default function ClienteTab({ proyecto, onCambio }: {
               <>
                 <div className="text-[13.5px] font-bold text-ink">{cliente.razon_social}</div>
                 <Campo v={cliente.rut ? `RUT: ${cliente.rut}` : undefined} placeholder="RUT pendiente" />
-                <Campo v={cliente.email} placeholder="email@cliente.com" />
+                <Campo v={cliente.email} placeholder="Email pendiente" />
                 <Campo v={cliente.telefono} placeholder="Teléfono del cliente" />
-                <button
+                {puedeEditar && (<button
                   onClick={() => setEligiendo(true)}
                   className="text-[12px] font-bold text-om hover:text-om-dark mt-1"
                 >
                   Cambiar cliente
-                </button>
+                </button>)}
               </>
             ) : (
               <>
                 <div className="text-[13px] text-subtle italic">Sin datos del cliente.</div>
-                <button
+                {puedeEditar && (<button
                   onClick={() => setEligiendo(true)}
                   className="mt-2 px-3.5 py-2 rounded-xl bg-om hover:bg-om-dark text-white text-[12.5px] font-bold transition"
                 >
                   + Asociar cliente
-                </button>
+                </button>)}
               </>
             )}
           </Bloque>
 
-          <Bloque titulo="Ubicación del proyecto">
+          <Bloque titulo="Ubicación de la obra">
             <Campo v={cliente?.direccion} placeholder="Dirección (Av. Las Condes 1234, Depto 5)" />
             <Campo
               v={[cliente?.comuna, cliente?.ciudad].filter(Boolean).join(' / ') || undefined}
               placeholder="Ciudad / Comuna"
             />
             <div className="text-[11px] text-subtle mt-1">
-              Se usa la dirección del cliente. Podrás fijar otra ubicación de obra en la Fase 5.
+              Se usa la dirección del cliente.
             </div>
           </Bloque>
         </div>

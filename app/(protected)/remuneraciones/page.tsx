@@ -5,21 +5,22 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, MetricCard } from '@/components/ui'
-import FiltroObra from '@/components/FiltroObra'
+import FiltroObra, { useObraFiltro } from '@/components/FiltroObra'
 import { filtrarPorObra } from '@/lib/consolidado'
-import { fmt } from '@/lib/format'
+import { fmt, fmtPeriodo } from '@/lib/format'
+import { ETIQUETA_LIQUIDACION, estadoLiquidacion, valoresLiquidacion, type EstadoLiquidacion } from '@/lib/liquidaciones'
 import { calcularLiquidacion, type ParametrosRemuneracion, type EmpleadoPrevisional } from '@/types/finanzas'
 
-const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
+const COLOR_ESTADO: Record<EstadoLiquidacion, string> = {
+  sin_guardar: 'text-warning bg-warning-bg',
+  desactualizada: 'text-warning bg-warning-bg',
+  guardada: 'text-success bg-success-bg',
+  pagada: 'text-brand bg-brand-bg',
+}
 
 function periodoActual() {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-}
-
-function labelPeriodo(periodo: string) {
-  const [y, m] = periodo.split('-')
-  return `${MESES[Number(m) - 1]} ${y}`
 }
 
 export default function RemuneracionesPage() {
@@ -31,8 +32,11 @@ export default function RemuneracionesPage() {
   const empleados = useMemo(() => (empData as any[]).filter((e: any) => e.estado !== 'inactivo'), [empData])
   useEffect(() => { if (paramsData !== undefined) setParams(prev => prev ?? paramsData) }, [paramsData])
   const [periodo, setPeriodo] = useState(periodoActual())
+  // Sin datos del mes anterior mientras carga: mostraría un estado que no es de este mes
+  const { data: guardadas, mutate: mutGuardadas } = useSWR<any[]>(`/api/remuneraciones?periodo=${periodo}`, fetcher, { keepPreviousData: false })
+  const [ocupado, setOcupado] = useState<string | null>(null)
   const [savingParams, setSavingParams] = useState(false)
-  const [msg, setMsg] = useState<string | null>(null)
+  const [msg, setMsg] = useState<{ texto: string; error?: boolean } | null>(null)
 
   // Modal de edición previsional de empleado
   const [empModal, setEmpModal] = useState<EmpleadoPrevisional | null>(null)
@@ -40,16 +44,28 @@ export default function RemuneracionesPage() {
   const [savingEmp, setSavingEmp] = useState(false)
 
   // ─── Carga inicial ───────────────────────────────────────
+  useEffect(() => {
+    const mes = new URLSearchParams(window.location.search).get('periodo')
+    if (mes && /^\d{4}-\d{2}$/.test(mes)) setPeriodo(mes)
+  }, [])
 
   // ─── Liquidaciones calculadas en vivo ────────────────────
-  const [obra, setObra] = useState('')
+  const [obra, setObra] = useObraFiltro()
   const liquidaciones = useMemo(() => {
     if (!params) return []
-    return filtrarPorObra(empleados as any[], obra).map((emp: any) => ({
-      empleado: emp,
-      calc: calcularLiquidacion(emp, params),
-    }))
-  }, [empleados, params, obra])
+    return filtrarPorObra(empleados as any[], obra).map((emp: any) => {
+      const calculada = calcularLiquidacion(emp, params)
+      const guardada = (Array.isArray(guardadas) ? guardadas : []).find(l => l.empleado_id === emp.id)
+      return {
+        empleado: emp,
+        guardada,
+        calc: valoresLiquidacion<typeof calculada>(guardada, calculada),
+        estado: estadoLiquidacion(guardada, calculada),
+      }
+    })
+  }, [empleados, params, obra, guardadas])
+
+  const sinGuardar = guardadas ? liquidaciones.filter(l => l.estado === 'sin_guardar') : []
 
   const totales = useMemo(() => {
     return liquidaciones.reduce((acc, l) => ({
@@ -70,7 +86,7 @@ export default function RemuneracionesPage() {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
     })
-    if (res.ok) setMsg('Parámetros guardados correctamente')
+    setMsg(res.ok ? { texto: 'Parámetros guardados correctamente' } : { texto: 'No se pudieron guardar los parámetros', error: true })
     setSavingParams(false)
   }
 
@@ -95,14 +111,48 @@ export default function RemuneracionesPage() {
   // ─── Guardar liquidación de un empleado ──────────────────
   // El servidor recalcula desde el empleado + parámetros guardados
   // (lo que se ve en pantalla es referencial).
-  const guardarLiq = async (emp: EmpleadoPrevisional, _calc: any) => {
+  const guardarLiq = async (emp: EmpleadoPrevisional) => {
     const res = await fetch('/api/remuneraciones', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ empleado_id: emp.id, periodo, estado: 'borrador' }),
     })
     const j = await res.json().catch(() => ({}))
-    if (!res.ok) { setMsg(`No se pudo guardar la liquidación de ${emp.nombre}: ${j.error || 'error desconocido'}`); return }
-    setMsg(j.aviso ? `Liquidación de ${emp.nombre} guardada. ${j.aviso}` : `Liquidación de ${emp.nombre} guardada`)
+    if (!res.ok) return { texto: `No se pudo guardar la liquidación de ${emp.nombre}: ${j.error || 'error desconocido'}`, error: true }
+    return j.aviso
+      ? { texto: `Liquidación de ${emp.nombre} guardada. ${j.aviso}`, error: true }
+      : { texto: `Liquidación de ${emp.nombre} guardada` }
+  }
+
+  const guardarUna = async (emp: EmpleadoPrevisional) => {
+    setOcupado(emp.id as string)
+    setMsg(await guardarLiq(emp))
+    await mutGuardadas()
+    setOcupado(null)
+  }
+
+  const guardarTodas = async () => {
+    setOcupado('todas')
+    const problemas: string[] = []
+    for (const { empleado } of sinGuardar) {
+      const r = await guardarLiq(empleado)
+      if (r.error) problemas.push(r.texto)
+    }
+    await mutGuardadas()
+    setOcupado(null)
+    setMsg(problemas.length > 0
+      ? { texto: problemas.join(' '), error: true }
+      : { texto: `Se guardaron ${sinGuardar.length} liquidaciones de ${fmtPeriodo(periodo)}` })
+  }
+
+  const cambiarPago = async (liquidacion: any, estado: 'pagada' | 'borrador') => {
+    setOcupado(liquidacion.empleado_id)
+    const res = await fetch('/api/remuneraciones', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: liquidacion.id, estado }),
+    })
+    if (!res.ok) setMsg({ texto: 'No se pudo cambiar el estado de la liquidación', error: true })
+    await mutGuardadas()
+    setOcupado(null)
   }
 
   if (isLoading || !params) return <p className="text-muted p-5">Cargando...</p>
@@ -115,8 +165,8 @@ export default function RemuneracionesPage() {
       </div>
 
       {msg && (
-        <div className="bg-success-bg text-success border border-[#b9e0c9] px-4 py-2.5 rounded-xl mb-4 text-[13px]">
-          {msg}
+        <div className={`border px-4 py-2.5 rounded-xl mb-4 text-[13px] ${msg.error ? 'bg-danger-bg text-danger border-[#f5c6c2]' : 'bg-success-bg text-success border-[#b9e0c9]'}`}>
+          {msg.texto}
         </div>
       )}
 
@@ -139,13 +189,12 @@ export default function RemuneracionesPage() {
       {tab === 'liquidaciones' && (
         <div>
           {/* Selector de período */}
-          <div className="flex items-center gap-3 mb-[18px]">
+          <div className="flex items-center gap-3 mb-[18px] flex-wrap">
             <label className="text-[13px] font-semibold text-muted">Período:</label>
             <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
             <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
               className="px-3 py-2 border border-[#d1d9e6] rounded-[7px] text-[13px]" />
-            <span className="text-[13px] text-[#1a2535] font-semibold">{labelPeriodo(periodo)}</span>
-          </div>
+                      </div>
 
           {/* Métricas */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
@@ -154,9 +203,20 @@ export default function RemuneracionesPage() {
             <MetricCard label="Líquido a pagar"  value={fmt(totales.liquido)} subColor="#1a7a4a" sub="Total nómina del mes" />
           </div>
 
+          {sinGuardar.length > 0 && (
+            <div className="flex items-center justify-between gap-3 flex-wrap bg-warning-bg rounded-lg px-3.5 py-2.5 mb-3">
+              <span className="text-[12.5px] text-warning font-semibold">
+                {sinGuardar.length === 1 ? '1 liquidación' : `${sinGuardar.length} liquidaciones`} de {fmtPeriodo(periodo)} sin guardar: su sueldo todavía no entra al costo de las obras.
+              </span>
+              <Btn variant="primary" onClick={guardarTodas} disabled={!!ocupado}>
+                {ocupado === 'todas' ? 'Guardando...' : `Guardar todas (${sinGuardar.length})`}
+              </Btn>
+            </div>
+          )}
+
           {/* Tabla de liquidaciones */}
           <div className="bg-white border border-[#e4e9f0] rounded-xl p-[18px] overflow-x-auto">
-            <table className="w-full border-collapse text-[12px] min-w-[800px]">
+            <table className="w-full border-collapse text-[12px] min-w-[920px]">
               <thead>
                 <tr className="border-b-2 border-[#e4e9f0]">
                   <th className={thS}>Empleado</th>
@@ -167,11 +227,12 @@ export default function RemuneracionesPage() {
                   <th className={thNum}>Impuesto</th>
                   <th className={thNum}>Otros</th>
                   <th className={thNum}>Líquido</th>
+                  <th className={thS}>Estado</th>
                   <th className={thS}></th>
                 </tr>
               </thead>
               <tbody>
-                {liquidaciones.map(({ empleado, calc }) => (
+                {liquidaciones.map(({ empleado, calc, guardada, estado }) => (
                   <tr key={empleado.id} className="border-b border-canvas">
                     <td className={tdS}>
                       <div className="font-bold text-[#1a2535]">{empleado.nombre}</div>
@@ -185,7 +246,24 @@ export default function RemuneracionesPage() {
                     <td className={`${tdNum} text-danger`}>{fmt(calc.otros_descuentos)}</td>
                     <td className={`${tdNum} font-extrabold text-success`}>{fmt(calc.liquido_pagar)}</td>
                     <td className={tdS}>
-                      <Btn onClick={() => guardarLiq(empleado, calc)} className="text-[11px] px-2.5 py-1.5">Guardar</Btn>
+                      {guardadas && (
+                        <span className={`text-[10.5px] font-bold px-2 py-1 rounded whitespace-nowrap ${COLOR_ESTADO[estado]}`}>{ETIQUETA_LIQUIDACION[estado]}</span>
+                      )}
+                    </td>
+                    <td className={tdS}>
+                      <div className="flex gap-1.5 justify-end">
+                        {(estado === 'sin_guardar' || estado === 'desactualizada') && (
+                          <Btn onClick={() => guardarUna(empleado)} disabled={!!ocupado} className="text-[11px] px-2.5 py-1.5">
+                            {estado === 'sin_guardar' ? 'Guardar' : 'Actualizar'}
+                          </Btn>
+                        )}
+                        {(estado === 'guardada' || estado === 'desactualizada') && (
+                          <Btn onClick={() => cambiarPago(guardada, 'pagada')} disabled={!!ocupado} className="text-[11px] px-2.5 py-1.5 whitespace-nowrap">Marcar pagada</Btn>
+                        )}
+                        {estado === 'pagada' && (
+                          <Btn onClick={() => cambiarPago(guardada, 'borrador')} disabled={!!ocupado} className="text-[11px] px-2.5 py-1.5 whitespace-nowrap">Deshacer pago</Btn>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -195,7 +273,7 @@ export default function RemuneracionesPage() {
           </div>
 
           <p className="text-[11px] text-muted mt-2.5">
-            Las liquidaciones se calculan automáticamente con los parámetros y datos previsionales de cada empleado. Edita los datos en la pestaña correspondiente.
+            Solo lo guardado llega al costo de las obras. Una liquidación guardada conserva sus montos: si cambian los datos del trabajador o los parámetros, aparece "Datos cambiaron" y puedes actualizarla.
           </p>
         </div>
       )}
@@ -274,9 +352,9 @@ export default function RemuneracionesPage() {
                   setMsg(null)
                   const res = await fetch('/api/indicadores')
                   const j = await res.json()
-                  if (!res.ok) { setMsg(j.error || 'No se pudo obtener UF/UTM'); return }
+                  if (!res.ok) { setMsg({ texto: j.error || 'No se pudo obtener UF/UTM', error: true }); return }
                   setParams(p => p ? { ...p, uf_valor: j.uf, utm_valor: j.utm } : p)
-                  setMsg(`UF $${j.uf.toLocaleString('es-CL')} y UTM $${j.utm.toLocaleString('es-CL')} traídas de ${j.fuente}. Recuerda Guardar.`)
+                  setMsg({ texto: `UF $${j.uf.toLocaleString('es-CL')} y UTM $${j.utm.toLocaleString('es-CL')} traídas de ${j.fuente}. Recuerda Guardar.` })
                 }}>
                   ↻ Traer UF/UTM del día
                 </Btn>

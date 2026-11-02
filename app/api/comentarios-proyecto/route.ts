@@ -9,7 +9,7 @@ import { z } from 'zod'
 
 const faltaMigracion = (msg: string) =>
   /relation .* does not exist|could not find|schema cache/i.test(msg)
-    ? '⚠ Falta ejecutar sql/37_gantt_comentarios.sql en Supabase (SQL Editor → Run). Si ya lo hiciste, espera unos segundos y reintenta.'
+    ? 'Esta función aún no está activada. Avisa al administrador.'
     : msg
 
 export async function GET(req: NextRequest) {

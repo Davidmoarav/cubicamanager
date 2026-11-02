@@ -10,6 +10,7 @@ import DescargarOCBtn from '@/components/DescargarOCBtn'
 import SelectorCatalogo from '@/components/SelectorCatalogo'
 import SelectorFactura from '@/components/SelectorFactura'
 import RecepcionOC from '@/components/RecepcionOC'
+import FiltroObra from '@/components/FiltroObra'
 import { Btn, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { opcionesPartida } from '@/lib/costos'
@@ -47,11 +48,13 @@ const CONCILIACION: Record<string, { texto: string; cls: string }> = {
 export default function OrdenesCompraPage() {
   const [busqueda, setBusqueda] = useState('')
   const [limite, setLimite]     = useState(60)
+  const [obra, setObra]         = useState('')
+  const paramObra = obra ? `&obra=${obra}` : ''
   const buscando = busqueda.trim().length >= 1
   const { data: items = [], isLoading, mutate } = useSWR<any[]>(
-    buscando ? `/api/ordenes-compra?buscar=${encodeURIComponent(busqueda.trim())}` : `/api/ordenes-compra?limit=${limite}`,
+    buscando ? `/api/ordenes-compra?buscar=${encodeURIComponent(busqueda.trim())}${paramObra}` : `/api/ordenes-compra?limit=${limite}${paramObra}`,
     fetcher)
-  const { data: resumen, mutate: mutResumen } = useSWR<any>('/api/ordenes-compra?resumen=1', fetcher)
+  const { data: resumen, mutate: mutResumen } = useSWR<any>(`/api/ordenes-compra?resumen=1${paramObra}`, fetcher)
   const { data: proveedores = [] } = useSWR<any[]>('/api/proveedores', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
 
@@ -213,10 +216,11 @@ export default function OrdenesCompraPage() {
       </div>
 
       {/* Buscador */}
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap gap-2 items-center">
         <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
           placeholder="Buscar por proveedor o proyecto…"
-          className="input-base !mb-0 w-full max-w-sm" />
+          className="input-base !mb-0 flex-1 min-w-[220px] max-w-sm" />
+        <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
       </div>
 
       {/* Tabla */}

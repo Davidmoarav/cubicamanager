@@ -82,7 +82,18 @@ export async function GET(req: Request) {
   if (!periodo) q = q.limit(300)   // sin período no cargamos todo el histórico
   const { data, error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+
+  // Una nota sigue a la factura que modifica, aunque esta sea de otro mes
+  const filas: any[] = data ?? []
+  const refs = [...new Set(filas.filter(f => f.factura_ref).map(f => f.factura_ref))]
+  if (refs.length === 0) return NextResponse.json(filas)
+  const { data: originales } = await supabase.from('facturas')
+    .select('id, proyecto, proyecto_id').eq('user_id', ownerId).in('id', refs)
+  const porId = new Map((originales ?? []).map((o: any) => [o.id, o]))
+  return NextResponse.json(filas.map(f => {
+    const o: any = porId.get(f.factura_ref)
+    return o && (o.proyecto_id || o.proyecto) ? { ...f, proyecto: o.proyecto, proyecto_id: o.proyecto_id } : f
+  }))
 }
 
 export async function POST(req: Request) {

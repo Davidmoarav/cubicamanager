@@ -3,19 +3,11 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
+import { useRouter } from 'next/navigation'
 import { fetcher } from '@/lib/fetcher'
 import { usePermisos } from '@/lib/usePermisos'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, fmtM } from '@/components/ui'
 import type { Proyecto } from '@/types'
-import DocumentosPanel from '@/components/DocumentosPanel'
-import PartidasPanel from '@/components/PartidasPanel'
-import PresupuestoPanel from '@/components/PresupuestoPanel'
-import ManoObraPanel from '@/components/ManoObraPanel'
-import ParteDiarioPanel from '@/components/ParteDiarioPanel'
-import BodegaPanel from '@/components/BodegaPanel'
-import SubcontratosPanel from '@/components/SubcontratosPanel'
-import EquiposPanel from '@/components/EquiposPanel'
-import InformePanel from '@/components/InformePanel'
 
 const EMPTY: Omit<Proyecto, 'id'|'created_at'|'user_id'> = { nombre:'', cliente:'', descripcion:'', valor:0, avance:0, estado:'cotizacion', inicio:'', fin:'' }
 
@@ -28,8 +20,7 @@ const META: Record<string, { label: string; dot: string; chip: string; bar: stri
 export default function ProyectosPage() {
   const { data: items = [], isLoading, mutate } = useSWR<Proyecto[]>('/api/proyectos', fetcher)
   const [modal, setModal]     = useState<'nuevo'|'editar'|null>(null)
-  const [gestion, setGestion] = useState<Proyecto | null>(null)
-  const [tab, setTab]         = useState<'obra' | 'presupuesto' | 'mano_obra' | 'parte' | 'bodega' | 'subcontratos' | 'equipos' | 'informe' | 'docs'>('obra')
+  const router = useRouter()
   const [form, setForm]       = useState<any>({})
   const [filtro, setFiltro]   = useState('todos')
   const [saving, setSaving]   = useState(false)
@@ -50,7 +41,7 @@ export default function ProyectosPage() {
 
   const openNew = () => { setForm({ ...EMPTY }); setFormError(''); setModal('nuevo') }
   const openEdit = (p: Proyecto) => { setForm({ ...p }); setFormError(''); setModal('editar') }
-  const openGestion = (p: Proyecto) => { setGestion(p); setTab('obra') }
+  const openGestion = (p: Proyecto) => router.push(`/obra/${p.id}`)
 
   const save = async () => {
     if (!form.nombre || !form.cliente) {
@@ -280,49 +271,6 @@ export default function ProyectosPage() {
             <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Guardando…' : 'Guardar'}</Btn>
           </div>
         </Modal>
-      )}
-
-      {/* ── MODAL GESTIÓN DE OBRA (3 tabs) ── */}
-      {gestion && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2 sm:p-5" onClick={() => { setGestion(null); refresh() }}>
-          <div className="bg-white rounded-card p-4 sm:p-7 max-w-[860px] w-full shadow-pop max-h-[92vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="text-lg font-bold text-ink m-0 flex items-center gap-2">{gestion.nombre}</h3>
-              <button onClick={() => { setGestion(null); refresh() }} className="text-2xl text-muted hover:text-ink leading-none transition">×</button>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-1 mb-6 p-1 bg-canvas rounded-xl overflow-x-auto no-scrollbar">
-              {[
-                { key: 'obra' as const,        label: 'Control de obra' },
-                { key: 'presupuesto' as const, label: 'Presupuesto y pagos' },
-                { key: 'mano_obra' as const,   label: 'Mano de obra' },
-                { key: 'parte' as const,       label: 'Parte diario' },
-                { key: 'bodega' as const,      label: 'Bodega' },
-                { key: 'subcontratos' as const, label: 'Subcontratos' },
-                { key: 'equipos' as const,     label: 'Equipos' },
-                { key: 'informe' as const,     label: 'Informe ejecutivo' },
-                { key: 'docs' as const,        label: 'Documentos' },
-              ].map(t => (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`shrink-0 lg:flex-1 whitespace-nowrap px-3 py-2 rounded-lg text-[13px] font-semibold transition
-                    ${tab === t.key ? 'bg-white text-brand shadow-card' : 'text-muted hover:text-ink'}`}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            {tab === 'obra'        && <PartidasPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} markupGlobal={(gestion as any).markup_global ?? 20} onAvanceChange={refresh} />}
-            {tab === 'presupuesto' && <PresupuestoPanel proyectoId={gestion.id} valorContrato={gestion.valor} anticipoRecibido={(gestion as any).anticipo ?? 0} proyectoNombre={gestion.nombre} proyectoCliente={gestion.cliente} proyectoDireccion={(gestion as any).direccion} />}
-            {tab === 'mano_obra'   && <ManoObraPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
-            {tab === 'parte'       && <ParteDiarioPanel proyectoId={gestion.id} />}
-            {tab === 'bodega'      && <BodegaPanel proyectoId={gestion.id} />}
-            {tab === 'subcontratos' && <SubcontratosPanel proyectoId={gestion.id} />}
-            {tab === 'equipos'     && <EquiposPanel proyectoId={gestion.id} />}
-            {tab === 'informe'     && <InformePanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
-            {tab === 'docs'        && <DocumentosPanel proyectoId={gestion.id} proyectoNombre={gestion.nombre} />}
-          </div>
-        </div>
       )}
     </div>
   )

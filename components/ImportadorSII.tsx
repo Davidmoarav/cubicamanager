@@ -8,7 +8,7 @@ import useSWR from 'swr'
 import { Btn, Modal } from '@/components/ui'
 import { fetcher } from '@/lib/fetcher'
 import { fmt } from '@/lib/format'
-import { decodificarCSV, splitCSVLine, parseFechaSII, parseMontoSII, mapTipoDocSII } from '@/lib/sii'
+import { decodificarCSV, parsearRCV } from '@/lib/sii'
 
 interface FilaSII {
   numero: string
@@ -82,10 +82,6 @@ export default function ImportadorSII({ onImported }: Props) {
   const [refs, setRefs]       = useState<Record<number, string>>({})   // index -> id de factura (UUID)
   const [refLabels, setRefLabels] = useState<Record<number, string>>({})   // index -> folio (display)
 
-  // Normaliza nombre de columna para buscar (sin tildes, minúsculas)
-  const norm = (s: string) => s.toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
-
   const procesarArchivo = (file: File) => {
     setError(''); setResultado(null)
     setNombreArchivo(file.name)
@@ -99,70 +95,10 @@ export default function ImportadorSII({ onImported }: Props) {
       try {
         // Decodifica UTF-8 y, si viene corrupto (SII exporta Latin-1), reintenta en Windows-1252
         const texto = decodificarCSV(e.target?.result as ArrayBuffer)
-        const lineas = texto.split(/\r?\n/).filter(l => l.trim())
-        if (lineas.length < 2) { setError('El archivo está vacío o no tiene datos'); return }
-
-        // Detectar separador (; o ,)
-        const sep = lineas[0].includes(';') ? ';' : ','
-        const header = splitCSVLine(lineas[0], sep).map(h => norm(h))
-
-        // Buscar índices de columnas por nombre (flexible)
-        const idx = (nombres: string[]) => {
-          for (const n of nombres) {
-            const i = header.findIndex(h => h.includes(norm(n)))
-            if (i >= 0) return i
-          }
-          return -1
-        }
-
-        const iFolio  = idx(['folio'])
-        const iRut    = idx(['rutproveedor', 'rutcliente', 'rut'])
-        const iRazon  = idx(['razonsocial', 'razon'])
-        const iFecha  = idx(['fechadocto', 'fechaemision', 'fecha'])
-        const iNeto   = idx(['montoneto', 'neto'])
-        const iExento = idx(['montoexento', 'exento'])
-        const iIva    = idx(['montoivarecuperable', 'ivarecuperable', 'montoiva', 'iva'])
-        const iTotal  = idx(['montototal', 'total'])
-        const iTipoDoc= idx(['tipodoc', 'tipodte', 'tipodocumento'])
-        const iRef    = idx(['nceondesobrefact', 'ndesobrefact', 'sobrefactdecompra', 'sobrefact', 'facturareferencia', 'referencia'])
-
-        if (iNeto < 0 || iTotal < 0) {
-          setError('No se reconocen las columnas del archivo. ¿Es un RCV del SII?')
-          return
-        }
-
-        const parsed: FilaSII[] = []
-        let sinMontos = 0
-        for (let i = 1; i < lineas.length; i++) {
-          // Split que respeta comillas: "EMPRESA X, LTDA" ya no corre las columnas
-          const c = splitCSVLine(lineas[i], sep)
-          const neto = parseMontoSII(c[iNeto])
-          const exento = iExento >= 0 ? parseMontoSII(c[iExento]) : 0
-          const total = parseMontoSII(c[iTotal])
-          const iva = iIva >= 0 ? parseMontoSII(c[iIva]) : 0
-          if (neto === 0 && total === 0 && exento === 0 && iva === 0) { sinMontos++; continue }
-
-          const emision = iFecha >= 0 ? parseFechaSII(c[iFecha]) : null
-          const codTipo = iTipoDoc >= 0 ? (c[iTipoDoc] || '').trim() : '33'
-
-          parsed.push({
-            numero: iFolio >= 0 ? (c[iFolio] || '').trim() : '',
-            contraparte: iRazon >= 0 ? (c[iRazon] || '').trim() : 'Sin nombre',
-            rut: iRut >= 0 ? (c[iRut] || '').trim() : '',
-            neto: neto + exento,   // el neto total incluye lo exento (sin IVA)
-            exento,
-            iva,
-            total,
-            emision,
-            periodo: emision ? emision.slice(0, 7) : null,
-            doc_tipo: mapTipoDocSII(codTipo),
-            ref_detectada: iRef >= 0 ? (c[iRef] || '').trim() : '',
-          })
-        }
-
-        setOmitidas(sinMontos)
-        if (parsed.length === 0) { setError('No se encontraron facturas válidas en el archivo'); return }
-        setFilas(parsed)
+        const r = parsearRCV(texto)
+        setOmitidas(r.omitidas)
+        if (r.error) { setError(r.error); return }
+        setFilas(r.filas)
       } catch (err: any) {
         setError('Error al leer el archivo: ' + (err?.message || 'desconocido'))
       }

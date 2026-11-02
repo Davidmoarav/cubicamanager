@@ -17,12 +17,14 @@ export const MENU: NavItem[] = [
   { href: '/clientes',          label: 'Clientes',          icon: '◍', section: 'Comercial' },
 
   { href: '/proyectos',         label: 'Proyectos',         icon: '◧', section: 'Obra' },
+  { href: '/terreno',           label: 'Terreno',           icon: '📍', section: 'Obra' },
   { href: '/catalogo-partidas', label: 'Catálogo partidas', icon: '📋', section: 'Obra' },
   { href: '/ordenes-compra',    label: 'Órdenes de compra', icon: '🛒', section: 'Obra' },
   { href: '/proveedores',       label: 'Proveedores',       icon: '◦', section: 'Obra' },
 
   { href: '/finanzas',          label: 'Finanzas',          icon: '◈', section: 'Finanzas' },
   { href: '/facturacion',       label: 'Facturación',       icon: '◻', section: 'Finanzas' },
+  { href: '/reportes',          label: 'Reportes por obra', icon: '📊', section: 'Finanzas' },
 
   { href: '/rrhh',              label: 'RRHH',              icon: '◉', section: 'Personal' },
   { href: '/remuneraciones',    label: 'Remuneraciones',    icon: '💰', section: 'Personal' },
@@ -37,6 +39,8 @@ export const MENU: NavItem[] = [
 // servidor (lib/roles.ts); esto solo evita mostrar lo que no corresponde.
 export const ACCESO: Record<string, string[]> = {
   '/proyectos':      ['admin', 'jefe_obra'],
+  '/terreno':        ['admin', 'jefe_obra'],
+  '/reportes':       ['admin', 'contador'],
   '/facturacion':    ['admin', 'contador'],
   '/finanzas':       ['admin', 'contador'],
   '/remuneraciones': ['admin', 'contador'],

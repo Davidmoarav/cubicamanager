@@ -20,6 +20,9 @@ const NOMBRE_TABLA: Record<string, string> = {
   parte_diario: 'Parte diario', recepciones_oc: 'Recepciones de OC',
   bodega_movimientos: 'Bodega', subcontratos: 'Subcontratos', subcontrato_eps: 'EP de subcontratos',
   equipos: 'Equipos', equipo_usos: 'Uso de equipos',
+  partida_dependencias: 'Dependencias de Gantt', libro_obra: 'Libro de obra',
+  prevencion_registros: 'Prevención de riesgos', partida_apu_recursos: 'Recursos de APU',
+  dte_emisiones: 'Emisiones de DTE',
 }
 
 export async function GET(req: Request) {

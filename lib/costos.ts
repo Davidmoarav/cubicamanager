@@ -65,6 +65,10 @@ export function resolverDocumentosCompra<T extends DocCompra>(docs: T[]): T[] {
     })
 }
 
+// Enlace por id (fiable); si la factura aún no tiene id, se acepta el nombre exacto.
+export const docsDeObra = <T extends DocCompra>(docs: T[], proy: { id: string; nombre?: string }) =>
+  docs.filter(d => d.proyecto_id ? d.proyecto_id === proy.id : d.proyecto === proy.nombre)
+
 // Reparto de una factura entre partidas, según las OCs que paga (id de factura → pesos)
 export type PesosFacturas = Record<string, { partida_id: string | null; peso: number }[]>
 
@@ -100,8 +104,7 @@ export function calcularCostosObra(proy: any, partidas: any[], gastos: any[], do
   const gastoManual   = sumaGastos(gastosProy.filter(g =>
     !g.orden_compra_id && !g.liquidacion_id && !g.subcontrato_ep_id && !g.equipo_uso_id && !g.traspaso_id))
 
-  // Enlace por id (fiable); si la factura aún no tiene id, se acepta el nombre exacto.
-  const docsProy = docs.filter(d => d.proyecto_id ? d.proyecto_id === proy.id : d.proyecto === proy.nombre)
+  const docsProy = docsDeObra(docs, proy)
   const gastoFacturas = docsProy.reduce((s, d) => s + netoConSigno(d), 0)
 
   const gastoReal = gastoManual + gastoOrdenes + gastoSueldos + gastoSubcontratos + gastoEquipos + gastoTraspasos + gastoFacturas

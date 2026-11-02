@@ -104,6 +104,8 @@ export const DocumentoSchema = z.object({
   archivo_path: z.string().trim().max(1000),
   archivo_tipo: texto.nullish(),
   archivo_size: z.coerce.number().int().min(0).optional(),
+  libro_id:     uuid.nullish(),
+  prevencion_id: uuid.nullish(),
 }).strip()
 
 export const FacturaSchema = z.object({
@@ -216,6 +218,42 @@ export const UsoEquipoSchema = z.object({
   tarifa:      z.coerce.number().int().min(0).max(999_999_999_999).optional(),
   factura_id:  uuid.nullish(),
   notas:       texto.nullish(),
+}).strip()
+
+// Dependencia de la Carta Gantt: partida_id parte cuando termina depende_de_id
+export const DependenciaSchema = z.object({
+  partida_id:    uuid,
+  depende_de_id: uuid,
+  desfase_dias:  z.coerce.number().int().min(-365).max(365).optional(),
+}).strip()
+
+export const LibroObraSchema = z.object({
+  proyecto_id: uuid,
+  fecha,
+  tipo:        z.enum(['avance', 'observacion', 'instruccion_ito', 'visita', 'otro']),
+  clima:       texto.nullish(),
+  texto:       textoLargo.min(1, 'Escribe lo ocurrido en la obra'),
+}).strip()
+
+export const PrevencionSchema = z.object({
+  proyecto_id:   uuid,
+  tipo:          z.enum(['charla', 'epp', 'inspeccion', 'incidente']),
+  fecha,
+  titulo:        texto.min(1, 'Falta el título'),
+  detalle:       textoLargo.nullish(),
+  responsable:   texto.nullish(),
+  asistentes:    z.coerce.number().int().min(0).max(100000).optional(),
+  gravedad:      z.enum(['leve', 'grave', 'fatal']).nullish(),
+  dias_perdidos: z.coerce.number().int().min(0).max(100000).optional(),
+  estado:        z.enum(['abierto', 'cerrado']).optional(),
+}).strip()
+
+export const RecursoAPUSchema = z.object({
+  partida_id:  uuid,
+  tipo:        z.enum(['mano_obra', 'equipo', 'otro']),
+  descripcion: texto.min(1, 'Falta la descripción'),
+  cantidad:    z.coerce.number().positive('La cantidad debe ser mayor que 0').max(100000),
+  costo_dia:   z.coerce.number().int().min(0).max(999_999_999_999),
 }).strip()
 
 // ─── Helper: valida y devuelve datos limpios o un mensaje de error ───

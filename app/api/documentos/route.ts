@@ -45,6 +45,14 @@ export async function POST(req: Request) {
     .from('proyectos').select('id').eq('id', v.data.proyecto_id).eq('user_id', ownerId).maybeSingle()
   if (!proy) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
 
+  // Un adjunto debe ser de un registro de la misma obra
+  for (const [tabla, id] of [['libro_obra', v.data.libro_id], ['prevencion_registros', v.data.prevencion_id]] as const) {
+    if (!id) continue
+    const { data: reg } = await supabase
+      .from(tabla).select('id').eq('id', id).eq('proyecto_id', v.data.proyecto_id).eq('user_id', ownerId).maybeSingle()
+    if (!reg) return NextResponse.json({ error: 'El registro no pertenece a esta obra' }, { status: 400 })
+  }
+
   const { data, error } = await supabase
     .from('documentos')
     .insert({ ...v.data, user_id: ownerId })

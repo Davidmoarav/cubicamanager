@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle, MetricCard } from '@/components/ui'
+import FiltroObra from '@/components/FiltroObra'
+import { filtrarPorObra } from '@/lib/consolidado'
 import { fmt } from '@/lib/format'
 import { calcularLiquidacion, type ParametrosRemuneracion, type EmpleadoPrevisional } from '@/types/finanzas'
 
@@ -40,13 +42,14 @@ export default function RemuneracionesPage() {
   // ─── Carga inicial ───────────────────────────────────────
 
   // ─── Liquidaciones calculadas en vivo ────────────────────
+  const [obra, setObra] = useState('')
   const liquidaciones = useMemo(() => {
     if (!params) return []
-    return empleados.map(emp => ({
+    return filtrarPorObra(empleados as any[], obra).map((emp: any) => ({
       empleado: emp,
       calc: calcularLiquidacion(emp, params),
     }))
-  }, [empleados, params])
+  }, [empleados, params, obra])
 
   const totales = useMemo(() => {
     return liquidaciones.reduce((acc, l) => ({
@@ -138,6 +141,7 @@ export default function RemuneracionesPage() {
           {/* Selector de período */}
           <div className="flex items-center gap-3 mb-[18px]">
             <label className="text-[13px] font-semibold text-muted">Período:</label>
+            <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
             <input type="month" value={periodo} onChange={e => setPeriodo(e.target.value)}
               className="px-3 py-2 border border-[#d1d9e6] rounded-[7px] text-[13px]" />
             <span className="text-[13px] text-[#1a2535] font-semibold">{labelPeriodo(periodo)}</span>

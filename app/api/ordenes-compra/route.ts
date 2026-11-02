@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
   const sugerir = sp.get('sugerir')
   const proyectoId = sp.get('proyecto_id')
   const id = sp.get('id')
+  const obra = sp.get('obra')   // id de la obra, o 'sin' para las que no tienen
 
   // ── Sugerencia: materiales agregados del proyecto ──
   if (sugerir && proyectoId) {
@@ -86,8 +87,10 @@ export async function GET(req: NextRequest) {
 
   // ── Resumen agregado para las métricas (usa el total guardado) ──
   if (sp.get('resumen')) {
-    const { data, error } = await supabase
-      .from('ordenes_compra').select('estado, total').eq('user_id', ownerId)
+    let qr = supabase.from('ordenes_compra').select('estado, total').eq('user_id', ownerId)
+    if (obra === 'sin') qr = qr.is('proyecto_id', null)
+    else if (obra) qr = qr.eq('proyecto_id', obra)
+    const { data, error } = await qr
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     const rows = data ?? []
     return NextResponse.json({
@@ -103,6 +106,8 @@ export async function GET(req: NextRequest) {
   const buscar = sp.get('buscar')
   const limit = Math.min(Number(sp.get('limit')) || 60, 500)
   let q = supabase.from('ordenes_compra').select('*').eq('user_id', ownerId)
+  if (obra === 'sin') q = q.is('proyecto_id', null)
+  else if (obra) q = q.eq('proyecto_id', obra)
   if (buscar) {
     const term = buscar.trim().replace(/[,()%*\\]/g, '')
     if (term) q = q.or(`proveedor.ilike.%${term}%,proyecto.ilike.%${term}%`)

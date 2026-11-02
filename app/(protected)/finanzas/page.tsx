@@ -6,6 +6,9 @@ import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, MetricCard, SectionTitle } from '@/components/ui'
 import { fmt, fmtM } from '@/lib/format'
+import FiltroObra from '@/components/FiltroObra'
+import ConsolidadoObras from '@/components/ConsolidadoObras'
+import { filtrarPorObra, SIN_OBRA } from '@/lib/consolidado'
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 function labelPeriodo(p: string) {
@@ -15,7 +18,10 @@ function labelPeriodo(p: string) {
 }
 
 export default function FinanzasPage() {
-  const [tab, setTab] = useState<'resumen' | 'iva' | 'presupuesto'>('resumen')
+  const [tab, setTab] = useState<'resumen' | 'obras' | 'iva' | 'presupuesto'>('resumen')
+  const [obra, setObra] = useState('')
+  const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
+  const { data: consolidado } = useSWR<any>(obra ? '/api/finanzas/consolidado' : null, fetcher)
   const [periodoSel, setPeriodoSel] = useState<string>(new Date().toISOString().slice(0, 7))
 
   const { data: facturasResumen, isLoading, mutate: mutFacturas } = useSWR<any>('/api/facturas?resumen=1', fetcher)
@@ -33,10 +39,14 @@ export default function FinanzasPage() {
 
   // ─── Resumen ─────────────────────────────────────────────
   const resumen = useMemo(() => {
+    const nomina = filtrarPorObra(empleados, obra).reduce((s, x) => s + (x.sueldo || 0) + (x.horas_extra || 0) * 14000, 0)
+    if (obra) {
+      const fila = (consolidado?.filas ?? []).find((f: any) => (f.proyecto_id ?? SIN_OBRA) === obra)
+      return { cobrado: fila?.cobrado || 0, pendiente: fila?.por_cobrar || 0, vencido: fila?.vencido || 0, nomina }
+    }
     const v = facturasResumen?.ventas || {}
-    const nomina = empleados.reduce((s, x) => s + (x.sueldo || 0) + (x.horas_extra || 0) * 14000, 0)
     return { cobrado: v.cobrado || 0, pendiente: v.pendiente || 0, vencido: v.vencido || 0, nomina }
-  }, [facturasResumen, empleados])
+  }, [facturasResumen, empleados, obra, consolidado])
 
   // ─── IVA del período seleccionado ───────────────────────
   const periodosDisponibles = useMemo(() => {
@@ -95,6 +105,7 @@ export default function FinanzasPage() {
       <div className="inline-flex gap-1 p-1 bg-canvas rounded-xl mb-6">
         {[
           { key: 'resumen' as const,     label: 'Resumen' },
+          { key: 'obras' as const,       label: 'Por obra' },
           { key: 'iva' as const,         label: 'Control IVA' },
           { key: 'presupuesto' as const, label: 'Avance presupuestario' },
         ].map(t => (
@@ -106,9 +117,12 @@ export default function FinanzasPage() {
         ))}
       </div>
 
+      {tab === 'obras' && <ConsolidadoObras />}
+
       {/* ══════ RESUMEN ══════ */}
       {tab === 'resumen' && (
         <div>
+          <div className="mb-4"><FiltroObra value={obra} onChange={setObra} proyectos={proyectos} /></div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <MetricCard label="Ingresos cobrados" value={fmtM(resumen.cobrado)}   sub="Facturas pagadas"     subColor="#1a7a4a" />
             <MetricCard label="CxC pendiente"     value={fmtM(resumen.pendiente)} sub="Por cobrar"           subColor="#b07d1a" />
@@ -252,6 +266,7 @@ export default function FinanzasPage() {
       {/* ══════ AVANCE PRESUPUESTARIO ══════ */}
       {tab === 'presupuesto' && (
         <div>
+          <div className="mb-3"><FiltroObra value={obra === SIN_OBRA ? '' : obra} onChange={setObra} proyectos={proyectos} sinObra={false} /></div>
           <p className="text-[13px] text-muted mb-[18px]">
             Compara el avance físico de cada obra con el presupuesto ejecutado a la fecha (suma del % de avance × valor de cada partida).
           </p>
@@ -264,7 +279,7 @@ export default function FinanzasPage() {
               </div>
             : (
               <div className="flex flex-col gap-3.5">
-                {presupuesto.map(p => {
+                {presupuesto.filter(p => !obra || obra === SIN_OBRA || p.proyecto_id === obra).map(p => {
                   const desviacion = p.pct_presupuesto - p.avance_fisico
                   const alerta = desviacion > 10  // gasto va más rápido que avance físico
                   return (

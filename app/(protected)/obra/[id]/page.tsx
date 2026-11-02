@@ -4,49 +4,91 @@
 import useSWR from 'swr'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import type { Proyecto } from '@/types'
 import type { Cliente } from '@/types/cliente'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import type { EstadoPago } from '@/types/estado-pago'
-import { ESTADO_EP } from '@/types/estado-pago'
 import { fmt } from '@/lib/format'
 import { EstadoBadge, Metrica, fechaCorta } from '@/components/obra/ui-obra'
 import CopilotoBar from '@/components/obra/CopilotoBar'
-import ArchivosTab from '@/components/obra/ArchivosTab'
 import ClienteTab from '@/components/obra/ClienteTab'
 import ComprasTab from '@/components/obra/ComprasTab'
 import GanttTab from '@/components/obra/GanttTab'
 import ComentariosTab from '@/components/obra/ComentariosTab'
 import { DescargarPresupuestoPDFBtn, ExportarExcelBtn } from '@/components/obra/ExportarBtns'
 import CompartirPanel from '@/components/obra/CompartirPanel'
+import DocumentosPanel from '@/components/DocumentosPanel'
+import PartidasPanel from '@/components/PartidasPanel'
+import PresupuestoPanel from '@/components/PresupuestoPanel'
+import ManoObraPanel from '@/components/ManoObraPanel'
+import InformePanel from '@/components/InformePanel'
 import ParteDiarioPanel from '@/components/ParteDiarioPanel'
+import LibroObraPanel from '@/components/LibroObraPanel'
+import PrevencionPanel from '@/components/PrevencionPanel'
+import ApuPanel from '@/components/ApuPanel'
+import FlujoCajaPanel from '@/components/FlujoCajaPanel'
 import BodegaPanel from '@/components/BodegaPanel'
 import SubcontratosPanel from '@/components/SubcontratosPanel'
 import EquiposPanel from '@/components/EquiposPanel'
 
 const IVA = 0.19
 
-const TABS = [
-  { id: 'presupuesto', label: 'Presupuesto' },
-  { id: 'compras',     label: 'Compras' },
-  { id: 'gantt',       label: 'Carta Gantt' },
-  { id: 'parte',       label: 'Parte diario' },
-  { id: 'bodega',      label: 'Bodega' },
-  { id: 'subcontratos', label: 'Subcontratos' },
-  { id: 'equipos',     label: 'Equipos' },
-  { id: 'archivos',    label: 'Archivos' },
-  { id: 'cobros',      label: 'Cobros' },
-  { id: 'comentarios', label: 'Comentarios' },
-  { id: 'cliente',     label: 'Cliente' },
+// Todo lo de la obra, en un solo lugar
+const GRUPOS = [
+  {
+    id: 'costos', label: 'Presupuesto y costos',
+    tabs: [
+      { id: 'presupuesto', label: 'Presupuesto' },
+      { id: 'control',     label: 'Control de obra' },
+      { id: 'pagos',       label: 'Pagos y gasto real' },
+      { id: 'apu',         label: 'APU' },
+      { id: 'compras',     label: 'Compras' },
+      { id: 'flujo',       label: 'Flujo de caja' },
+      { id: 'informe',     label: 'Informe' },
+    ],
+  },
+  {
+    id: 'ejecucion', label: 'Ejecución',
+    tabs: [
+      { id: 'gantt',        label: 'Carta Gantt' },
+      { id: 'parte',        label: 'Parte diario' },
+      { id: 'mano_obra',    label: 'Mano de obra' },
+      { id: 'bodega',       label: 'Bodega' },
+      { id: 'subcontratos', label: 'Subcontratos' },
+      { id: 'equipos',      label: 'Equipos' },
+    ],
+  },
+  {
+    id: 'registro', label: 'Registro',
+    tabs: [
+      { id: 'libro',       label: 'Libro de obra' },
+      { id: 'prevencion',  label: 'Prevención' },
+      { id: 'archivos',    label: 'Documentos' },
+      { id: 'comentarios', label: 'Comentarios' },
+    ],
+  },
+  {
+    id: 'cliente', label: 'Cliente',
+    tabs: [{ id: 'cliente', label: 'Cliente' }],
+  },
 ]
 
-const PROXIMAMENTE: Record<string, { titulo: string; detalle: string; fase: string }> = {}
+const grupoDe = (tab: string) => GRUPOS.find(g => g.tabs.some(t => t.id === tab)) ?? GRUPOS[0]
 
 export default function ObraProyecto() {
   const params = useParams<{ id: string }>()
   const id = params?.id
-  const [tab, setTab] = useState('presupuesto')
+  const searchParams = useSearchParams()
+  const [tab, setTabState] = useState(() => {
+    const pedido = searchParams?.get('tab') ?? ''
+    return GRUPOS.some(g => g.tabs.some(t => t.id === pedido)) ? pedido : 'presupuesto'
+  })
+  // La pestaña queda en la URL: se puede recargar o compartir sin perderla
+  const setTab = (nueva: string) => {
+    setTabState(nueva)
+    window.history.replaceState(null, '', `?tab=${nueva}`)
+  }
   const [editando, setEditando] = useState(false)
   const [respuesta, setRespuesta] = useState('')
 
@@ -147,26 +189,41 @@ export default function ObraProyecto() {
         </div>
       </div>
 
-      {/* ─── Pestañas ─── */}
-      <div className="mt-5 border-b border-line flex gap-1 overflow-x-auto">
-        {TABS.map(t => (
+      {/* ─── Secciones y pestañas ─── */}
+      <div className="mt-5 flex gap-1 overflow-x-auto no-scrollbar">
+        {GRUPOS.map(g => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={g.id}
+            onClick={() => setTab(g.tabs[0].id)}
+            aria-pressed={grupoDe(tab).id === g.id}
             className={[
-              'px-3.5 py-2.5 text-[13px] font-bold whitespace-nowrap border-b-2 -mb-px transition',
-              tab === t.id
-                ? 'text-om border-om'
-                : 'text-muted border-transparent hover:text-ink',
+              'px-3.5 py-2 rounded-xl text-[12.5px] font-bold whitespace-nowrap transition',
+              grupoDe(tab).id === g.id ? 'bg-om-ink text-white' : 'text-muted hover:text-ink hover:bg-white',
             ].join(' ')}
           >
-            {t.label}
+            {g.label}
           </button>
         ))}
       </div>
+      {grupoDe(tab).tabs.length > 1 && (
+        <div className="mt-2 border-b border-line flex gap-1 overflow-x-auto">
+          {grupoDe(tab).tabs.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={[
+                'px-3.5 py-2.5 text-[13px] font-bold whitespace-nowrap border-b-2 -mb-px transition',
+                tab === t.id ? 'text-om border-om' : 'text-muted border-transparent hover:text-ink',
+              ].join(' ')}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ─── Contenido ─── */}
-      <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_290px]">
+      <div className={['mt-5 grid gap-5', tab === 'presupuesto' ? 'lg:grid-cols-[1fr_290px]' : ''].join(' ')}>
         <div className="min-w-0">
           {tab === 'presupuesto' && (
             <div className="bg-white rounded-card border border-line shadow-card overflow-hidden">
@@ -226,41 +283,41 @@ export default function ObraProyecto() {
             </div>
           )}
 
-          {tab === 'cobros' && (
-            <div className="bg-white rounded-card border border-line shadow-card overflow-hidden">
-              <div className="p-5 border-b border-line">
-                <h2 className="text-[16px] font-extrabold text-ink">Cobros · Estados de pago</h2>
-                <p className="text-[12.5px] text-muted mt-0.5">Datos reales de tu módulo de estados de pago.</p>
-              </div>
-              {listaEps.length === 0 ? (
-                <div className="p-8 text-center text-muted text-[13px]">
-                  Sin estados de pago aún. Créalos desde{' '}
-                  <Link href="/proyectos" className="text-om font-semibold">Proyectos</Link>.
-                </div>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {listaEps.map(ep => {
-                    const s = ESTADO_EP[ep.estado] ?? { label: ep.estado, bg: '#F1ECE6', color: '#6b7a8d' }
-                    return (
-                      <li key={ep.id} className="px-5 py-3.5 flex items-center gap-3">
-                        <span className="w-9 h-9 rounded-xl bg-om-bg text-om font-extrabold flex items-center justify-center text-[13px]">
-                          {ep.numero}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-ink text-[13.5px]">EP N°{ep.numero}{ep.periodo ? ` · ${ep.periodo}` : ''}</div>
-                          <div className="text-[12px] text-muted">{ep.fecha ? fechaCorta(ep.fecha) : ''} · Avance {Math.round(ep.avance_obra || 0)}%</div>
-                        </div>
-                        <span className="px-2.5 py-1 rounded-full text-[11px] font-bold" style={{ background: s.bg, color: s.color }}>
-                          {s.label}
-                        </span>
-                        <span className="font-extrabold text-ink text-[14px] w-28 text-right">{fmt(Number(ep.total) || 0)}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
+          {proyecto && tab === 'control' && (
+            <PanelObra>
+              <PartidasPanel proyectoId={proyecto.id} proyectoNombre={proyecto.nombre}
+                markupGlobal={(proyecto as any).markup_global ?? 20}
+                onAvanceChange={() => { mutPartidas(); mutProyectos() }} />
+            </PanelObra>
           )}
+
+          {proyecto && tab === 'pagos' && (
+            <PanelObra>
+              <PresupuestoPanel proyectoId={proyecto.id} valorContrato={proyecto.valor}
+                anticipoRecibido={(proyecto as any).anticipo ?? 0} proyectoNombre={proyecto.nombre}
+                proyectoCliente={proyecto.cliente} proyectoDireccion={(proyecto as any).direccion} />
+            </PanelObra>
+          )}
+
+          {proyecto && tab === 'apu' && (
+            <PanelObra>
+              <ApuPanel proyectoId={proyecto.id} onCambio={() => { mutPartidas(); mutProyectos() }} />
+            </PanelObra>
+          )}
+
+          {id && tab === 'flujo' && <PanelObra><FlujoCajaPanel proyectoId={id} /></PanelObra>}
+
+          {proyecto && tab === 'informe' && (
+            <PanelObra><InformePanel proyectoId={proyecto.id} proyectoNombre={proyecto.nombre} /></PanelObra>
+          )}
+
+          {proyecto && tab === 'mano_obra' && (
+            <PanelObra><ManoObraPanel proyectoId={proyecto.id} proyectoNombre={proyecto.nombre} /></PanelObra>
+          )}
+
+          {id && tab === 'libro' && <PanelObra><LibroObraPanel proyectoId={id} /></PanelObra>}
+
+          {id && tab === 'prevencion' && <PanelObra><PrevencionPanel proyectoId={id} /></PanelObra>}
 
           {tab === 'compras' && proyecto && (
             <ComprasTab proyecto={proyecto} partidas={Array.isArray(partidas) ? partidas : []} />
@@ -275,40 +332,30 @@ export default function ObraProyecto() {
           )}
 
           {tab === 'parte' && id && (
-            <div className="bg-white rounded-card border border-line shadow-card p-5">
-              <ParteDiarioPanel proyectoId={id} />
-            </div>
+            <PanelObra><ParteDiarioPanel proyectoId={id} /></PanelObra>
           )}
 
           {(tab === 'bodega' || tab === 'subcontratos' || tab === 'equipos') && id && (
-            <div className="bg-white rounded-card border border-line shadow-card p-5">
+            <PanelObra>
               {tab === 'bodega' && <BodegaPanel proyectoId={id} />}
               {tab === 'subcontratos' && <SubcontratosPanel proyectoId={id} />}
               {tab === 'equipos' && <EquiposPanel proyectoId={id} />}
-            </div>
+            </PanelObra>
           )}
 
           {tab === 'comentarios' && id && <ComentariosTab proyectoId={id} />}
 
-          {tab === 'archivos' && id && <ArchivosTab proyectoId={id} />}
+          {tab === 'archivos' && proyecto && (
+            <PanelObra><DocumentosPanel proyectoId={proyecto.id} proyectoNombre={proyecto.nombre} /></PanelObra>
+          )}
 
           {tab === 'cliente' && proyecto && (
             <ClienteTab proyecto={proyecto} onCambio={() => mutProyectos()} />
           )}
-
-          {PROXIMAMENTE[tab] && (
-            <div className="bg-white rounded-card border border-dashed border-line2 p-10 text-center">
-              <div className="inline-block px-3 py-1 rounded-full bg-om-bg text-om text-[11px] font-extrabold uppercase tracking-wide mb-3">
-                {PROXIMAMENTE[tab].fase}
-              </div>
-              <div className="text-[16px] font-extrabold text-ink">{PROXIMAMENTE[tab].titulo}</div>
-              <p className="text-[13px] text-muted mt-1.5 max-w-[420px] mx-auto">{PROXIMAMENTE[tab].detalle}</p>
-            </div>
-          )}
         </div>
 
         {/* ─── Rail derecho de acciones ─── */}
-        <aside className="space-y-3">
+        {tab === 'presupuesto' && <aside className="space-y-3">
           <div className="bg-white rounded-card border border-line shadow-card p-4 space-y-2.5">
             {proyecto && <CompartirPanel proyecto={proyecto} />}
             {proyecto && (
@@ -341,16 +388,22 @@ export default function ObraProyecto() {
               Generar plan de compra →
             </button>
           </div>
-        </aside>
+        </aside>}
       </div>
 
-      <CopilotoBar
-        onSubmit={editar}
-        busy={editando}
-        respuesta={respuesta}
-      />
+      {(tab === 'presupuesto' || tab === 'control') && (
+        <CopilotoBar
+          onSubmit={editar}
+          busy={editando}
+          respuesta={respuesta}
+        />
+      )}
     </div>
   )
+}
+
+function PanelObra({ children }: { children: React.ReactNode }) {
+  return <div className="bg-white rounded-card border border-line shadow-card p-4 sm:p-5">{children}</div>
 }
 
 // ─── Filas de la tabla de presupuesto ───

@@ -5,14 +5,18 @@ import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
+import FiltroObra from '@/components/FiltroObra'
+import { filtrarPorObra } from '@/lib/consolidado'
 import { IconEdit } from '@/components/Icon'
 import type { Empleado } from '@/types'
 
 const EMPTY: Omit<Empleado,'id'|'created_at'|'user_id'> = { nombre:'', rut:'', cargo:'', sueldo:0, horas_extra:0, estado:'activo', tipo:'planta', modalidad:'mensual', inicio:'' }
 
 export default function RRHHPage() {
-  const { data: items = [], isLoading, mutate } = useSWR<Empleado[]>('/api/empleados', fetcher)
+  const { data: todos = [], isLoading, mutate } = useSWR<Empleado[]>('/api/empleados', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
+  const [obra, setObra] = useState('')
+  const items = filtrarPorObra(todos as any[], obra) as Empleado[]
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
   const [saving, setSaving] = useState(false)
@@ -57,7 +61,10 @@ export default function RRHHPage() {
     <div>
       <div className="flex justify-between items-center mb-[18px]">
         <SectionTitle>Recursos humanos</SectionTitle>
-        <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Agregar trabajador</Btn>
+        <div className="flex gap-2 items-center flex-wrap">
+          <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
+          <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Agregar trabajador</Btn>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">

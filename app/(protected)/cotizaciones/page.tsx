@@ -12,6 +12,7 @@ import type { Cliente } from '@/types/cliente'
 import type { CatalogoPartida } from '@/types/catalogo-partida'
 import DescargarPDFBtn from '@/components/DescargarPDFBtn'
 import ConvertirBtn from '@/components/ConvertirBtn'
+import FiltroObra from '@/components/FiltroObra'
 
 const IVA = 0.19
 
@@ -50,14 +51,17 @@ export default function CotizacionesPage() {
   const [filtro, setFiltro]     = useState('todos')
   const [busqueda, setBusqueda] = useState('')
   const [limite, setLimite]     = useState(60)
+  const [obra, setObra]         = useState('')
+  const paramObra = obra ? `&obra=${obra}` : ''
   const buscando = busqueda.trim().length >= 1
   const { data: itemsRaw = [], isLoading, mutate } = useSWR<Cotizacion[]>(
     buscando
-      ? `/api/cotizaciones?buscar=${encodeURIComponent(busqueda.trim())}`
-      : `/api/cotizaciones?limit=${limite}&estado=${filtro}`,
+      ? `/api/cotizaciones?buscar=${encodeURIComponent(busqueda.trim())}${paramObra}`
+      : `/api/cotizaciones?limit=${limite}&estado=${filtro}${paramObra}`,
     fetcher)
   const items = Array.isArray(itemsRaw) ? itemsRaw : []
-  const { data: resumen, mutate: mutResumen } = useSWR<any>('/api/cotizaciones?resumen=1', fetcher)
+  const { data: resumen, mutate: mutResumen } = useSWR<any>(`/api/cotizaciones?resumen=1${paramObra}`, fetcher)
+  const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
   const { data: clientes = [] } = useSWR<Cliente[]>('/api/clientes', fetcher)
   const [modal, setModal]       = useState<'nuevo' | 'editar' | 'ver' | null>(null)
   const [form, setForm]         = useState<any>(EMPTY_COTIZACION)
@@ -228,6 +232,10 @@ export default function CotizacionesPage() {
         <MetricCard label="Aprobadas"          value={metricas.aprobadas}   sub="Listas para convertir" subColor="#1a7a4a" />
         <MetricCard label="Convertidas"        value={metricas.convertidas} sub="Ya son proyecto"        subColor="#534ab7" />
         <MetricCard label="Monto en cartera"   value={fmtM(metricas.monto)} sub="Excluye rechazadas" />
+      </div>
+
+      <div className="mb-3">
+        <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
       </div>
 
       <div className="inline-flex gap-1 p-1 bg-white border border-line rounded-xl mb-6 shadow-card flex-wrap">

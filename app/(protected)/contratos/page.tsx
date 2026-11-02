@@ -5,13 +5,17 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Badge, Btn, FormInput, FormSelect, MetricCard, Modal, SectionTitle, Table, Td, Th, fmt, fmtM } from '@/components/ui'
+import FiltroObra from '@/components/FiltroObra'
+import { filtrarPorObra } from '@/lib/consolidado'
 import type { Contrato } from '@/types'
 
 const EMPTY: Omit<Contrato,'id'|'created_at'|'user_id'> = { numero:'', contraparte:'', tipo:'Suma alzada', valor:0, inicio:'', fin:'', estado:'ejecucion' }
 
 export default function ContratosPage() {
-  const { data: items = [], isLoading, mutate } = useSWR<Contrato[]>('/api/contratos', fetcher)
+  const { data: todos = [], isLoading, mutate } = useSWR<Contrato[]>('/api/contratos', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
+  const [obra, setObra] = useState('')
+  const items = filtrarPorObra(todos as any[], obra) as Contrato[]
   const { data: clientes = [] }  = useSWR<any[]>('/api/clientes', fetcher)
   const [modal, setModal]   = useState<'nuevo'|'editar'|null>(null)
   const [form, setForm]     = useState<any>({})
@@ -55,7 +59,10 @@ export default function ContratosPage() {
     <div>
       <div className="flex justify-between items-center mb-[18px]">
         <SectionTitle>Contratos</SectionTitle>
-        <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Nuevo contrato</Btn>
+        <div className="flex gap-2 items-center flex-wrap">
+          <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
+          <Btn variant="primary" onClick={() => { setForm({ ...EMPTY }); setModal('nuevo') }}>+ Nuevo contrato</Btn>
+        </div>
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-5">

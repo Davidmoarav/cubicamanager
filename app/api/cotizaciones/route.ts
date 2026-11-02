@@ -11,13 +11,17 @@ export async function GET(req: Request) {
   const ownerId = await getOwnerId(supabase) || user.id
 
   const sp = new URL(req.url).searchParams
+  const obra = sp.get('obra')   // id de la obra, o 'sin' para las no convertidas
 
   // ── Resumen para métricas (suma partidas en el servidor, columnas mínimas) ──
   if (sp.get('resumen')) {
-    const { data, error } = await supabase
+    let qr = supabase
       .from('cotizaciones')
       .select('estado, partidas:partidas_cotizacion(cantidad, precio_unitario)')
       .eq('user_id', ownerId)
+    if (obra === 'sin') qr = qr.is('proyecto_id', null)
+    else if (obra) qr = qr.eq('proyecto_id', obra)
+    const { data, error } = await qr
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     const rows = data ?? []
     const montoDe = (c: any) => (c.partidas ?? []).reduce((s: number, p: any) => s + (Number(p.cantidad) || 0) * (Number(p.precio_unitario) || 0), 0)
@@ -38,6 +42,9 @@ export async function GET(req: Request) {
     .from('cotizaciones')
     .select('*, partidas:partidas_cotizacion(*)')
     .eq('user_id', ownerId)
+
+  if (obra === 'sin') q = q.is('proyecto_id', null)
+  else if (obra) q = q.eq('proyecto_id', obra)
 
   if (buscar) {
     const term = buscar.trim().replace(/[,()%*\\]/g, '')

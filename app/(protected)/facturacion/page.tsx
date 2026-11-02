@@ -9,15 +9,26 @@ import ImportadorSII from '@/components/ImportadorSII'
 import { IconSearch } from '@/components/Icon'
 import ResumenBoletas from '@/components/ResumenBoletas'
 import { opcionesPartida } from '@/lib/costos'
+import { filtrarPorObra } from '@/lib/consolidado'
+import FiltroObra from '@/components/FiltroObra'
+import ConciliacionSII from '@/components/ConciliacionSII'
+import EmitirDTE from '@/components/EmitirDTE'
 
 const EMPTY: any = { numero:'', cliente:'', proyecto:'', proyecto_id:'', partida_id:'', tipo:'venta', doc_tipo:'factura', factura_ref:'', neto:0, iva:0, monto:0, emision:'', vencimiento:'', estado:'pendiente' }
 
 export default function FacturacionPage() {
   const [periodoSel, setPeriodoSel] = useState(new Date().toISOString().slice(0, 7))
-  const { data: items = [], isLoading, mutate } = useSWR<any[]>(`/api/facturas?periodo=${periodoSel}`, fetcher)
+  const { data: todos = [], isLoading, mutate } = useSWR<any[]>(`/api/facturas?periodo=${periodoSel}`, fetcher)
+  const { data: emisiones = [], mutate: mutEmisiones } = useSWR<any[]>('/api/dte', fetcher)
+  const [emitiendo, setEmitiendo] = useState<string | null>(null)
+  const [obra, setObra] = useState('')
   const { data: clientes = [] } = useSWR<any[]>('/api/clientes', fetcher)
   const { data: proveedores = [] } = useSWR<any[]>('/api/proveedores', fetcher)
   const { data: proyectos = [] } = useSWR<any[]>('/api/proyectos', fetcher)
+  const items = filtrarPorObra(todos, obra, proyectos)
+  // La emisión vigente de cada documento (vienen de la más nueva a la más antigua)
+  const emisionDe = (id: string) => (Array.isArray(emisiones) ? emisiones : [])
+    .find((e: any) => e.factura_id === id && ['enviando', 'enviado', 'aceptado'].includes(e.estado))
   const [modal, setModal]             = useState(false)
   const [form, setForm]               = useState<any>({})
   const [filtro, setFiltro]           = useState('todos')
@@ -185,6 +196,7 @@ export default function FacturacionPage() {
           <p className="text-sm text-muted mt-1">Ventas, compras e IVA</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <ConciliacionSII onImportado={mutate} periodoInicial={periodoSel} />
           <ImportadorSII onImported={mutate} />
           <ResumenBoletas onSaved={mutate} />
           <Btn
@@ -209,6 +221,7 @@ export default function FacturacionPage() {
         <label className="text-[13px] font-semibold text-ink">Período:</label>
         <input type="month" value={periodoSel} onChange={e => setPeriodoSel(e.target.value)}
           className="input-base !mb-0 !py-1.5 w-[170px]" />
+        <FiltroObra value={obra} onChange={setObra} proyectos={proyectos} />
         <span className="text-[12px] text-muted">Se muestran las facturas de este mes. Los totales de arriba también son del mes.</span>
       </div>
 
@@ -332,6 +345,15 @@ export default function FacturacionPage() {
                   <Td><Badge estado={f.estado} tipo="factura" /></Td>
                   <Td>
                     <div className="flex gap-1 items-center">
+                      {f.tipo !== 'compra' && f.doc_tipo !== 'boleta' && (() => {
+                        const em = emisionDe(f.id)
+                        return (
+                          <button onClick={() => setEmitiendo(f.id)}
+                            className={`text-[10.5px] font-bold px-1.5 py-1 rounded-[5px] whitespace-nowrap ${em ? 'bg-success-bg text-success' : 'bg-canvas text-brand hover:bg-brand-bg'}`}>
+                            {em ? `DTE ${em.folio ?? em.estado}` : 'Emitir DTE'}
+                          </button>
+                        )
+                      })()}
                       <select value={f.estado} onChange={e => setEstado(f.id, e.target.value)}
                         className="text-[11px] px-1.5 py-0.5 border border-line2 rounded-[5px] cursor-pointer bg-white">
                         <option value="pendiente">Pendiente</option>
@@ -511,6 +533,10 @@ export default function FacturacionPage() {
             <Btn variant="primary" onClick={save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'}</Btn>
           </div>
         </Modal>
+      )}
+
+      {emitiendo && (
+        <EmitirDTE facturaId={emitiendo} onClose={() => setEmitiendo(null)} onEmitido={() => { mutate(); mutEmisiones() }} />
       )}
 
       {asignacion && (

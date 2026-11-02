@@ -5,22 +5,28 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { getOwnerId } from '@/lib/roles'
 import { Badge, Table, Th, Td } from '@/components/ui'
 import { fmt, fmtM } from '@/lib/format'
+import { resolverDocumentosCompra } from '@/lib/costos'
+import { filtrarPorObra } from '@/lib/consolidado'
+import { FiltroObraUrl } from '@/components/FiltroObra'
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ obra?: string }> }) {
   const supabase = await createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   const ownerId = await getOwnerId(supabase) || user.id
+  const obra = (await searchParams)?.obra ?? ''
 
   const [{ data: proyectos }, { data: empleados }, { data: facturas }] = await Promise.all([
     supabase.from('proyectos').select('id, nombre, cliente, avance, valor, estado, created_at').eq('user_id', ownerId).order('created_at', { ascending: false }),
-    supabase.from('empleados').select('id, tipo').eq('user_id', ownerId),
-    supabase.from('facturas').select('id, numero, cliente, tipo, doc_tipo, estado, monto, created_at').eq('user_id', ownerId).order('created_at', { ascending: false }),
+    supabase.from('empleados').select('id, tipo, proyecto_id').eq('user_id', ownerId),
+    supabase.from('facturas').select('id, numero, cliente, tipo, doc_tipo, estado, monto, created_at, proyecto, proyecto_id, partida_id, factura_ref').eq('user_id', ownerId).order('created_at', { ascending: false }),
   ])
 
-  const p = proyectos ?? []
-  const e = empleados ?? []
-  const f = facturas  ?? []
+  const todas = proyectos ?? []
+  const p = obra ? todas.filter((x:any) => x.id === obra) : todas
+  const e = filtrarPorObra((empleados ?? []) as any[], obra)
+  // Las notas siguen a la factura que modifican
+  const f = filtrarPorObra(resolverDocumentosCompra((facturas ?? []) as any[]), obra, todas) as any[]
 
   // Ingresos = solo facturas de VENTA. Con signo: notas de crédito restan.
   const efecto    = (x:any) => ((x.doc_tipo === 'nota_credito' ? -1 : 1) * (x.monto || 0))
@@ -44,9 +50,12 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-[22px] font-extrabold text-ink tracking-tight">Panel general</h1>
-        <p className="text-sm text-muted mt-1">Resumen de tu operación</p>
+      <div className="mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-[22px] font-extrabold text-ink tracking-tight">Panel general</h1>
+          <p className="text-sm text-muted mt-1">Resumen de tu operación</p>
+        </div>
+        <FiltroObraUrl value={obra} proyectos={todas as any[]} />
       </div>
 
       {/* Métricas */}

@@ -69,11 +69,11 @@ async function cargarPesosFacturas(supabase: any, ownerId: string, proyIds: stri
   }
 }
 
-export async function cargarCostosObras(supabase: any, ownerId: string, proyectos: any[]) {
-  if (proyectos.length === 0) return []
+// Lo que necesitan los costos de esas obras: partidas, gastos y documentos de compra resueltos
+export async function cargarBaseCostos(supabase: any, ownerId: string, proyectos: any[]) {
   const proyIds = proyectos.map(p => p.id)
   const proyNombres = proyectos.map(p => p.nombre).filter(Boolean)
-  const COLS_DOC = 'id, proyecto, proyecto_id, partida_id, factura_ref, neto, tipo, doc_tipo'
+  const COLS_DOC = 'id, proyecto, proyecto_id, partida_id, factura_ref, neto, tipo, doc_tipo, emision'
 
   const [partidas, gastos, docs, notas, pesos] = await Promise.all([
     traerTodo((d, h) => supabase.from('partidas_proyecto').select('*')
@@ -82,12 +82,12 @@ export async function cargarCostosObras(supabase: any, ownerId: string, proyecto
       .eq('user_id', ownerId).in('proyecto_id', proyIds).order('id').range(d, h)),
     // Se enlaza por proyecto_id (fiable). Se incluyen también las que solo tienen
     // el nombre en texto (facturas antiguas aún sin migrar) para no perder gasto.
-    traerTodo<DocCompra>((d, h) => supabase.from('facturas').select(COLS_DOC)
+    traerTodo<DocCompra & { emision?: string | null }>((d, h) => supabase.from('facturas').select(COLS_DOC)
       .eq('user_id', ownerId).eq('tipo', 'compra')
       .or(`proyecto_id.in.(${proyIds.join(',')}),proyecto.in.(${proyNombres.map(n => `"${String(n).replace(/"/g, '')}"`).join(',') || '"__no_match__"'})`)
       .order('id').range(d, h)),
     // Las notas importadas del SII no traen obra: heredan la de su factura.
-    traerTodo<DocCompra>((d, h) => supabase.from('facturas').select(COLS_DOC)
+    traerTodo<DocCompra & { emision?: string | null }>((d, h) => supabase.from('facturas').select(COLS_DOC)
       .eq('user_id', ownerId).eq('tipo', 'compra')
       .in('doc_tipo', ['nota_credito', 'nota_debito']).not('factura_ref', 'is', null)
       .order('id').range(d, h)),
@@ -95,13 +95,17 @@ export async function cargarCostosObras(supabase: any, ownerId: string, proyecto
   ])
 
   const unicos = new Map([...docs, ...notas].map(d => [d.id, d]))
-  const resueltos = resolverDocumentosCompra([...unicos.values()])
+  return { partidas, gastos, docs: resolverDocumentosCompra([...unicos.values()]), pesos }
+}
 
+export async function cargarCostosObras(supabase: any, ownerId: string, proyectos: any[]) {
+  if (proyectos.length === 0) return []
+  const { partidas, gastos, docs, pesos } = await cargarBaseCostos(supabase, ownerId, proyectos)
   return proyectos.map(proy => calcularCostosObra(
     proy,
     partidas.filter((p: any) => p.proyecto_id === proy.id),
     gastos,
-    resueltos,
+    docs,
     pesos,
   ))
 }

@@ -303,6 +303,7 @@ export async function PUT(req: Request) {
         numero: `EP-${ep.numero}`,
         cliente: proy?.cliente || 'Cliente',
         proyecto: proy?.nombre || '',
+        proyecto_id: ep.proyecto_id,
         tipo: 'venta',
         neto: ep.monto_pagar,
         iva: ep.iva,

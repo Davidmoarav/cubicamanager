@@ -48,6 +48,7 @@ export default function PrivacidadPage() {
           <p>Datos de la cuenta: nombre, correo electrónico, contraseña cifrada y rol dentro de la empresa.</p>
           <p>Datos que la empresa registra: obras, presupuestos, clientes, proveedores, facturas, documentos y fotos de obra.</p>
           <p>Datos de trabajadores que la empresa registra: identificación, cargo, horas trabajadas, remuneraciones e información previsional.</p>
+          <p>Si la empresa usa el Filtro DS27, datos de las familias que postulan a subsidios: identificación, contacto, tramo del Registro Social de Hogares, integrantes, discapacidad, condición de víctima de prisión política y datos de la vivienda.</p>
           <p>La app usa la cámara y las fotos del teléfono solo cuando la persona decide adjuntar una imagen.</p>
         </Seccion>
 

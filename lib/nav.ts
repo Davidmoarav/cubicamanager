@@ -29,6 +29,8 @@ export const MENU: NavItem[] = [
   { href: '/rrhh',              label: 'RRHH',              icon: '◉', section: 'Personal' },
   { href: '/remuneraciones',    label: 'Remuneraciones',    icon: '💰', section: 'Personal' },
 
+  { href: '/filtro',            label: 'Filtro DS27',       icon: '▤', section: 'Postulaciones' },
+
   { href: '/contratos',         label: 'Contratos',         icon: '◫', section: 'Admin' },
   { href: '/usuarios',          label: 'Usuarios y roles',  icon: '👥', section: 'Admin', modulo: 'usuarios' },
   { href: '/auditoria',         label: 'Bitácora',          icon: '🕐', section: 'Admin', modulo: 'auditoria' },
@@ -47,11 +49,12 @@ export const ACCESO: Record<string, string[]> = {
   '/rrhh':           ['admin', 'contador'],
   '/usuarios':       ['admin'],
   '/auditoria':      ['admin'],
+  '/filtro':         ['admin', 'jefe_obra'],   // datos sensibles de postulantes (RSH, salud)
 }
 
 // Rutas cuyos datos el servidor niega por rol: sin permiso se ven vacías, no bloqueadas.
 // Proyectos y Terreno no están: el contador las ve en solo lectura.
-const RUTAS_PROTEGIDAS = ['/reportes', '/facturacion', '/finanzas', '/remuneraciones', '/rrhh', '/usuarios', '/auditoria']
+const RUTAS_PROTEGIDAS = ['/reportes', '/facturacion', '/finanzas', '/remuneraciones', '/rrhh', '/usuarios', '/auditoria', '/filtro']
 
 const protegidaDe = (pathname: string) =>
   RUTAS_PROTEGIDAS.find(r => pathname === r || pathname.startsWith(`${r}/`))
@@ -80,7 +83,7 @@ export function menuPorRol(rol: string): NavItem[] {
   })
 }
 
-export const SECCIONES = ['Principal', 'Comercial', 'Obra', 'Finanzas', 'Personal', 'Admin']
+export const SECCIONES = ['Principal', 'Comercial', 'Obra', 'Finanzas', 'Personal', 'Postulaciones', 'Admin']
 
 export function etiquetaRol(rol?: string): string {
   return rol === 'admin' ? 'Administrador'

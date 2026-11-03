@@ -69,7 +69,7 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
     <>
       {/* ─── Barra desktop ─── */}
       <nav ref={navRef} className="hidden lg:block sticky top-0 z-40 bg-om-ink text-white">
-        <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center gap-1">
+        <div className="max-w-[1280px] mx-auto px-4 xl:px-6 h-14 flex items-center gap-0.5 xl:gap-1">
           {/* Logo */}
           <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-3">
             <img src="/logo.png" alt="" className="w-7 h-7 rounded-lg object-contain" />
@@ -88,7 +88,7 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
                 <button
                   onClick={() => setAbierto(open ? null : sec)}
                   className={[
-                    'px-3 py-1.5 rounded-lg text-[13.5px] font-medium transition flex items-center gap-1',
+                    'px-2 xl:px-3 py-1.5 rounded-lg text-[13px] xl:text-[13.5px] font-medium transition flex items-center gap-1',
                     open || seccionActiva(sec) ? 'text-white bg-white/10' : 'text-white/60 hover:text-white hover:bg-white/5',
                   ].join(' ')}
                 >
@@ -120,7 +120,7 @@ export default function AppTopNav({ userEmail }: { userEmail?: string }) {
               pathname === '/obra' ? 'bg-om text-white' : 'bg-om/90 text-white hover:bg-om',
             ].join(' ')}
           >
-            Copiloto de obra
+            Copiloto<span className="hidden xl:inline"> de obra</span>
           </Link>}
 
           {/* Avatar */}

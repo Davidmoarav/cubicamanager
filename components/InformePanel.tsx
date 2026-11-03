@@ -76,7 +76,8 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
         <>
           <div className="text-[11px] font-bold text-muted uppercase tracking-wide mb-2">Costo real y margen</div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            <MetricCard label="Gasto real" value={fmt(c.gasto_real)} sub={`${c.pct_gastado}% del presupuesto de costo`} subColor="#b0401a" />
+            <MetricCard label="Gasto real" value={fmt(c.gasto_real)}
+              sub={c.mano_obra_reservada ? 'Sin la mano de obra de cuadrillas de menos de 3 personas' : `${c.pct_gastado}% del presupuesto de costo`} subColor="#b0401a" />
             <MetricCard label="Presupuesto de costo" value={fmt(c.presupuesto_costo)} sub={`${fmt(c.costo_ejecutado)} según avance`} />
             <MetricCard label="Desviación según avance" value={fmt(c.desviacion_ejecutada)}
               sub={c.desviacion_ejecutada < 0 ? 'sobre lo presupuestado' : 'dentro de lo presupuestado'}

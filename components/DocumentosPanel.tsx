@@ -11,6 +11,7 @@ import { Btn, FormInput, FormSelect, Modal, SectionTitle } from '@/components/ui
 import { CATEGORIAS_DOC, type Documento, type CategoriaDocumento } from '@/types/documento'
 import { avisar, confirmar } from '@/lib/avisos'
 import { usePermisos } from '@/lib/usePermisos'
+import { esNativo, guardarArchivo } from '@/lib/nativo'
 
 const MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
@@ -173,6 +174,17 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
 
     if (error || !data?.signedUrl) {
       avisar('Error al generar enlace de descarga')
+      return
+    }
+
+    if (esNativo()) {
+      try {
+        const res = await fetch(data.signedUrl)
+        if (!res.ok) throw new Error()
+        await guardarArchivo(await res.blob(), doc.nombre)
+      } catch {
+        avisar('No se pudo descargar el documento')
+      }
       return
     }
 

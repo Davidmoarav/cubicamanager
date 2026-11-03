@@ -6,12 +6,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { mensajeAuth, mensajeLink, motivoDeHash } from '@/lib/auth-recuperacion'
+import { abrirEnNavegador, esNativo } from '@/lib/nativo'
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
   const [mode, setMode] = useState<'login' | 'register'>('login')
+  // Las cuentas se crean en el sitio: las tiendas exigen poder eliminar dentro de la app lo que se crea ahí
+  const [nativo, setNativo] = useState(false)
+  useEffect(() => { setNativo(esNativo()) }, [])
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [nombre, setNombre]     = useState('')
@@ -65,7 +69,7 @@ export default function LoginPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex bg-[var(--bg)] rounded-lg p-1 mb-6">
+        {!nativo && <div className="flex bg-[var(--bg)] rounded-lg p-1 mb-6">
           {(['login', 'register'] as const).map(m => (
             <button key={m} onClick={() => { setMode(m); setError(''); setMsg('') }}
               className={`flex-1 py-2 rounded-[6px] border-none cursor-pointer text-[13px] font-semibold transition-all
@@ -76,7 +80,7 @@ export default function LoginPage() {
               {m === 'login' ? 'Iniciar sesión' : 'Registrarse'}
             </button>
           ))}
-        </div>
+        </div>}
 
         <form onSubmit={handleSubmit}>
           {mode === 'register' && (
@@ -95,7 +99,9 @@ export default function LoginPage() {
               placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : 'Tu contraseña'}
               required minLength={mode === 'register' ? 8 : undefined} className="input-base" />
             {mode === 'login' && (
-              <Link href="/auth/forgot" className="inline-block mt-1.5 text-[12px] text-brand hover:underline">
+              <Link href="/auth/forgot"
+                onClick={e => { if (nativo) { e.preventDefault(); abrirEnNavegador(`${window.location.origin}/auth/forgot`) } }}
+                className="inline-block mt-1.5 text-[12px] text-brand hover:underline">
                 ¿Olvidaste tu contraseña?
               </Link>
             )}
@@ -110,6 +116,10 @@ export default function LoginPage() {
             {loading ? 'Cargando...' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
           </button>
         </form>
+
+        <p className="text-center text-[12px] text-[var(--muted)] mt-5">
+          <Link href="/privacidad" className="hover:underline">Política de privacidad</Link>
+        </p>
       </div>
     </div>
   )

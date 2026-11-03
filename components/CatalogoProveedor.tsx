@@ -7,6 +7,7 @@ import { useState, useRef } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
 import { Btn, Modal, fmt } from '@/components/ui'
+import { guardarArchivo } from '@/lib/nativo'
 
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '')
 
@@ -76,7 +77,7 @@ export default function CatalogoProveedor({ proveedor, onClose }: { proveedor: a
     setMsg(`${data.insertados} productos cargados`); mutate()
   }
 
-  const descargarPlantilla = () => {
+  const descargarPlantilla = async () => {
     const filas = [
       'codigo;descripcion;unidad;precio',
       'ADH-01;Adhesivo EIFS 25 kg;saco;12000',
@@ -84,12 +85,7 @@ export default function CatalogoProveedor({ proveedor, onClose }: { proveedor: a
       'PERF-03;Perfil PVC arranque;ml;2500',
     ].join('\n')
     const blob = new Blob(['\ufeff' + filas], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'plantilla_catalogo.csv'
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    await guardarArchivo(blob, 'plantilla_catalogo.csv')
   }
 
   return (

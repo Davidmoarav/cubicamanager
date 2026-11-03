@@ -21,22 +21,49 @@ export interface TramoSueldo {
   monto: number
 }
 
-// Para quien no ve sueldos: junta los gastos de liquidaciones por mes y partida, sin nombres.
-export function ocultarSueldos<T extends Record<string, any>>(gastos: T[]): T[] {
-  const grupos = new Map<string, any>()
+// Para quien no ve sueldos (jefe de obra): la mano de obra agrupada de modo que no se pueda
+// sacar el sueldo de nadie. Por obra y mes:
+//   - menos de MINIMO_PERSONAS distintas → el monto se reserva (no se muestra ni suma)
+//   - si cada partida del mes reúne el mínimo → una línea por partida
+//   - si no → una sola línea del mes, sin partida
+// No evita la resta entre meses de una misma cuadrilla cuando entra o sale una persona.
+export const MINIMO_PERSONAS = 3
+
+export function ocultarSueldos<T extends Record<string, any>>(gastos: T[], minimo = MINIMO_PERSONAS): T[] {
   const resto: T[] = []
+  const porMes = new Map<string, any[]>()
   for (const g of gastos) {
     if (!g.liquidacion_id) { resto.push(g); continue }
-    const mes = String(g.fecha || '').slice(0, 7)
-    const clave = `${mes}|${g.partida_id || ''}`
-    const previo = grupos.get(clave)
-    if (previo) previo.monto += Number(g.monto) || 0
-    else grupos.set(clave, {
-      id: `mano-obra-${clave}`, proyecto_id: g.proyecto_id, partida_id: g.partida_id ?? null, fecha: g.fecha,
-      categoria: 'mano_obra', descripcion: 'Mano de obra del mes', monto: Number(g.monto) || 0, agregado: true,
-    })
+    const clave = `${g.proyecto_id}|${String(g.fecha || '').slice(0, 7)}`
+    porMes.set(clave, [...(porMes.get(clave) ?? []), g])
   }
-  return [...resto, ...grupos.values()].sort((a, b) => String(b.fecha ?? '').localeCompare(String(a.fecha ?? '')))
+
+  const personas = (filas: any[]) => new Set(filas.map(f => f.liquidacion_id)).size
+  const suma = (filas: any[]) => filas.reduce((s, f) => s + (Number(f.monto) || 0), 0)
+  const linea = (filas: any[], partida: string | null, extra: Record<string, any> = {}) => ({
+    id: `mano-obra-${filas[0].proyecto_id}-${String(filas[0].fecha || '').slice(0, 7)}-${partida ?? 'obra'}`,
+    proyecto_id: filas[0].proyecto_id, partida_id: partida, fecha: filas[0].fecha,
+    categoria: 'mano_obra', descripcion: 'Mano de obra del mes', monto: suma(filas), agregado: true, ...extra,
+  })
+
+  const agrupados: any[] = []
+  for (const filas of porMes.values()) {
+    if (personas(filas) < minimo) {
+      agrupados.push(linea(filas, null, {
+        monto: 0, reservado: true,
+        descripcion: `Mano de obra del mes: reservada, menos de ${minimo} personas`,
+      }))
+      continue
+    }
+    const porPartida = new Map<string, any[]>()
+    for (const f of filas) porPartida.set(f.partida_id || '', [...(porPartida.get(f.partida_id || '') ?? []), f])
+    if ([...porPartida.values()].every(p => personas(p) >= minimo)) {
+      for (const [partida, p] of porPartida) agrupados.push(linea(p, partida || null))
+    } else {
+      agrupados.push(linea(filas, null))
+    }
+  }
+  return [...resto, ...agrupados].sort((x, y) => String(y.fecha ?? '').localeCompare(String(x.fecha ?? ''))) as T[]
 }
 
 // Función pura. Los tramos suman EXACTO el costo (método del mayor resto).

@@ -7,6 +7,7 @@
 import { useState } from 'react'
 import { Btn, Modal } from '@/components/ui'
 import { fmt } from '@/lib/format'
+import { descargaEnNativo } from '@/lib/nativo'
 
 interface Sub { nombre: string; etapas: { nombre: string; partidas: any[] }[] }
 
@@ -190,7 +191,7 @@ export default function ImportarExcelPartidas({ proyectoId, markup = 20, onImpor
             Sube tu planilla de análisis económico. Debe tener el <strong>subproyecto</strong> en la columna A,
             la <strong>etapa</strong> en la C, y la <strong>partida</strong> en la F (con unidad, cantidad, material y HH).
           </p>
-          <a href="/Plantilla_Partidas_ObraManager.xlsx" download
+          <a href="/Plantilla_Partidas_ObraManager.xlsx" download onClick={e => descargaEnNativo(e, 'Plantilla_Partidas_ObraManager.xlsx')}
             className="flex items-center gap-2 text-[12px] text-brand font-semibold mb-3 hover:underline">
             Descargar plantilla de ejemplo
             <span className="text-[11px] text-muted font-normal">(recomendado si armas desde cero — evita errores)</span>

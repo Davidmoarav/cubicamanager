@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import type { EstadoPago } from '@/types/estado-pago'
 import { avisar } from '@/lib/avisos'
+import { guardarArchivo } from '@/lib/nativo'
 
 interface Props {
   ep: EstadoPago
@@ -57,14 +58,7 @@ export default function DescargarEPBtn({ ep, proyecto }: Props) {
         <EstadoPagoPDF ep={ep} proyecto={proyecto} empresa={empresa} logoUrl={logoUrl} detalle={detalle} />
       ).toBlob()
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `EP_${ep.numero}_${(proyecto.nombre || 'obra').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await guardarArchivo(blob, `EP_${ep.numero}_${(proyecto.nombre || 'obra').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)
       avisar('Error al generar PDF: ' + (err?.message || err))

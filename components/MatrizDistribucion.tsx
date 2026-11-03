@@ -9,6 +9,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Btn } from '@/components/ui'
 import { fmt } from '@/lib/format'
+import { descargaEnNativo, guardarExcel } from '@/lib/nativo'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 
 type Nodo = PartidaProyecto & { children?: Nodo[] }
@@ -149,7 +150,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
     const ws = XLSX.utils.aoa_to_sheet(aoa)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Distribucion')
-    XLSX.writeFile(wb, 'Distribucion_partidas.xlsx')
+    await guardarExcel(XLSX, wb, 'Distribucion_partidas.xlsx')
   }
 
   // ─── Descargar una plantilla con los beneficiarios reales y filas de ejemplo ───
@@ -171,7 +172,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
     ws['!cols'] = [{ wch: 34 }, { wch: 18 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, ...cols.map(() => ({ wch: 16 }))]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Distribucion')
-    XLSX.writeFile(wb, 'Plantilla_Distribucion.xlsx')
+    await guardarExcel(XLSX, wb, 'Plantilla_Distribucion.xlsx')
   }
 
   // ─── Importar cantidades desde Excel (matriz partida × beneficiario) ───
@@ -447,7 +448,7 @@ export default function MatrizDistribucion({ proyectoId, raices, markupGlobal = 
       <p className="text-[11px] text-muted mt-2">
         Escribe la cantidad que aplica a cada beneficiario. Vacío o 0 = no se le aplica esa partida (si ya la tenía, se elimina al guardar).
         Los costos y el precio son compartidos por todos los beneficiarios de esa partida.{' '}
-        <a href="/Plantilla_Distribucion.xlsx" download className="text-brand font-semibold hover:underline">
+        <a href="/Plantilla_Distribucion.xlsx" download onClick={e => descargaEnNativo(e, 'Plantilla_Distribucion.xlsx')} className="text-brand font-semibold hover:underline">
           Descargar plantilla de ejemplo
         </a>.
       </p>

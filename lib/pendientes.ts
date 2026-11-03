@@ -29,6 +29,7 @@ export function calcularPendientes(d: {
   empleados?: Lista
   liquidaciones?: Lista // las del mes anterior
   incidentes?: Lista
+  avisosPago?: Lista    // pagos que informó el cliente en el portal, sin revisar
 }): Pendiente[] {
   const out: Pendiente[] = []
   const finanzas = d.rol === 'admin' || d.rol === 'contador'
@@ -75,6 +76,16 @@ export function calcularPendientes(d: {
         href: `/remuneraciones?periodo=${mes}`,
       })
     }
+  }
+
+  // Todos los roles: el contador registra pagos y el jefe de obra conoce a su cliente
+  for (const a of (d.avisosPago ?? []).slice(0, 3)) {
+    out.push({
+      id: `aviso-pago-${a.id}`,
+      texto: `${nombreObra(a.proyecto_id)}: el cliente informó un pago`,
+      detalle: a.estado_pago?.numero ? `Estado de pago N°${a.estado_pago.numero} · ${fmt(Number(a.monto) || 0)}` : fmt(Number(a.monto) || 0),
+      href: `/obra/${a.proyecto_id}?tab=pagos`,
+    })
   }
 
   if (obra && d.incidentes) {

@@ -5,6 +5,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { avisar } from '@/lib/avisos'
+import { guardarArchivo } from '@/lib/nativo'
 
 interface Props {
   data: any
@@ -43,15 +44,8 @@ export default function DescargarInformeBtn({ data, proximo }: Props) {
         <InformePDF data={data} proximo={proximo} empresa={empresa} logoUrl={logoUrl} />
       ).toBlob()
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
       const nombre = (data?.proyecto?.nombre || 'proyecto').replace(/[^a-zA-Z0-9]/g, '_')
-      a.download = `Informe_Ejecutivo_${nombre}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await guardarArchivo(blob, `Informe_Ejecutivo_${nombre}.pdf`)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)
       avisar('Error al generar PDF: ' + (err?.message || err))

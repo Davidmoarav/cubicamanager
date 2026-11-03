@@ -12,6 +12,7 @@ import { ParteDiarioSchema, validar } from '@/lib/validar'
 import { traerTodo } from '@/lib/costos-server'
 import { reimputarSueldos } from '@/lib/imputacion-sueldos'
 import { huellaParte } from '@/lib/cola-terreno'
+import { lectorSueldos } from '@/lib/supabase-admin'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const FECHA = /^\d{4}-\d{2}-\d{2}$/
@@ -53,8 +54,8 @@ export async function GET(req: NextRequest) {
   const [partes, emps] = await Promise.all([
     supabase.from('parte_diario').select('id, empleado_id, partida_id, horas, notas')
       .eq('proyecto_id', proyectoId).eq('fecha', fecha).eq('user_id', ownerId).order('created_at'),
-    // Solo lo necesario: el jefe de obra registra horas, pero no ve sueldos
-    supabase.from('empleados').select('id, nombre, cargo, proyecto_id, estado')
+    // Solo lo necesario: el jefe de obra registra horas, pero no lee la tabla de trabajadores
+    lectorSueldos(supabase).from('empleados').select('id, nombre, cargo, proyecto_id, estado')
       .eq('user_id', ownerId).order('nombre'),
   ])
   if (partes.error) return NextResponse.json({ error: partes.error.message }, { status: 500 })
@@ -92,7 +93,7 @@ export async function PUT(req: Request) {
 
   const empleadoIds = [...new Set(filas.map(f => f.empleado_id))]
   if (empleadoIds.length > 0) {
-    const { data: emps } = await supabase
+    const { data: emps } = await lectorSueldos(supabase)
       .from('empleados').select('id').eq('user_id', ownerId).in('id', empleadoIds)
     if ((emps ?? []).length !== empleadoIds.length) {
       return NextResponse.json({ error: 'Trabajador no encontrado' }, { status: 404 })
@@ -162,7 +163,8 @@ export async function PUT(req: Request) {
   // ── Las liquidaciones ya generadas se reparten de nuevo con las horas actuales ──
   const afectados = [...new Set([...empleadoIds, ...actuales.map((p: any) => p.empleado_id)])]
   try {
-    await reimputarSueldos(supabase, ownerId, afectados, fecha.slice(0, 7))
+    // El jefe de obra no lee liquidaciones: el reparto lo hace el servidor con la llave de servicio
+    await reimputarSueldos(lectorSueldos(supabase), ownerId, afectados, fecha.slice(0, 7))
   } catch (e: any) {
     return NextResponse.json({ ok: true, aviso: `Las horas quedaron guardadas, pero no se pudo reimputar el sueldo: ${e?.message ?? 'error'}` })
   }

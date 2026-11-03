@@ -35,7 +35,9 @@ export async function middleware(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith('/auth')
   const isPublic   = request.nextUrl.pathname === '/'
-    || request.nextUrl.pathname.startsWith('/portal')   // portal público del cliente (por token)
+    || request.nextUrl.pathname === '/privacidad'       // las tiendas la exigen pública
+    || request.nextUrl.pathname.startsWith('/portal')
+    || request.nextUrl.pathname === '/api/portal/pago'  // el cliente informa un pago desde el portal   // portal público del cliente (por token)
 
   if (!user && !isAuthPage && !isPublic) {
     return NextResponse.redirect(new URL('/auth/login', request.url))

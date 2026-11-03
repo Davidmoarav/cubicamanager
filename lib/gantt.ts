@@ -1,7 +1,18 @@
 // lib/gantt.ts
 // Motor puro de la Carta Gantt (Fase 4): posiciones de barras, fase actual,
 // días restantes y plan automático. Fechas en 'YYYY-MM-DD' (UTC, sin horas).
+// Duraciones, holguras y desfases se cuentan en días laborables según el calendario de la obra.
 import { fmtFecha } from './format'
+import { nombreFeriado } from './feriados-cl'
+
+export type CalendarioGantt = 'lun_vie' | 'lun_sab' | 'corridos'
+export const CALENDARIOS: { id: CalendarioGantt; label: string }[] = [
+  { id: 'lun_vie', label: 'Lunes a viernes' },
+  { id: 'lun_sab', label: 'Lunes a sábado' },
+  { id: 'corridos', label: 'Días corridos' },
+]
+export const calendarioDe = (c?: string | null): CalendarioGantt =>
+  c === 'lun_sab' || c === 'corridos' ? c : 'lun_vie'
 
 export interface EtapaGantt {
   id: string
@@ -19,12 +30,14 @@ export interface BarraEtapa extends EtapaGantt {
   iniPct: number            // posición izquierda de la barra (%)
   anchoPct: number          // ancho de la barra (%)
   estado: EstadoEtapa
+  dias: number              // días laborables de la tarea
 }
 
 export interface GanttCalc {
   desde: string | null
   hasta: string | null
-  totalDias: number
+  totalDias: number         // días del calendario: dan la posición de las barras
+  diasPeriodo: number       // días laborables entre inicio y entrega
   hoyPct: number | null     // posición de la línea HOY (%), null si fuera de rango
   etapas: BarraEtapa[]
   sinFechas: number         // etapas sin planificar
@@ -48,9 +61,43 @@ export const sumarDias = (iso: string, dias: number): string => deUTC(aUTC(iso) 
 
 export const fechaCortaCL = fmtFecha
 
+// ─── Días laborables ───
+// Por qué no se trabaja ese día; null si es laborable
+export function motivoNoLaborable(iso: string, calendario: CalendarioGantt): string | null {
+  if (calendario === 'corridos') return null
+  const semana = new Date(aUTC(iso)).getUTCDay()
+  if (semana === 0) return 'domingo'
+  if (semana === 6 && calendario === 'lun_vie') return 'sábado'
+  return nombreFeriado(iso)
+}
+
+export const esLaborable = (iso: string, calendario: CalendarioGantt) => motivoNoLaborable(iso, calendario) === null
+
+// Ambos extremos incluidos
+export function contarLaborables(desde: string, hasta: string, calendario: CalendarioGantt): number {
+  let n = 0
+  for (let t = aUTC(desde), fin = aUTC(hasta); t <= fin; t += DIA_MS) {
+    if (esLaborable(deUTC(t), calendario)) n++
+  }
+  return n
+}
+
+export function primerLaborable(iso: string, calendario: CalendarioGantt): string {
+  let d = iso
+  while (!esLaborable(d, calendario)) d = sumarDias(d, 1)
+  return d
+}
+
+// El día en que termina una tarea de n días laborables que parte en iso
+export function finDeTarea(iso: string, n: number, calendario: CalendarioGantt): string {
+  let d = primerLaborable(iso, calendario)
+  for (let quedan = Math.max(1, n) - 1; quedan > 0; quedan--) d = primerLaborable(sumarDias(d, 1), calendario)
+  return d
+}
+
 const MESES_CL = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
-export function calcularGantt(etapas: EtapaGantt[], hoyISO: string): GanttCalc {
+export function calcularGantt(etapas: EtapaGantt[], hoyISO: string, calendario: CalendarioGantt = 'corridos'): GanttCalc {
   const conFechas = etapas.filter(e => e.fecha_inicio && e.fecha_fin)
   const sinFechas = etapas.length - conFechas.length
 
@@ -64,8 +111,8 @@ export function calcularGantt(etapas: EtapaGantt[], hoyISO: string): GanttCalc {
 
   if (conFechas.length === 0) {
     return {
-      desde: null, hasta: null, totalDias: 0, hoyPct: null,
-      etapas: etapas.map(e => ({ ...e, iniPct: 0, anchoPct: 0, estado: estadoDe(e, hoyISO) })),
+      desde: null, hasta: null, totalDias: 0, diasPeriodo: 0, hoyPct: null,
+      etapas: etapas.map(e => ({ ...e, iniPct: 0, anchoPct: 0, estado: estadoDe(e, hoyISO), dias: 0 })),
       sinFechas, faseActual: faseActualDe(etapas), diasRestantes: null,
       fechaEntrega: null, avanceGlobal, meses: [],
     }
@@ -84,7 +131,7 @@ export function calcularGantt(etapas: EtapaGantt[], hoyISO: string): GanttCalc {
 
   const barras: BarraEtapa[] = etapas.map(e => {
     if (!e.fecha_inicio || !e.fecha_fin) {
-      return { ...e, iniPct: 0, anchoPct: 0, estado: estadoDe(e, hoyISO) }
+      return { ...e, iniPct: 0, anchoPct: 0, estado: estadoDe(e, hoyISO), dias: 0 }
     }
     const ini = pct(aUTC(e.fecha_inicio))
     const fin = pct(aUTC(e.fecha_fin) + DIA_MS) // barra incluye el día de término
@@ -93,11 +140,12 @@ export function calcularGantt(etapas: EtapaGantt[], hoyISO: string): GanttCalc {
       iniPct: Math.max(0, ini),
       anchoPct: Math.max(1.5, fin - ini),
       estado: estadoDe(e, hoyISO),
+      dias: contarLaborables(e.fecha_inicio, e.fecha_fin, calendario),
     }
   })
 
-  // Días restantes hasta la entrega (fin del rango)
-  const diasRestantes = Math.max(0, Math.round((hastaT - hoyT) / DIA_MS))
+  // Días laborables que quedan hasta la entrega, sin contar hoy
+  const diasRestantes = hoyT >= hastaT ? 0 : contarLaborables(sumarDias(hoyISO, 1), hasta, calendario)
 
   // Cabecera de meses para la grilla
   const meses: GanttCalc['meses'] = []
@@ -116,6 +164,7 @@ export function calcularGantt(etapas: EtapaGantt[], hoyISO: string): GanttCalc {
 
   return {
     desde, hasta, totalDias, hoyPct,
+    diasPeriodo: contarLaborables(desde, hasta, calendario),
     etapas: barras, sinFechas,
     faseActual: faseActualDe(etapas),
     diasRestantes, fechaEntrega: hasta,
@@ -207,8 +256,8 @@ export function tareasGantt(partidas: PartidaGantt[], modo: 'etapas' | 'partidas
     })
 }
 
-// ─── Ruta crítica (CPM), en días corridos ─────────────────
-// Dependencia: la tarea parte el día siguiente al término de la otra, más el desfase.
+// ─── Ruta crítica (CPM), en días laborables ───────────────
+// Dependencia: la tarea parte el día laborable siguiente al término de la otra, más el desfase.
 export interface DependenciaGantt {
   partida_id: string
   depende_de_id: string
@@ -235,9 +284,27 @@ export interface ResultadoCPM {
 }
 
 const dia = (iso: string) => Math.round(aUTC(iso) / DIA_MS)
-const deDia = (d: number) => deUTC(d * DIA_MS)
 
-export function rutaCritica(tareas: EtapaGantt[], dependencias: DependenciaGantt[]): ResultadoCPM {
+// Numera los días laborables: así el cálculo de la ruta crítica es igual en cualquier calendario.
+// Un día no laborable toma el número del laborable siguiente al partir y del anterior al terminar.
+function numeracion(desde: string, hasta: string, calendario: CalendarioGantt) {
+  const fechas: string[] = []
+  const alPartir = new Map<string, number>()
+  const alTerminar = new Map<string, number>()
+  for (let t = aUTC(desde), fin = aUTC(hasta); t <= fin; t += DIA_MS) {
+    const d = deUTC(t)
+    alPartir.set(d, fechas.length)
+    if (esLaborable(d, calendario)) fechas.push(d)
+    alTerminar.set(d, fechas.length - 1)
+  }
+  return {
+    alPartir: (iso: string) => alPartir.get(iso) as number,
+    alTerminar: (iso: string) => alTerminar.get(iso) as number,
+    fecha: (n: number) => fechas[n],
+  }
+}
+
+export function rutaCritica(tareas: EtapaGantt[], dependencias: DependenciaGantt[], calendario: CalendarioGantt = 'corridos'): ResultadoCPM {
   const vacio: ResultadoCPM = { ciclo: false, porId: {}, criticas: [], inicio: null, fin: null, duracion: 0, ajustes: [] }
   const validas = tareas.filter(t => t.fecha_inicio && t.fecha_fin && dia(t.fecha_fin) >= dia(t.fecha_inicio))
   if (validas.length === 0) return vacio
@@ -260,17 +327,27 @@ export function rutaCritica(tareas: EtapaGantt[], dependencias: DependenciaGantt
   }
   if (orden.length < validas.length) return { ...vacio, ciclo: true }
 
+  // Margen a ambos lados: dependencias y desfases nunca salen de la numeración
+  const margen = 7 * (validas.reduce((s, t) => s + dia(t.fecha_fin as string) - dia(t.fecha_inicio as string) + 1, 0)
+    + deps.reduce((s, d) => s + Math.abs(Number(d.desfase_dias) || 0), 0) + 30)
+  const num = numeracion(
+    sumarDias(validas.map(t => t.fecha_inicio as string).sort()[0], -margen),
+    sumarDias(validas.map(t => t.fecha_fin as string).sort().at(-1) as string, margen),
+    calendario,
+  )
+
   const porIdTarea = new Map(validas.map(t => [t.id, t]))
+  const inicioPlan = (id: string) => num.alPartir((porIdTarea.get(id) as EtapaGantt).fecha_inicio as string)
   const duracion = (id: string) => {
     const t = porIdTarea.get(id) as EtapaGantt
-    return dia(t.fecha_fin as string) - dia(t.fecha_inicio as string) + 1
+    return Math.max(1, num.alTerminar(t.fecha_fin as string) - num.alPartir(t.fecha_inicio as string) + 1)
   }
 
   // Hacia adelante: nunca antes de su fecha planificada ni de sus dependencias
   const es = new Map<string, number>()
   const ef = new Map<string, number>()
   for (const id of orden) {
-    let inicio = dia((porIdTarea.get(id) as EtapaGantt).fecha_inicio as string)
+    let inicio = inicioPlan(id)
     for (const d of deps.filter(x => x.partida_id === id)) {
       inicio = Math.max(inicio, (ef.get(d.depende_de_id) as number) + 1 + (Number(d.desfase_dias) || 0))
     }
@@ -297,13 +374,13 @@ export function rutaCritica(tareas: EtapaGantt[], dependencias: DependenciaGantt
     const holgura = (lf.get(id) as number) - (ef.get(id) as number)
     porId[id] = {
       duracion: duracion(id),
-      inicio_temprano: deDia(es.get(id) as number),
-      fin_temprano: deDia(ef.get(id) as number),
+      inicio_temprano: num.fecha(es.get(id) as number),
+      fin_temprano: num.fecha(ef.get(id) as number),
       holgura,
       critica: holgura === 0,
     }
-    if ((es.get(id) as number) > dia((porIdTarea.get(id) as EtapaGantt).fecha_inicio as string)) {
-      ajustes.push({ id, fecha_inicio: deDia(es.get(id) as number), fecha_fin: deDia(ef.get(id) as number) })
+    if ((es.get(id) as number) > inicioPlan(id)) {
+      ajustes.push({ id, fecha_inicio: num.fecha(es.get(id) as number), fecha_fin: num.fecha(ef.get(id) as number) })
     }
   }
 
@@ -311,8 +388,8 @@ export function rutaCritica(tareas: EtapaGantt[], dependencias: DependenciaGantt
     ciclo: false,
     porId,
     criticas: orden.filter(id => porId[id].critica),
-    inicio: deDia(inicioProyecto),
-    fin: deDia(finProyecto),
+    inicio: num.fecha(inicioProyecto),
+    fin: num.fecha(finProyecto),
     duracion: finProyecto - inicioProyecto + 1,
     ajustes,
   }
@@ -337,7 +414,8 @@ export function creaCiclo(dependencias: DependenciaGantt[], partidaId: string, d
 export function planAutomatico(
   etapas: EtapaGantt[],
   desdeISO: string,
-  horizonteDias = 30
+  horizonteDias = 30,
+  calendario: CalendarioGantt = 'corridos'
 ): { id: string; fecha_inicio: string; fecha_fin: string }[] {
   if (etapas.length === 0) return []
   const MIN_DIAS = 3
@@ -349,11 +427,11 @@ export function planAutomatico(
   )
 
   const plan: { id: string; fecha_inicio: string; fecha_fin: string }[] = []
-  let cursor = desdeISO
+  let cursor = primerLaborable(desdeISO, calendario)
   etapas.forEach((e, i) => {
-    const fin = sumarDias(cursor, duraciones[i] - 1)
+    const fin = finDeTarea(cursor, duraciones[i], calendario)
     plan.push({ id: e.id, fecha_inicio: cursor, fecha_fin: fin })
-    cursor = sumarDias(fin, 1)
+    cursor = primerLaborable(sumarDias(fin, 1), calendario)
   })
   return plan
 }

@@ -3,7 +3,7 @@
 
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
 import type { Proyecto } from '@/types'
-import type { GanttCalc } from '@/lib/gantt'
+import type { CalendarioGantt, GanttCalc } from '@/lib/gantt'
 import { fechaCortaCL } from '@/lib/gantt'
 
 const CORAL = '#E5502A'
@@ -47,13 +47,14 @@ const s = StyleSheet.create({
   pieTexto: { fontSize: 7.5, color: MUTE },
 })
 
-export function GanttPDF({ proyecto, calc }: { proyecto: Proyecto; calc: GanttCalc }) {
+export function GanttPDF({ proyecto, calc, calendario = 'corridos' }: { proyecto: Proyecto; calc: GanttCalc; calendario?: CalendarioGantt }) {
+  const unidad = calendario === 'corridos' ? 'días' : 'días hábiles'
   return (
     <Document>
       <Page size="A4" orientation="landscape" style={s.page}>
         <Text style={s.titulo}>Carta Gantt · {proyecto.nombre}</Text>
         <Text style={s.sub}>
-          {calc.desde ? `${fechaCortaCL(calc.desde)} a ${fechaCortaCL(calc.hasta)} · ${calc.totalDias} días` : 'Sin planificación'}
+          {calc.desde ? `${fechaCortaCL(calc.desde)} a ${fechaCortaCL(calc.hasta)} · ${calc.diasPeriodo} ${unidad}` : 'Sin planificación'}
         </Text>
 
         <View style={s.stats}>
@@ -67,8 +68,8 @@ export function GanttPDF({ proyecto, calc }: { proyecto: Proyecto; calc: GanttCa
             {calc.faseActual ? <Text style={s.statSub}>{calc.faseActual.avance}%</Text> : null}
           </View>
           <View style={s.stat}>
-            <Text style={s.statLabel}>DÍAS RESTANTES</Text>
-            <Text style={s.statValor}>{calc.diasRestantes !== null ? `${calc.diasRestantes} días` : '—'}</Text>
+            <Text style={s.statLabel}>{unidad.toUpperCase()} RESTANTES</Text>
+            <Text style={s.statValor}>{calc.diasRestantes !== null ? `${calc.diasRestantes} ${unidad}` : '—'}</Text>
             {calc.fechaEntrega ? <Text style={s.statSub}>entrega {fechaCortaCL(calc.fechaEntrega)}</Text> : null}
           </View>
         </View>

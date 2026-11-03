@@ -11,6 +11,7 @@ import { usePermisos } from '@/lib/usePermisos'
 import { fmt, fmtFecha, fmtPeriodo } from '@/lib/format'
 import { ESTADO_EP, type EstadoPago } from '@/types/estado-pago'
 import DescargarEPBtn from '@/components/DescargarEPBtn'
+import AvisosPagoPanel from '@/components/AvisosPagoPanel'
 import { contratoNeto, pctCobrado } from '@/lib/informe'
 import { avisar, confirmar } from '@/lib/avisos'
 
@@ -32,7 +33,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
   const { soloLectura } = usePermisos('obra')
   const [eps, setEps]         = useState<EstadoPago[]>([])
   const [loading, setLoading] = useState(true)
-  const [resumen, setResumen] = useState({ presupuesto: 0, ejecutado: 0, cobrado: 0, costo: 0, ganancia: 0, markup_real: 0, margen_venta: 0, costo_ejecutado: 0, ganancia_ejecutada: 0, gasto_real: 0, gasto_manual: 0, gasto_ordenes: 0, gasto_sueldos: 0, gasto_subcontratos: 0, gasto_equipos: 0, gasto_traspasos: 0, gasto_facturas: 0, gasto_sin_partida: 0, desviacion: 0, desviacion_ejecutada: 0, pct_costo_ejecutado: 0, pct_ejecutado: 0, ganancia_real: 0, pct_gastado: 0, moneda: 'peso', valor_uf: 0, valor_contrato_pesos: 0, gasto_por_partida: {} as Record<string, number>, detalle_partidas: [] as any[] })
+  const [resumen, setResumen] = useState({ presupuesto: 0, ejecutado: 0, cobrado: 0, costo: 0, ganancia: 0, markup_real: 0, margen_venta: 0, costo_ejecutado: 0, ganancia_ejecutada: 0, mano_obra_reservada: false, gasto_real: 0, gasto_manual: 0, gasto_ordenes: 0, gasto_sueldos: 0, gasto_subcontratos: 0, gasto_equipos: 0, gasto_traspasos: 0, gasto_facturas: 0, gasto_sin_partida: 0, desviacion: 0, desviacion_ejecutada: 0, pct_costo_ejecutado: 0, pct_ejecutado: 0, ganancia_real: 0, pct_gastado: 0, moneda: 'peso', valor_uf: 0, valor_contrato_pesos: 0, gasto_por_partida: {} as Record<string, number>, detalle_partidas: [] as any[] })
 
   // Gastos reales de la obra
   const [gastos, setGastos]     = useState<any[]>([])
@@ -94,6 +95,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
       costo_ejecutado: p?.costo_ejecutado || 0,
       ganancia_ejecutada: p?.ganancia_ejecutada || 0,
       gasto_real: p?.gasto_real || 0,
+      mano_obra_reservada: !!p?.mano_obra_reservada,
       gasto_manual: p?.gasto_manual || 0,
       gasto_ordenes: p?.gasto_ordenes || 0,
       gasto_sueldos: p?.gasto_sueldos || 0,
@@ -355,6 +357,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
             <div className="text-[11px] text-muted">Gasto real</div>
             <div className="text-base font-bold text-danger">{fmt(resumen.gasto_real)}</div>
             <div className="text-[10px] text-muted">{resumen.pct_gastado}% del presupuesto</div>
+            {resumen.mano_obra_reservada && <div className="text-[10px] text-warning font-semibold">Sin la mano de obra de cuadrillas de menos de 3 personas</div>}
           </div>
           <div>
             <div className="text-[11px] text-muted">Desviación al avance</div>
@@ -481,6 +484,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
 
       {subTab === 'estados' && (<>
       {/* ─── ESTADOS DE PAGO ─── */}
+      <AvisosPagoPanel proyectoId={proyectoId} onCambio={load} />
       <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
         <div className="text-sm font-bold text-ink">
           Estados de pago ({eps.length})

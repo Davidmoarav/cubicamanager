@@ -2,6 +2,9 @@
 // Carga desde Supabase lo que necesita el motor de costos (lib/costos.ts).
 import { calcularCostosObra, resolverDocumentosCompra, type DocCompra, type PesosFacturas } from './costos'
 import { pesosFacturaPorPartida } from './recepciones'
+import { ocultarSueldos } from './imputacion-sueldos'
+import { getRolActual } from './roles'
+import { lectorSueldos } from './supabase-admin'
 
 const TAM_PAGINA = 1000
 
@@ -17,6 +20,20 @@ export async function traerTodo<T = any>(
     out.push(...(data ?? []))
     if (!data || data.length < TAM_PAGINA) return out
   }
+}
+
+// Gastos de obra tal como los puede ver quien consulta. El jefe de obra no lee los sueldos:
+// los trae el servidor con la llave de servicio y se los entrega agrupados (ocultarSueldos).
+export async function gastosVisibles(supabase: any, ownerId: string, proyIds: string[]): Promise<any[]> {
+  const consulta = (cliente: any, sueldos: boolean) => traerTodo((d, h) => {
+    const q = cliente.from('gastos_obra').select('*').eq('user_id', ownerId).in('proyecto_id', proyIds)
+    return (sueldos ? q.not('liquidacion_id', 'is', null) : q.is('liquidacion_id', null)).order('id').range(d, h)
+  })
+  const info = await getRolActual(supabase)
+  if (info?.rol !== 'jefe_obra') return traerTodo((d, h) => supabase.from('gastos_obra').select('*')
+    .eq('user_id', ownerId).in('proyecto_id', proyIds).order('id').range(d, h))
+  const [otros, sueldos] = await Promise.all([consulta(supabase, false), consulta(lectorSueldos(supabase), true)])
+  return [...otros, ...ocultarSueldos(sueldos)]
 }
 
 // FK: la partida debe pertenecer al proyecto (y este a la organización).
@@ -78,8 +95,7 @@ export async function cargarBaseCostos(supabase: any, ownerId: string, proyectos
   const [partidas, gastos, docs, notas, pesos] = await Promise.all([
     traerTodo((d, h) => supabase.from('partidas_proyecto').select('*')
       .eq('user_id', ownerId).in('proyecto_id', proyIds).order('id').range(d, h)),
-    traerTodo((d, h) => supabase.from('gastos_obra').select('*')
-      .eq('user_id', ownerId).in('proyecto_id', proyIds).order('id').range(d, h)),
+    gastosVisibles(supabase, ownerId, proyIds),
     // Se enlaza por proyecto_id (fiable). Se incluyen también las que solo tienen
     // el nombre en texto (facturas antiguas aún sin migrar) para no perder gasto.
     traerTodo<DocCompra & { emision?: string | null }>((d, h) => supabase.from('facturas').select(COLS_DOC)

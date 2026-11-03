@@ -9,11 +9,12 @@ import useSWR from 'swr'
 import type { Proyecto } from '@/types'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import {
-  calcularGantt, planAutomatico, fechaCortaCL, rutaCritica, tareasGantt,
-  type EstadoEtapa, type NodoCPM, type TareaGantt,
+  CALENDARIOS, calcularGantt, calendarioDe, contarLaborables, motivoNoLaborable, planAutomatico, fechaCortaCL,
+  rutaCritica, tareasGantt, type CalendarioGantt, type EstadoEtapa, type NodoCPM, type TareaGantt,
 } from '@/lib/gantt'
 import { usePermisos } from '@/lib/usePermisos'
 import { confirmar } from '@/lib/avisos'
+import { guardarArchivo } from '@/lib/nativo'
 
 const COLOR_BARRA: Record<EstadoEtapa, string> = {
   completa: 'bg-success',
@@ -53,12 +54,34 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
   const [error, setError] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
 
-  const hoyISO = new Date().toISOString().slice(0, 10)
+  const [calendario, setCalendario] = useState<CalendarioGantt>(calendarioDe(proyecto.calendario_gantt))
+  useEffect(() => { setCalendario(calendarioDe(proyecto.calendario_gantt)) }, [proyecto.calendario_gantt])
+
+  // Fecha local: con la de UTC, en Chile sería mañana desde la tarde
+  const ahora = new Date()
+  const hoyISO = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}-${String(ahora.getDate()).padStart(2, '0')}`
 
   const etapas: TareaGantt[] = useMemo(() => tareasGantt(partidas, nivel), [partidas, nivel])
-  const cpm = useMemo(() => rutaCritica(etapas, deps), [etapas, deps])
+  const cpm = useMemo(() => rutaCritica(etapas, deps, calendario), [etapas, deps, calendario])
 
-  const g = useMemo(() => calcularGantt(etapas, hoyISO), [etapas, hoyISO])
+  const g = useMemo(() => calcularGantt(etapas, hoyISO, calendario), [etapas, hoyISO, calendario])
+
+  const cambiarCalendario = async (nuevo: CalendarioGantt) => {
+    const anterior = calendario
+    setCalendario(nuevo)
+    setError('')
+    const res = await fetch('/api/gantt', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ proyecto_id: proyecto.id, calendario_gantt: nuevo }),
+    })
+    if (!res.ok) {
+      setCalendario(anterior)
+      setError((await res.json().catch(() => ({})))?.error ?? 'No se pudo cambiar el calendario')
+      return
+    }
+    onCambio()
+  }
 
   const guardarEtapa = async (etapaId: string, cambios: { fecha_inicio?: string; fecha_fin?: string; responsable?: string }) => {
     setGuardando(etapaId)
@@ -102,7 +125,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
 
   // Corre las tareas que parten antes de lo que permiten sus dependencias
   const aplicarDependencias = async () => {
-    if (!(await confirmar(`¿Correr ${cpm.ajustes.length} ${cpm.ajustes.length === 1 ? 'tarea' : 'tareas'} para respetar las dependencias? Conservan su duración.`))) return
+    if (!(await confirmar(`¿Correr ${cpm.ajustes.length} ${cpm.ajustes.length === 1 ? 'tarea' : 'tareas'} para respetar las dependencias? Conservan sus días de trabajo.`))) return
     setGuardando('auto')
     setError('')
     try {
@@ -127,7 +150,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
     setGuardando('auto')
     setError('')
     try {
-      for (const p of planAutomatico(etapas.filter(e => !e.derivada), hoyISO, 30)) {
+      for (const p of planAutomatico(etapas.filter(e => !e.derivada), hoyISO, 30, calendario)) {
         const res = await fetch('/api/gantt', {
           method: 'PUT',
           headers: { 'content-type': 'application/json' },
@@ -150,13 +173,8 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
         import('@react-pdf/renderer'),
         import('./GanttPDF'),
       ])
-      const blob = await pdf(<GanttPDF proyecto={proyecto} calc={g} />).toBlob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `CartaGantt_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)}.pdf`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      const blob = await pdf(<GanttPDF proyecto={proyecto} calc={g} calendario={calendario} />).toBlob()
+      await guardarArchivo(blob, `CartaGantt_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)}.pdf`)
     } catch (e: any) {
       setError('Error al generar PDF: ' + (e?.message ?? e))
     } finally {
@@ -183,6 +201,11 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
         <h2 className="text-[16px] font-extrabold text-ink mr-1">Carta Gantt</h2>
         <span className="text-[12px] text-muted hidden sm:inline">· la línea coral marca hoy</span>
         <div className="flex-1" />
+        <select value={calendario} disabled={!puedeEditar} aria-label="Días de trabajo de la obra"
+          onChange={e => cambiarCalendario(e.target.value as CalendarioGantt)}
+          className="px-3 py-2 rounded-xl border border-line bg-white text-[12.5px] font-bold text-ink cursor-pointer">
+          {CALENDARIOS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+        </select>
         <div className="flex rounded-xl border border-line overflow-hidden">
           {(['etapas', 'partidas'] as const).map(v => (
             <button
@@ -262,7 +285,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
           <div className="text-[15px] font-extrabold text-ink leading-tight">{g.faseActual?.nombre ?? '—'}</div>
           {g.faseActual && <div className="text-[12px] text-muted">{g.faseActual.avance}%</div>}
         </StatCard>
-        <StatCard label="Días restantes">
+        <StatCard label={calendario === 'corridos' ? 'Días restantes' : 'Días hábiles restantes'}>
           <div className="text-[18px] font-extrabold text-ink">
             {g.diasRestantes !== null ? `${g.diasRestantes} días` : '—'}
           </div>
@@ -276,7 +299,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
             {cpm.criticas.length > 0 ? `tareas sin holgura · ${cpm.duracion} días` : 'Programa fechas para calcularla'}
           </div>
         </StatCard>
-        <StatCard label={`Período · ${g.totalDias || '—'} días`}>
+        <StatCard label={`Período · ${g.diasPeriodo || '—'} ${calendario === 'corridos' ? 'días' : 'días hábiles'}`}>
           <div className="flex items-center gap-2 text-[12.5px] font-bold text-ink">
             <span className="px-2 py-1 rounded-lg border border-om/40 text-om">{fechaCortaCL(g.desde)}</span>
             <span className="text-subtle">→</span>
@@ -349,6 +372,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
                   onAgregarDep={agregarDep}
                   onQuitarDep={quitarDep}
                   puedeEditar={puedeEditar}
+                  calendario={calendario}
                 />
               ))}
             </tbody>
@@ -358,6 +382,7 @@ export default function GanttTab({ proyecto, partidas, onCambio }: {
 
       <p className="text-[12px] text-subtle">
         El avance viene del presupuesto y se actualiza solo. Una tarea crítica no tiene holgura: si se atrasa, se mueve la entrega.
+        {calendario !== 'corridos' && ' Duración, holgura y desfase se cuentan en días hábiles, sin feriados nacionales de Chile. Las elecciones y los feriados regionales no están incluidos.'}
       </p>
     </div>
   )
@@ -376,7 +401,7 @@ function FilaTimeline({ etapa, hoyPct, nodo }: {
         <div className="font-bold text-ink text-[13px] truncate">{etapa.nombre}</div>
         <div className="text-[11.5px] text-muted truncate">
           {etapa.grupo ? `${etapa.grupo} · ` : ''}
-          {etapa.fecha_inicio ? `${fechaCortaCL(etapa.fecha_inicio)} – ${fechaCortaCL(etapa.fecha_fin)}` : 'Sin fechas'}
+          {etapa.fecha_inicio ? `${fechaCortaCL(etapa.fecha_inicio)} – ${fechaCortaCL(etapa.fecha_fin)} · ${etapa.dias} ${etapa.dias === 1 ? 'día' : 'días'}` : 'Sin fechas'}
           {etapa.responsable ? ` · ${etapa.responsable}` : ''}
         </div>
         {nodo && (
@@ -420,7 +445,7 @@ function FilaTimeline({ etapa, hoyPct, nodo }: {
 }
 
 // ─── Fila editable de la vista lista ───
-function FilaLista({ etapa, guardando, onGuardar, nodo, tareas, deps, onAgregarDep, onQuitarDep, puedeEditar }: {
+function FilaLista({ etapa, guardando, onGuardar, nodo, tareas, deps, onAgregarDep, onQuitarDep, puedeEditar, calendario }: {
   etapa: ReturnType<typeof calcularGantt>['etapas'][number] & { derivada?: boolean; grupo?: string | null }
   guardando: boolean
   onGuardar: (id: string, c: { fecha_inicio?: string; fecha_fin?: string; responsable?: string }) => void
@@ -430,6 +455,7 @@ function FilaLista({ etapa, guardando, onGuardar, nodo, tareas, deps, onAgregarD
   onAgregarDep: (partidaId: string, dependeDeId: string, desfase: number) => void
   onQuitarDep: (id: string) => void
   puedeEditar: boolean
+  calendario: CalendarioGantt
 }) {
   const [ini, setIni] = useState(etapa.fecha_inicio ?? '')
   const [fin, setFin] = useState(etapa.fecha_fin ?? '')
@@ -444,6 +470,9 @@ function FilaLista({ etapa, guardando, onGuardar, nodo, tareas, deps, onAgregarD
   const nombreDe = (id: string) => tareas.find(t => t.id === id)?.nombre ?? 'Tarea de otra vista'
   const disponibles = tareas.filter(t => t.id !== etapa.id && !deps.some(d => d.depende_de_id === t.id))
   const b = BADGE_ESTADO[etapa.estado]
+  const motivoIni = ini ? motivoNoLaborable(ini, calendario) : null
+  const motivoFin = fin ? motivoNoLaborable(fin, calendario) : null
+  const dias = ini && fin && fin >= ini ? contarLaborables(ini, fin, calendario) : null
 
   return (
     <tr className="border-b border-line/60">
@@ -455,10 +484,13 @@ function FilaLista({ etapa, guardando, onGuardar, nodo, tareas, deps, onAgregarD
       <td className="px-2 py-2">
         <input type="date" value={ini} onChange={e => setIni(e.target.value)} disabled={etapa.derivada || !puedeEditar} aria-label={`Inicio de ${etapa.nombre}`}
           className="w-full border border-line rounded-lg px-2 py-1.5 text-[12.5px] outline-none focus:border-om" />
+        {motivoIni && <div className="text-[10.5px] font-semibold text-warning mt-0.5">No se trabaja: {motivoIni}</div>}
       </td>
       <td className="px-2 py-2">
         <input type="date" value={fin} onChange={e => setFin(e.target.value)} disabled={etapa.derivada || !puedeEditar} aria-label={`Término de ${etapa.nombre}`}
           className="w-full border border-line rounded-lg px-2 py-1.5 text-[12.5px] outline-none focus:border-om" />
+        {motivoFin && <div className="text-[10.5px] font-semibold text-warning mt-0.5">No se trabaja: {motivoFin}</div>}
+        {dias !== null && !motivoFin && <div className="text-[10.5px] text-muted mt-0.5">{dias} {dias === 1 ? 'día' : 'días'}</div>}
       </td>
       <td className="px-2 py-2">
         <input value={resp} onChange={e => setResp(e.target.value)} placeholder="Maestro a cargo" disabled={!puedeEditar}
@@ -482,7 +514,7 @@ function FilaLista({ etapa, guardando, onGuardar, nodo, tareas, deps, onAgregarD
               <option value="">+ Agregar…</option>
               {disponibles.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
             </select>
-            <input type="number" value={desfase} onChange={e => setDesfase(e.target.value)} title="Días de desfase" aria-label="Días de desfase"
+            <input type="number" value={desfase} onChange={e => setDesfase(e.target.value)} title="Días de trabajo de desfase" aria-label="Días de trabajo de desfase"
               className="w-12 border border-line rounded-lg px-1 py-1 text-[11.5px] text-right" />
           </div>
         )}

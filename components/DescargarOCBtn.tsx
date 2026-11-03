@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { avisar } from '@/lib/avisos'
+import { guardarArchivo } from '@/lib/nativo'
 
 interface Props {
   orden: any
@@ -51,14 +52,7 @@ export default function DescargarOCBtn({ orden, proveedores }: Props) {
         <OrdenCompraPDF orden={full} proveedor={proveedor} empresa={empresa} logoUrl={logoUrl} />
       ).toBlob()
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `OC_${orden?.numero ?? 'orden'}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await guardarArchivo(blob, `OC_${orden?.numero ?? 'orden'}.pdf`)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)
       avisar('Error al generar PDF: ' + (err?.message || err))

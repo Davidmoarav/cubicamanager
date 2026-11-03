@@ -1,7 +1,7 @@
 // app/api/gastos-obra/route.ts
 import { createServerSupabase } from '@/lib/supabase-server'
-import { guardEscritura, getOwnerId, getRolActual } from '@/lib/roles'
-import { ocultarSueldos } from '@/lib/imputacion-sueldos'
+import { guardEscritura, getOwnerId } from '@/lib/roles'
+import { gastosVisibles } from '@/lib/costos-server'
 import { NextResponse, type NextRequest } from 'next/server'
 
 // ─── GET: gastos de un proyecto ───────────────────────────
@@ -14,16 +14,12 @@ export async function GET(req: NextRequest) {
   const proyectoId = req.nextUrl.searchParams.get('proyecto_id')
   if (!proyectoId) return NextResponse.json({ error: 'Falta proyecto_id' }, { status: 400 })
 
-  const { data, error } = await supabase
-    .from('gastos_obra')
-    .select('*')
-    .eq('proyecto_id', proyectoId)
-    .eq('user_id', ownerId)
-    .order('fecha', { ascending: false })
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  const info = await getRolActual(supabase)
-  return NextResponse.json(info?.rol === 'jefe_obra' ? ocultarSueldos(data ?? []) : data ?? [])
+  try {
+    const gastos = await gastosVisibles(supabase, ownerId, [proyectoId])
+    return NextResponse.json(gastos.sort((a, b) => String(b.fecha ?? '').localeCompare(String(a.fecha ?? ''))))
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Error leyendo los gastos' }, { status: 500 })
+  }
 }
 
 // ─── POST: crear gasto ────────────────────────────────────

@@ -97,15 +97,19 @@ export function calcularCostosObra(proy: any, partidas: any[], gastos: any[], do
   const gastosProy = gastos.filter(g => g.proyecto_id === proy.id)
   const sumaGastos = (filas: any[]) => filas.reduce((s, g) => s + (Number(g.monto) || 0), 0)
   const gastoOrdenes  = sumaGastos(gastosProy.filter(g => g.orden_compra_id))
-  const gastoSueldos  = sumaGastos(gastosProy.filter(g => g.liquidacion_id))
+  // `agregado`: la mano de obra que recibe agrupada el jefe de obra (ocultarSueldos)
+  const gastoSueldos  = sumaGastos(gastosProy.filter(g => g.liquidacion_id || g.agregado))
   const gastoSubcontratos = sumaGastos(gastosProy.filter(g => g.subcontrato_ep_id))
   const gastoEquipos  = sumaGastos(gastosProy.filter(g => g.equipo_uso_id))
   const gastoTraspasos = sumaGastos(gastosProy.filter(g => g.traspaso_id))
   const gastoManual   = sumaGastos(gastosProy.filter(g =>
-    !g.orden_compra_id && !g.liquidacion_id && !g.subcontrato_ep_id && !g.equipo_uso_id && !g.traspaso_id))
+    !g.orden_compra_id && !g.liquidacion_id && !g.agregado && !g.subcontrato_ep_id && !g.equipo_uso_id && !g.traspaso_id))
 
   const docsProy = docsDeObra(docs, proy)
   const gastoFacturas = docsProy.reduce((s, d) => s + netoConSigno(d), 0)
+
+  // El jefe de obra no ve la mano de obra de cuadrillas chicas: el gasto la omite y se avisa
+  const manoObraReservada = gastosProy.some(g => g.reservado)
 
   const gastoReal = gastoManual + gastoOrdenes + gastoSueldos + gastoSubcontratos + gastoEquipos + gastoTraspasos + gastoFacturas
 
@@ -180,6 +184,7 @@ export function calcularCostosObra(proy: any, partidas: any[], gastos: any[], do
     venta_ejecutada: Math.round(ventaEjecutada),
     pct_ejecutado: pctEjecutado,
     // GASTO REAL
+    mano_obra_reservada: manoObraReservada,
     gasto_real: Math.round(gastoReal),
     gasto_manual: Math.round(gastoManual),
     gasto_ordenes: Math.round(gastoOrdenes),

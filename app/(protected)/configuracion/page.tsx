@@ -244,6 +244,22 @@ export default function ConfiguracionPage() {
         </div>
       </div>
 
+      {/* ─── DATOS PARA RECIBIR PAGOS ─── */}
+      <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
+        <div className="text-[14px] font-bold text-[#1a2535] mb-1">Datos para recibir pagos</div>
+        <p className="text-[12px] text-muted mb-3.5">
+          Se muestran en el portal del cliente, junto a los estados de pago por pagar. Déjalos vacíos para no mostrarlos.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+          <FormInput label="Banco"             value={form.banco || ''}          onChange={v => upd('banco', v)}          placeholder="Ej: Banco Estado" />
+          <FormInput label="Tipo de cuenta"    value={form.tipo_cuenta || ''}    onChange={v => upd('tipo_cuenta', v)}    placeholder="Ej: Cuenta corriente" />
+          <FormInput label="Número de cuenta"  value={form.numero_cuenta || ''}  onChange={v => upd('numero_cuenta', v)}  placeholder="Ej: 123456789" />
+          <FormInput label="Titular"           value={form.titular_cuenta || ''} onChange={v => upd('titular_cuenta', v)} placeholder="Razón social del titular" />
+          <FormInput label="RUT del titular"   value={form.rut_titular || ''}    onChange={v => upd('rut_titular', v)}    placeholder="Ej: 76.123.456-7" />
+          <FormInput label="Correo para avisos de pago" value={form.correo_pagos || ''} onChange={v => upd('correo_pagos', v)} placeholder="pagos@empresa.cl" type="email" />
+        </div>
+      </div>
+
       {/* ─── PERSONALIZACIÓN PDF ─── */}
       <div className="bg-white border border-line rounded-card p-6 shadow-card mb-5">
         <div className="text-[14px] font-bold text-[#1a2535] mb-3.5">Personalización de documentos PDF</div>

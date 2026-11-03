@@ -3,6 +3,7 @@
 // Requiere sql/37_gantt_comentarios.sql ejecutado en Supabase.
 //   GET ?proyecto_id=X  → dependencias de la obra
 //   POST / DELETE       → agregar o quitar una dependencia (sql/43)
+//   PATCH               → días de trabajo de la obra (sql/46)
 
 import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
@@ -19,6 +20,33 @@ const BodySchema = z.object({
   fecha_fin: fechaISO.nullish().or(z.literal('')),
   responsable: z.string().max(80).nullish(),
 })
+
+const CalendarioSchema = z.object({
+  proyecto_id: z.string().min(1),
+  calendario_gantt: z.enum(['lun_vie', 'lun_sab', 'corridos']),
+})
+
+export async function PATCH(req: Request) {
+  const supabase = await createServerSupabase()
+  const ro = await guardEscritura(supabase, 'obra')
+  if (ro) return ro
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  const ownerId = await getOwnerId(supabase) || user.id
+
+  const v = CalendarioSchema.safeParse(await req.json().catch(() => ({})))
+  if (!v.success) return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
+
+  const { data, error } = await supabase.from('proyectos')
+    .update({ calendario_gantt: v.data.calendario_gantt })
+    .eq('id', v.data.proyecto_id).eq('user_id', ownerId).select('id')
+  if (error) {
+    const falta = /calendario_gantt|schema cache/i.test(error.message)
+    return NextResponse.json({ error: falta ? 'Esta función aún no está activada. Avisa al administrador.' : error.message }, { status: 500 })
+  }
+  if (!data?.length) return NextResponse.json({ error: 'Obra no encontrada' }, { status: 404 })
+  return NextResponse.json({ ok: true })
+}
 
 export async function PUT(req: Request) {
   const supabase = await createServerSupabase()

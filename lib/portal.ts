@@ -50,6 +50,7 @@ export interface SnapshotPortal {
     fecha_fin?: string | null
   }[]
   cobros: EpSnap[]
+  calendario?: string
   generado_en: string
 }
 
@@ -59,7 +60,7 @@ const IVA = 0.19
 const EP_OCULTOS = new Set(['borrador', 'rechazado'])
 
 export function armarSnapshot(args: {
-  proyecto: { nombre: string; estado: string; descripcion?: string | null; avance?: number }
+  proyecto: { nombre: string; estado: string; descripcion?: string | null; avance?: number; calendario_gantt?: string | null }
   partidas: PartidaSnap[]
   eps: { numero: number; fecha?: string | null; periodo?: string | null; estado: string; total: number }[]
   empresa?: { razon_social?: string; telefono?: string; email?: string } | null
@@ -146,6 +147,39 @@ export function armarSnapshot(args: {
     presupuesto: { grupos },
     etapas,
     cobros,
+    calendario: proyecto.calendario_gantt ?? 'lun_vie',
     generado_en: args.ahora ?? new Date().toISOString(),
   }
 }
+
+// ─── Cobros al día (sql/48) ───
+// La foto del link puede tener semanas; los cobros se leen al momento con portal_cobros.
+// Sin esa función (migración no ejecutada) se usa lo que trae la foto.
+export interface AvisoPortal { estado: 'pendiente' | 'confirmado' | 'rechazado'; monto: number; fecha_pago: string; motivo?: string | null }
+export interface CobroPortal extends EpSnap { factura?: string | null; vencimiento?: string | null; aviso?: AvisoPortal | null }
+export interface BancoPortal { banco?: string | null; tipo_cuenta?: string | null; numero_cuenta?: string | null; titular?: string | null; rut?: string | null; correo?: string | null }
+
+export function cobrosPortal(snap: Pick<SnapshotPortal, 'cobros' | 'montos'>, vivos: { cobros?: any[]; banco?: BancoPortal | null } | null) {
+  const alDia = Array.isArray(vivos?.cobros)
+  const cobros: CobroPortal[] = (alDia ? vivos!.cobros! : snap.cobros)
+    .filter(c => !EP_OCULTOS.has(c.estado))
+    .map(c => ({
+      numero: c.numero, fecha: c.fecha ?? null, periodo: c.periodo ?? null, estado: c.estado,
+      total: Math.round(Number(c.total) || 0), factura: c.factura ?? null, vencimiento: c.vencimiento ?? null,
+      aviso: c.aviso ?? null,
+    }))
+    .sort((a, b) => a.numero - b.numero)
+  const pagado = cobros.filter(c => c.estado === 'pagado').reduce((s, c) => s + c.total, 0)
+  const porPagar = cobros.filter(c => c.estado === 'presentado' || c.estado === 'aprobado').reduce((s, c) => s + c.total, 0)
+  return {
+    alDia,
+    cobros,
+    pagado,
+    porPagar,
+    saldo: Math.max(0, snap.montos.total - pagado),
+    banco: alDia && vivos?.banco?.numero_cuenta ? vivos.banco : null,
+  }
+}
+
+export const puedeInformarPago = (c: CobroPortal) =>
+  (c.estado === 'presentado' || c.estado === 'aprobado') && c.aviso?.estado !== 'pendiente'

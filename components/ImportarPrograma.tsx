@@ -8,6 +8,7 @@
 import { useState } from 'react'
 import { Btn, Modal } from '@/components/ui'
 import { fmt } from '@/lib/format'
+import { descargaEnNativo } from '@/lib/nativo'
 
 export default function ImportarPrograma({ proyectoId, markup = 20, onImported, onClose }: {
   proyectoId: string
@@ -158,7 +159,7 @@ export default function ImportarPrograma({ proyectoId, markup = 20, onImported, 
             Cada beneficiario se creará como un <strong>subproyecto</strong> dentro de esta obra, con sus
             soluciones y partidas. Podrás medir avance y rentabilidad por beneficiario o del programa completo.
           </div>
-          <a href="/Plantilla_Programa_Beneficiarios.xlsx" download
+          <a href="/Plantilla_Programa_Beneficiarios.xlsx" download onClick={e => descargaEnNativo(e, 'Plantilla_Programa_Beneficiarios.xlsx')}
             className="flex items-center gap-2 text-[12px] text-brand font-semibold mb-3 hover:underline">
             Descargar plantilla de programa
             <span className="text-[11px] text-muted font-normal">(con la grilla de beneficiarios lista)</span>

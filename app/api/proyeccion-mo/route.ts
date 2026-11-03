@@ -4,6 +4,8 @@
 import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId, getRolActual } from '@/lib/roles'
 import { NextResponse, type NextRequest } from 'next/server'
+import { lectorSueldos } from '@/lib/supabase-admin'
+import { MINIMO_PERSONAS } from '@/lib/imputacion-sueldos'
 
 // Factor imposiciones patronales por defecto (SIS, mutual, cesantía ≈ +5%)
 const FACTOR_IMPOSICIONES = 0.05
@@ -61,7 +63,7 @@ export async function GET(req: NextRequest) {
   if (sugerir) {
     const [{ data: proy }, { data: emps }] = await Promise.all([
       supabase.from('proyectos').select('inicio, fin').eq('id', proyectoId).maybeSingle(),
-      supabase.from('empleados').select('sueldo, estado').eq('proyecto_id', proyectoId).eq('user_id', ownerId),
+      lectorSueldos(supabase).from('empleados').select('sueldo, estado').eq('proyecto_id', proyectoId).eq('user_id', ownerId),
     ])
 
     const activos = (emps ?? []).filter((e: any) => e.estado === 'activo')
@@ -69,9 +71,9 @@ export async function GET(req: NextRequest) {
     const sueldoProm = dotInicial > 0
       ? activos.reduce((s: number, e: any) => s + (e.sueldo || 0), 0) / dotInicial
       : 0
-    // Con un solo trabajador, el promedio sería su sueldo: el jefe de obra no lo ve
+    // Con pocas personas, el promedio deja ver sueldos: el jefe de obra no lo recibe
     const info = await getRolActual(supabase)
-    const costoUnitario = info?.rol === 'jefe_obra' && dotInicial < 2 ? 0 : Math.round(sueldoProm * (1 + FACTOR_IMPOSICIONES))
+    const costoUnitario = info?.rol === 'jefe_obra' && dotInicial < MINIMO_PERSONAS ? 0 : Math.round(sueldoProm * (1 + FACTOR_IMPOSICIONES))
 
     const inicio = proy?.inicio ? new Date(proy.inicio) : new Date()
     const fin = proy?.fin ? new Date(proy.fin) : new Date(inicio.getFullYear(), inicio.getMonth() + 5, 1)

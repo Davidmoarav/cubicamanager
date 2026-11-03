@@ -1,10 +1,12 @@
 // app/portal/[token]/page.tsx — Portal público del cliente (Fase 5).
-// Solo lectura, sin login: lee el snapshot vía la función portal_por_token
-// (SECURITY DEFINER). Nadie puede ver nada sin el token exacto.
+// Sin login: lee el snapshot vía la función portal_por_token y los cobros al día vía
+// portal_cobros (SECURITY DEFINER). Nadie puede ver nada sin el token exacto.
+// El cliente puede informar un pago; la empresa lo confirma en la obra.
 
 import { createClient } from '@supabase/supabase-js'
-import type { SnapshotPortal } from '@/lib/portal'
-import { calcularGantt, fechaCortaCL } from '@/lib/gantt'
+import { cobrosPortal, puedeInformarPago, type SnapshotPortal } from '@/lib/portal'
+import { calcularGantt, calendarioDe, fechaCortaCL } from '@/lib/gantt'
+import { DatosBancarios, InformarPago } from '@/components/PagoPortal'
 import { fmt, fmtPeriodo } from '@/lib/format'
 
 export const dynamic = 'force-dynamic'
@@ -17,22 +19,24 @@ const ESTADO_PROY: Record<string, { label: string; color: string; bg: string }> 
 
 const ESTADO_EP_PORTAL: Record<string, { label: string; color: string; bg: string }> = {
   presentado: { label: 'Por pagar', color: '#b07d1a', bg: '#fef3d7' },
-  aprobado:   { label: 'Aprobado',  color: '#E5502A', bg: '#FCEAE3' },
+  aprobado:   { label: 'Por pagar', color: '#b07d1a', bg: '#fef3d7' },
   pagado:     { label: 'Pagado',    color: '#1a7a4a', bg: '#e6f4ed' },
 }
+const INFORMADO = { label: 'Pago en revisión', color: '#1e6bb8', bg: '#e7f1fb' }
 
 const COLOR_BARRA: Record<string, string> = {
   completa: '#1a7a4a', encurso: '#E5502A', atrasada: '#b0401a', pendiente: '#d1d9e6',
 }
 
+const clientePublico = () => createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  { auth: { persistSession: false } }
+)
+
 async function cargarSnapshot(token: string): Promise<(SnapshotPortal & { actualizado_en?: string }) | null> {
   try {
-    const sb = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false } }
-    )
-    const { data, error } = await sb.rpc('portal_por_token', { t: token })
+    const { data, error } = await clientePublico().rpc('portal_por_token', { t: token })
     if (error || !data) return null
     return data as SnapshotPortal & { actualizado_en?: string }
   } catch {
@@ -40,9 +44,18 @@ async function cargarSnapshot(token: string): Promise<(SnapshotPortal & { actual
   }
 }
 
+async function cargarCobros(token: string) {
+  try {
+    const { data, error } = await clientePublico().rpc('portal_cobros', { t: token })
+    return error || !data ? null : data
+  } catch {
+    return null
+  }
+}
+
 export default async function PortalCliente({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  const snap = await cargarSnapshot(token)
+  const [snap, vivos] = await Promise.all([cargarSnapshot(token), cargarCobros(token)])
 
   if (!snap || !snap.nombre) {
     return (
@@ -60,9 +73,13 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
   }
 
   const est = ESTADO_PROY[snap.estado] ?? ESTADO_PROY.cotizacion
-  const hoy = new Date().toISOString().slice(0, 10)
-  const gantt = calcularGantt(snap.etapas ?? [], hoy)
+  // Hoy en Chile: el servidor corre en UTC
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
+  // Un link creado antes de los días hábiles no trae calendario: se mantiene en días corridos
+  const calendario = snap.calendario ? calendarioDe(snap.calendario) : 'corridos'
+  const gantt = calcularGantt(snap.etapas ?? [], hoy, calendario)
   const m = snap.montos
+  const cobro = cobrosPortal(snap, vivos)
 
   return (
     <div className="min-h-screen bg-om-canvas">
@@ -105,8 +122,8 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
           <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               { label: 'Total presupuesto', valor: fmt(m.total), coral: false },
-              { label: 'Pagado', valor: fmt(m.pagado), coral: false },
-              { label: 'Saldo', valor: fmt(m.saldo), coral: true },
+              { label: 'Pagado', valor: fmt(cobro.pagado), coral: false },
+              { label: 'Saldo', valor: fmt(cobro.saldo), coral: true },
             ].map(x => (
               <div key={x.label} className="bg-canvas/70 rounded-xl px-3 py-2.5">
                 <div className="text-[10px] font-bold uppercase tracking-wider text-muted">{x.label}</div>
@@ -123,7 +140,7 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
               <h2 className="text-[15px] font-extrabold text-ink">Línea de tiempo</h2>
               <span className="text-[12px] text-muted">
                 {fechaCortaCL(gantt.desde)} → {fechaCortaCL(gantt.hasta)}
-                {gantt.diasRestantes !== null && gantt.diasRestantes > 0 && ` · faltan ${gantt.diasRestantes} días`}
+                {gantt.diasRestantes !== null && gantt.diasRestantes > 0 && ` · faltan ${gantt.diasRestantes} ${calendario === 'corridos' ? 'días' : 'días hábiles'}`}
               </span>
             </div>
             <div className="space-y-2.5">
@@ -186,31 +203,57 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
         </div>
 
         {/* Cobros */}
-        {snap.cobros.length > 0 && (
+        {cobro.cobros.length > 0 && (
           <div className="bg-white rounded-card border border-line shadow-card overflow-hidden">
-            <div className="p-5 pb-3">
+            <div className="p-5 pb-3 flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-[15px] font-extrabold text-ink">Estados de pago</h2>
+              {cobro.porPagar > 0 && <span className="text-[13px] font-bold text-ink">Por pagar: {fmt(cobro.porPagar)}</span>}
             </div>
             <ul className="divide-y divide-line">
-              {snap.cobros.map(c => {
-                const e = ESTADO_EP_PORTAL[c.estado] ?? { label: c.estado, color: '#6b7a8d', bg: '#F1ECE6' }
+              {cobro.cobros.map(c => {
+                const e = c.aviso?.estado === 'pendiente'
+                  ? INFORMADO
+                  : ESTADO_EP_PORTAL[c.estado] ?? { label: c.estado, color: '#6b7a8d', bg: '#F1ECE6' }
                 return (
-                  <li key={c.numero} className="px-5 py-3 flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-om-bg text-om font-extrabold flex items-center justify-center text-[12px]">
-                      {c.numero}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-ink text-[13px]">Estado de pago N°{c.numero}</div>
-                      <div className="text-[11.5px] text-muted">{c.periodo ? fmtPeriodo(c.periodo) : c.fecha ? fechaCortaCL(c.fecha) : ''}</div>
+                  <li key={c.numero} className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-lg bg-om-bg text-om font-extrabold flex items-center justify-center text-[12px] shrink-0">
+                        {c.numero}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-ink text-[13px]">Estado de pago N°{c.numero}</div>
+                        <div className="text-[11.5px] text-muted">
+                          {c.periodo ? fmtPeriodo(c.periodo) : c.fecha ? fechaCortaCL(c.fecha) : ''}
+                          {c.factura ? ` · factura ${c.factura}` : ''}
+                          {c.vencimiento && c.estado !== 'pagado' ? ` · vence ${fechaCortaCL(c.vencimiento)}` : ''}
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold shrink-0" style={{ background: e.bg, color: e.color }}>
+                        {e.label}
+                      </span>
+                      <span className="font-extrabold text-ink text-[13.5px] w-24 text-right shrink-0">{fmt(c.total)}</span>
                     </div>
-                    <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold" style={{ background: e.bg, color: e.color }}>
-                      {e.label}
-                    </span>
-                    <span className="font-extrabold text-ink text-[13.5px] w-24 text-right">{fmt(c.total)}</span>
+                    {c.aviso?.estado === 'pendiente' && (
+                      <p className="mt-1.5 text-[12px] text-muted">
+                        Informaste un pago de {fmt(c.aviso.monto)} el {fechaCortaCL(c.aviso.fecha_pago)}. {snap.empresa.nombre} lo está revisando.
+                      </p>
+                    )}
+                    {c.aviso?.estado === 'rechazado' && c.estado !== 'pagado' && (
+                      <p className="mt-1.5 text-[12px] text-danger font-semibold">
+                        Tu último aviso no se confirmó{c.aviso.motivo ? `: ${c.aviso.motivo}` : ''}.
+                      </p>
+                    )}
+                    {cobro.alDia && puedeInformarPago(c) && <InformarPago token={token} numero={c.numero} total={c.total} />}
                   </li>
                 )
               })}
             </ul>
+            {cobro.banco && cobro.porPagar > 0 && (
+              <div className="border-t border-line p-5">
+                <h3 className="text-[13px] font-extrabold text-ink mb-2.5">Datos para transferir</h3>
+                <DatosBancarios banco={cobro.banco as Record<string, string | null>} />
+              </div>
+            )}
           </div>
         )}
 
@@ -225,7 +268,7 @@ export default async function PortalCliente({ params }: { params: Promise<{ toke
         </div>
 
         <p className="text-center text-[11px] text-subtle pb-6">
-          Datos actualizados al {snap.actualizado_en ? fechaCortaCL(snap.actualizado_en.slice(0, 10)) : '—'} ·
+          Presupuesto y avance al {snap.actualizado_en ? fechaCortaCL(snap.actualizado_en.slice(0, 10)) : '—'}{cobro.alDia ? ' · estados de pago al día' : ''} ·
           Documento informativo generado con CubicaManager
         </p>
       </main>

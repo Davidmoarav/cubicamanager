@@ -9,6 +9,7 @@ import type { Cliente } from '@/types/cliente'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import { filasMINVU, ANCHOS_MINVU } from '@/lib/minvu'
 import { avisar } from '@/lib/avisos'
+import { guardarArchivo, guardarExcel } from '@/lib/nativo'
 
 const limpiar = (s: string) => s.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 40)
 
@@ -79,14 +80,7 @@ export function DescargarPresupuestoPDFBtn({ proyecto, cliente, partidas }: {
         />
       ).toBlob()
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `Presupuesto_${limpiar(proyecto.nombre)}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await guardarArchivo(blob, `Presupuesto_${limpiar(proyecto.nombre)}.pdf`)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)
       avisar('Error al generar PDF: ' + (err?.message || err))
@@ -118,7 +112,7 @@ export function ExportarExcelBtn({ proyecto, partidas }: {
       ws['!cols'] = ANCHOS_MINVU
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Presupuesto')
-      XLSX.writeFile(wb, `Presupuesto_MINVU_${limpiar(proyecto.nombre)}.xlsx`)
+      await guardarExcel(XLSX, wb, `Presupuesto_MINVU_${limpiar(proyecto.nombre)}.xlsx`)
     } catch (err: any) {
       console.error('Error al exportar Excel:', err)
       avisar('Error al exportar Excel: ' + (err?.message || err))

@@ -16,5 +16,11 @@ export interface EmpresaConfig {
   logo_path?: string
   color_primario?: string
   notas_pdf?: string
+  banco?: string
+  tipo_cuenta?: string
+  numero_cuenta?: string
+  titular_cuenta?: string
+  rut_titular?: string
+  correo_pagos?: string
   updated_at?: string
 }

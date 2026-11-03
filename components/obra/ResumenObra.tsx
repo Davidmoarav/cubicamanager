@@ -40,7 +40,7 @@ export default function ResumenObra({ proyecto, partidas, estadosPago, irA }: {
     <div className="space-y-5">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Avance" value={`${Math.round(Number(proyecto.avance) || 0)}%`} sub={`${partidas.length} partidas`} />
-        <MetricCard label="Gasto real" value={c ? fmt(c.gasto_real) : sinDato} sub={c ? `${c.pct_gastado}% del presupuesto de costo` : undefined} />
+        <MetricCard label="Gasto real" value={c ? fmt(c.gasto_real) : sinDato} sub={c ? (c.mano_obra_reservada ? 'Sin la mano de obra de cuadrillas de menos de 3 personas' : `${c.pct_gastado}% del presupuesto de costo`) : undefined} />
         <MetricCard label="Margen real" value={c ? `${c.margen_real_pct}%` : sinDato} sub={c ? `Esperado ${c.margen_venta_pct}%` : undefined} />
         <MetricCard label="Cobrado" value={k ? `${k.cobrado_pct}%` : sinDato} sub={k ? `Por facturar ${fmt(k.saldo_por_facturar)}` : undefined} />
       </div>

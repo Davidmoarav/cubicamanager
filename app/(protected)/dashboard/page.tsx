@@ -10,6 +10,7 @@ import { fmt } from '@/lib/format'
 import { resolverDocumentosCompra } from '@/lib/costos'
 import { filtrarPorObra } from '@/lib/consolidado'
 import { FiltroObraUrl } from '@/components/FiltroObra'
+import { lectorSueldos } from '@/lib/supabase-admin'
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ obra?: string }> }) {
   const supabase = await createServerSupabase()
@@ -21,9 +22,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const hoy = new Date().toISOString().slice(0, 10)
   const obra = (await searchParams)?.obra ?? ''
 
-  const [{ data: proyectos }, { data: empleados }, { data: facturas }, ordenes, estadosPago, liquidaciones, incidentes, clientes, { data: empresa }] = await Promise.all([
+  const [{ data: proyectos }, { data: empleados }, { data: facturas }, ordenes, estadosPago, liquidaciones, incidentes, clientes, { data: empresa }, avisosPago] = await Promise.all([
     supabase.from('proyectos').select('*').eq('user_id', ownerId).order('created_at', { ascending: false }),
-    supabase.from('empleados').select('id, tipo, proyecto_id, estado').eq('user_id', ownerId),
+    lectorSueldos(supabase).from('empleados').select('id, tipo, proyecto_id, estado').eq('user_id', ownerId),
     supabase.from('facturas').select('id, numero, cliente, tipo, doc_tipo, estado, monto, created_at, proyecto, proyecto_id, partida_id, factura_ref, vencimiento, periodo').eq('user_id', ownerId).order('created_at', { ascending: false }),
     supabase.from('ordenes_compra').select('id, estado, proyecto_id').eq('user_id', ownerId),
     supabase.from('estados_pago').select('proyecto_id, numero, estado, factura_id').eq('user_id', ownerId),
@@ -31,6 +32,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     supabase.from('prevencion_registros').select('id, proyecto_id, tipo, estado, titulo').eq('user_id', ownerId).eq('estado', 'abierto'),
     supabase.from('clientes').select('id').eq('user_id', ownerId).limit(1),
     supabase.from('empresa_config').select('razon_social, rut').eq('user_id', ownerId).maybeSingle(),
+    supabase.from('avisos_pago').select('id, proyecto_id, monto, estado_pago:estados_pago(numero)').eq('user_id', ownerId).eq('estado', 'pendiente'),
   ])
 
   const todas = proyectos ?? []
@@ -69,6 +71,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     estadosPago: porObra(estadosPago.error ? null : estadosPago.data),
     empleados: e,
     liquidaciones: liquidaciones.error ? null : liquidaciones.data,
+    avisosPago: porObra(avisosPago.error ? null : avisosPago.data),
     incidentes: porObra(incidentes.error ? null : incidentes.data),
   })
   const pasos = primerosPasos({ rol, empresa, clientes: clientes.data?.length ?? 0, obras: todas.length, empleados: (empleados ?? []).length })

@@ -9,6 +9,7 @@ import { createClient } from '@/lib/supabase'
 import type { Cotizacion } from '@/types/cotizaciones'
 import type { Cliente } from '@/types/cliente'
 import { avisar } from '@/lib/avisos'
+import { guardarArchivo } from '@/lib/nativo'
 
 interface Props {
   cotizacion: Cotizacion
@@ -51,15 +52,8 @@ export default function DescargarPDFBtn({ cotizacion, cliente }: Props) {
         <CotizacionPDF cotizacion={cotizacion} cliente={cliente} empresa={empresa} logoUrl={logoUrl} />
       ).toBlob()
 
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
       const nombre = String(cotizacion?.numero || 'cotizacion').replace(/[^a-zA-Z0-9]/g, '_')
-      a.download = `Cotizacion_${nombre}.pdf`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await guardarArchivo(blob, `Cotizacion_${nombre}.pdf`)
     } catch (err: any) {
       console.error('Error al generar PDF:', err)   // ← error real, no el síntoma
       avisar('Error al generar PDF: ' + (err?.message || err))

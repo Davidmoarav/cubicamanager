@@ -2,6 +2,7 @@
 // Tipos base compartidos de las entidades principales.
 
 export interface Proyecto {
+  calendario_gantt?: string | null
   id: string
   nombre: string
   cliente: string

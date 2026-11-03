@@ -7,6 +7,7 @@ import { getOwnerId, getRolActual } from '@/lib/roles'
 import { calcularPendientes, mesAnterior, primerosPasos } from '@/lib/pendientes'
 import { Badge, Table, Th, Td } from '@/components/ui'
 import { fmt } from '@/lib/format'
+import { contratoBruto } from '@/lib/informe'
 import { resolverDocumentosCompra } from '@/lib/costos'
 import { filtrarPorObra } from '@/lib/consolidado'
 import { FiltroObraUrl } from '@/components/FiltroObra'
@@ -214,7 +215,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                           <span className={`text-[11px] font-bold w-8 text-right ${pct === 100 ? 'text-success' : 'text-brand'}`}>{pct}%</span>
                         </div>
                       </Td>
-                      <Td className="font-bold tabular-nums">{fmt(pr.valor)}</Td>
+                      <Td className="font-bold tabular-nums">{fmt(contratoBruto(pr))}</Td>
                       <Td><Badge estado={pr.estado} tipo="proyecto" /></Td>
                     </tr>
                   )

@@ -7,6 +7,7 @@ import { confirmar } from '@/lib/avisos';
 import { filtrar, FiltrosPostulantes, useFiltros } from './FiltrosPostulantes';
 import { GrupoForm } from './GrupoForm';
 import { ImportarExcel } from './ImportarExcel';
+import { PasarAProyecto } from './PasarAProyecto';
 import { PostulanteForm } from './PostulanteForm';
 import { TablaPostulantes } from './TablaPostulantes';
 import { Boton, Cumple, fmt, Tarjeta } from './ui';
@@ -27,6 +28,7 @@ export function GrupoDetalle() {
   const [importando, setImportando] = useState(false);
   const [editando, setEditando] = useState<Postulante | 'nuevo' | null>(null);
   const [verSeleccion, setVerSeleccion] = useState(false);
+  const [pasando, setPasando] = useState(false);
 
   const delGrupo = useMemo(() => evaluados.filter((e) => e.grupo_id === id), [evaluados, id]);
   const filtros = useFiltros();
@@ -61,6 +63,18 @@ export function GrupoDetalle() {
           <Boton onClick={() => setImportando(true)}>Importar Excel</Boton>
           <Boton onClick={() => exportarExcel(delGrupo, `${grupo.nombre}.xlsx`)} disabled={delGrupo.length === 0}>Exportar</Boton>
           <Boton variante="primario" onClick={() => setEditando('nuevo')}>+ Postulante</Boton>
+          {grupo.proyecto_id ? (
+            <Link
+              href={`/obra/${grupo.proyecto_id}`}
+              className="inline-flex items-center rounded-lg border border-success/40 bg-success-bg px-3.5 py-2 text-[13px] font-semibold text-success hover:underline"
+            >
+              Ver obra →
+            </Link>
+          ) : (
+            <Boton variante={grupo.estado === 'Seleccionado' ? 'primario' : 'secundario'} onClick={() => setPasando(true)} disabled={r.incluidos === 0}>
+              Pasar a proyecto
+            </Boton>
+          )}
         </div>
       </div>
 
@@ -126,6 +140,7 @@ export function GrupoDetalle() {
       />
 
       {editandoGrupo && <GrupoForm grupo={grupo} onCerrar={() => setEditandoGrupo(false)} />}
+      {pasando && <PasarAProyecto grupo={grupo} llamado={llamadoDelGrupo} evaluados={delGrupo} onCerrar={() => setPasando(false)} />}
       {importando && <ImportarExcel grupo={grupo} par={par} onCerrar={() => setImportando(false)} />}
       {editando && (
         <PostulanteForm

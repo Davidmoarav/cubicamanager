@@ -3,42 +3,33 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Boton, Campo, Casilla, claseInput, fmt, Modal } from './ui';
 import { useDatos } from './DataProvider';
+import { NuevoLlamado } from './NuevoLlamado';
 import { avisar, confirmar } from '@/lib/avisos';
 import { evaluarTodos, resumirGrupo } from '@/lib/filtro/evaluacion';
 import {
   claveDesde, EXIGENCIAS, PARAMETROS_RES_1048_2026, puntajeAntiguedad, type Exigencia, type FilaPuntos,
   type MontosZona, type Parametros,
 } from '@/lib/filtro/reglas';
-import { DOCUMENTO_RES_1048_2026 } from '@/lib/filtro/documentoRes1048';
 import type { Llamado } from '@/lib/filtro/tipos';
 
 const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 export function Criterios() {
-  const { llamado, guardarLlamado } = useDatos();
-  if (!llamado) return <PrimerLlamado onCrear={guardarLlamado} />;
+  const { llamado } = useDatos();
+  if (!llamado) return <PrimerLlamado />;
   return <Editor key={llamado.id + llamado.updated_at} llamado={llamado} />;
 }
 
-function PrimerLlamado({ onCrear }: { onCrear: ReturnType<typeof useDatos>['guardarLlamado'] }) {
-  const { elegirLlamado } = useDatos();
+function PrimerLlamado() {
+  const [creando, setCreando] = useState(false);
   return (
     <div className="rounded-card bg-white shadow-card p-8 text-center border border-line">
       <p className="text-ink">No hay llamados creados.</p>
-      <Boton
-        variante="primario"
-        className="mt-4"
-        onClick={async () => {
-          const l = await onCrear({
-            nombre: 'DS27 Cap. IV 2026 – Maule', resolucion: 'Res. Ex. N°1048 del 14.07.2026', region: 'Maule',
-            parametros: structuredClone(PARAMETROS_RES_1048_2026), bloqueado: false,
-            documento: structuredClone(DOCUMENTO_RES_1048_2026),
-          });
-          elegirLlamado(l.id);
-        }}
-      >
-        Crear llamado 2026 con los criterios de la Res. 1048
+      <p className="mt-1 text-[13px] text-muted">Parte de los criterios de la Res. 1048/2026 y ajústalos a tu región o resolución.</p>
+      <Boton variante="primario" className="mt-4" onClick={() => setCreando(true)}>
+        Crear llamado
       </Boton>
+      {creando && <NuevoLlamado onCerrar={() => setCreando(false)} />}
     </div>
   );
 }
@@ -284,54 +275,8 @@ function Editor({ llamado }: { llamado: Llamado }) {
         </div>
       )}
 
-      {duplicando && <Duplicar parametros={p} documento={llamado.documento} region={cabecera.region} onCerrar={() => setDuplicando(false)} />}
+      {duplicando && <NuevoLlamado desde={{ llamadoId: llamado.id, parametros: p }} onCerrar={() => setDuplicando(false)} />}
     </div>
-  );
-}
-
-function Duplicar({
-  parametros, documento, region, onCerrar,
-}: {
-  parametros: Parametros; documento: Llamado['documento']; region: string; onCerrar: () => void;
-}) {
-  const { guardarLlamado, elegirLlamado } = useDatos();
-  const [nombre, setNombre] = useState(`DS27 Cap. IV ${parametros.anioLlamado + 1} – ${region || 'Región'}`);
-  const [resolucion, setResolucion] = useState('');
-  const [anio, setAnio] = useState(parametros.anioLlamado + 1);
-  const [error, setError] = useState<string | null>(null);
-
-  async function crear() {
-    try {
-      const l = await guardarLlamado({
-        nombre: nombre.trim(), resolucion: resolucion.trim() || null, region: region || null,
-        parametros: { ...structuredClone(parametros), anioLlamado: anio }, bloqueado: false,
-        documento: documento ? structuredClone(documento) : null,
-      });
-      elegirLlamado(l.id);
-      onCerrar();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  return (
-    <Modal titulo="Duplicar como llamado nuevo" onCerrar={onCerrar} ancho="max-w-lg">
-      <p className="text-sm text-muted">
-        Se crea un llamado nuevo con los criterios que ves en pantalla y una copia del texto de la resolución.
-        Luego ajusta lo que cambió en la nueva resolución (criterios aquí y texto en «Resolución»). Los grupos
-        existentes siguen en su llamado original con sus reglas.
-      </p>
-      <div className="mt-4 space-y-3">
-        <Campo etiqueta="Nombre"><input className={claseInput} value={nombre} onChange={(e) => setNombre(e.target.value)} /></Campo>
-        <Campo etiqueta="Resolución"><input className={claseInput} value={resolucion} onChange={(e) => setResolucion(e.target.value)} placeholder="Res. Ex. N°… del …" /></Campo>
-        <Campo etiqueta="Año del llamado"><Numero valor={anio} onChange={setAnio} /></Campo>
-      </div>
-      {error && <p className="mt-3 rounded bg-danger-bg p-2 text-sm text-danger">{error}</p>}
-      <div className="mt-5 flex justify-end gap-2 border-t border-line pt-4">
-        <Boton onClick={onCerrar}>Cancelar</Boton>
-        <Boton variante="primario" onClick={crear} disabled={!nombre.trim()}>Crear llamado</Boton>
-      </div>
-    </Modal>
   );
 }
 

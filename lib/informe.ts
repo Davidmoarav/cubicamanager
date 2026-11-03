@@ -11,12 +11,16 @@ export interface ProyectoContrato {
   valor_uf?: number | null
 }
 
+// Valor del contrato con IVA, en pesos (si la obra se contrató en UF, al valor UF guardado)
+export function contratoBruto(p: ProyectoContrato): number {
+  return p.moneda === 'uf' ? Math.round((Number(p.valor) || 0) * (Number(p.valor_uf) || 0)) : Number(p.valor) || 0
+}
+
 // El bruto de un estado de pago es neto: todo lo que se compara con él usa este valor
 export function contratoNeto(p: ProyectoContrato): number {
   const monto = Number(p.monto_contrato) || 0
   if (monto > 0) return monto
-  const valor = p.moneda === 'uf' ? (Number(p.valor) || 0) * (Number(p.valor_uf) || 0) : Number(p.valor) || 0
-  return Math.round(valor / 1.19)
+  return Math.round(contratoBruto(p) / 1.19)
 }
 
 // Cobrado: bruto de los estados de pago pagados sobre el contrato, ambos netos

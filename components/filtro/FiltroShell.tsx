@@ -3,8 +3,9 @@
 // Usa la sesión de Cubica; los datos son de la empresa y solo los ven administrador y jefe de obra.
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { DataProvider, useDatos } from './DataProvider'
+import { NuevoLlamado } from './NuevoLlamado'
 import { Boton } from './ui'
 
 const PESTANAS = [
@@ -17,6 +18,7 @@ const PESTANAS = [
 function Contenido({ children }: { children: ReactNode }) {
   const { cargando, error, recargar, llamados, llamado, elegirLlamado } = useDatos()
   const pathname = usePathname() ?? ''
+  const [creando, setCreando] = useState(false)
   const activa = (p: (typeof PESTANAS)[number]) =>
     p.exacta ? pathname === p.href || pathname.startsWith('/filtro/grupos') : pathname.startsWith(p.href)
 
@@ -28,19 +30,22 @@ function Contenido({ children }: { children: ReactNode }) {
           <p className="text-[13px] text-muted">Pre-evaluación de postulaciones de Acondicionamiento Térmico</p>
         </div>
         {llamados.length > 0 && (
-          <label className="flex items-center gap-2 text-[12.5px] font-semibold text-muted">
-            Llamado
-            <select
-              aria-label="Llamado"
-              className="max-w-[280px] rounded-lg border border-line2 bg-white px-3 py-2 text-[13px] font-semibold text-ink cursor-pointer"
-              value={llamado?.id}
-              onChange={(e) => elegirLlamado(e.target.value)}
-            >
-              {llamados.map((l) => (
-                <option key={l.id} value={l.id}>{l.bloqueado ? '🔒 ' : ''}{l.nombre}</option>
-              ))}
-            </select>
-          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 text-[12.5px] font-semibold text-muted">
+              Llamado
+              <select
+                aria-label="Llamado"
+                className="max-w-[280px] rounded-lg border border-line2 bg-white px-3 py-2 text-[13px] font-semibold text-ink cursor-pointer"
+                value={llamado?.id}
+                onChange={(e) => elegirLlamado(e.target.value)}
+              >
+                {llamados.map((l) => (
+                  <option key={l.id} value={l.id}>{l.bloqueado ? '🔒 ' : ''}{l.nombre}</option>
+                ))}
+              </select>
+            </label>
+            <Boton onClick={() => setCreando(true)}>+ Nuevo llamado</Boton>
+          </div>
         )}
       </div>
 
@@ -78,6 +83,7 @@ function Contenido({ children }: { children: ReactNode }) {
       ) : (
         children
       )}
+      {creando && <NuevoLlamado onCerrar={() => setCreando(false)} />}
     </div>
   )
 }

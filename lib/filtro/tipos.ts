@@ -50,6 +50,8 @@ export interface Grupo {
   localidad_mas_5000: boolean;
   estado: EstadoGrupo;
   observaciones: string | null;
+  /** Obra de Cubica a la que pasó el grupo (sql/51). */
+  proyecto_id?: string | null;
   created_at: string;
   updated_at: string;
 }

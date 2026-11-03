@@ -81,7 +81,7 @@ export function Modal({
   }, [onCerrar])
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8">
-      <div role="dialog" aria-modal="true" aria-label={titulo} className={`w-full ${ancho} rounded-card bg-white shadow-pop`}>
+      <div role="dialog" aria-modal="true" aria-label={titulo} className={`w-full ${ancho} rounded-card bg-white text-left shadow-pop`}>
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <h2 className="text-[16px] font-extrabold text-ink">{titulo}</h2>
           <button onClick={onCerrar} className="rounded-lg p-1.5 text-muted hover:bg-canvas" aria-label="Cerrar">✕</button>

@@ -1,7 +1,7 @@
 // tests/usabilidad.test.ts
 // Cifras del informe, estado de liquidaciones, formatos y rutas con acceso restringido.
 import { describe, it, expect } from 'vitest'
-import { contratoNeto, kpisProyecto, pctCobrado } from '../lib/informe'
+import { contratoBruto, contratoNeto, kpisProyecto, pctCobrado } from '../lib/informe'
 import { estadoLiquidacion, valoresLiquidacion } from '../lib/liquidaciones'
 import { fmt, fmtFecha, fmtPeriodo } from '../lib/format'
 import { avisoSoloLectura, rutaPermitida, rutaProtegida } from '../lib/nav'
@@ -21,6 +21,10 @@ describe('contrato neto', () => {
   })
   it('un contrato en UF se lleva a pesos antes de sacar el IVA', () => {
     expect(contratoNeto({ valor: 100, moneda: 'uf', valor_uf: 40000 })).toBe(Math.round(4000000 / 1.19))
+  })
+  it('el contrato con IVA de una obra en UF se muestra en pesos', () => {
+    expect(contratoBruto({ valor: 722, moneda: 'uf', valor_uf: 39500 })).toBe(28519000)
+    expect(contratoBruto({ valor: 1190000 })).toBe(1190000)
   })
 })
 

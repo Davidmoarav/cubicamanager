@@ -10,6 +10,7 @@ import type { Cliente } from '@/types/cliente'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import type { EstadoPago } from '@/types/estado-pago'
 import { fmt } from '@/lib/format'
+import { contratoBruto } from '@/lib/informe'
 import { EstadoBadge } from '@/components/obra/ui-obra'
 import ResumenObra from '@/components/obra/ResumenObra'
 import { usePermisos } from '@/lib/usePermisos'
@@ -145,7 +146,7 @@ export default function ObraProyecto() {
   // ─── Métricas del header ───
   const listaEps = Array.isArray(eps) ? eps : []
   const pagado = listaEps.filter(e => e.estado === 'pagado').reduce((s, e) => s + (Number(e.total) || 0), 0)
-  const monto = Number(proyecto?.valor) || 0
+  const monto = proyecto ? contratoBruto(proyecto as any) : 0
   const pendiente = Math.max(0, monto - pagado)
   const proximo = listaEps.find(e => e.estado === 'presentado' || e.estado === 'aprobado')
 

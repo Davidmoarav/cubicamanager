@@ -2,7 +2,7 @@
 //
 // Pasa un grupo del Filtro DS27 a una obra:
 // 1. Crea la obra en UF con el total de las viviendas incluidas
-// 2. Una partida por vivienda (neta, en pesos al valor UF indicado) con avance 0%
+// 2. Por cada vivienda: un grupo, su partida (neta, en pesos al valor UF indicado) y su ficha de beneficiario
 // 3. Enlaza el grupo con la obra
 // Con rollback manual si algo falla. El Filtro solo lo leen dueño, admin y jefe de obra (RLS).
 
@@ -11,6 +11,7 @@ import { guardEscritura, getOwnerId } from '@/lib/roles'
 import { evaluarTodos } from '@/lib/filtro/evaluacion'
 import { netoPesos, obraDesdeGrupo } from '@/lib/filtro/proyecto'
 import type { Grupo, Llamado, Postulante } from '@/lib/filtro/tipos'
+import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 
@@ -80,6 +81,13 @@ export async function POST(req: Request) {
     })
     .select()
     .single()
+  // Datos del programa (sql/54). Aparte, para que la obra se cree igual si la migración aún no corre.
+  if (proyecto) {
+    await supabase.from('proyectos').update({
+      tipo: 'programa', programa: 'DS27', codigo_grupo: grupo.codigo || null,
+      resolucion: llamado.resolucion || null, comuna: grupo.comuna || null,
+    }).eq('id', proyecto.id).eq('user_id', ownerId)
+  }
   if (e1 || !proyecto) return NextResponse.json({ error: 'Error al crear la obra: ' + (e1?.message ?? '') }, { status: 500 })
 
   const deshacer = async () => {
@@ -87,13 +95,34 @@ export async function POST(req: Request) {
     await supabase.from('proyectos').delete().eq('id', proyecto.id).eq('user_id', ownerId)
   }
 
-  // 3. Una partida por vivienda
-  const { error: e2 } = await supabase.from('partidas_proyecto').insert(
-    obra.viviendas.map((x, i) => ({
+  // 3. Por vivienda: grupo (la vivienda) → partida (sus obras). Misma forma que el programa importado
+  //    por Excel, así el cobro por beneficiario, la matriz y las fotos funcionan igual.
+  const idsGrupo = obra.viviendas.map(() => randomUUID())
+  const { error: e2 } = await supabase.from('partidas_proyecto').insert([
+    ...obra.viviendas.map((x, i) => ({
+      id: idsGrupo[i],
       proyecto_id: proyecto.id,
       parent_id: null,
+      nivel: 1,
+      es_grupo: true,
       orden: i,
       descripcion: x.descripcion,
+      unidad: 'gl',
+      cantidad: 0,
+      precio_unitario: 0,
+      costo_unitario: 0,
+      markup_pct: null,
+      avance: 0,
+      user_id: ownerId,
+    })),
+    ...obra.viviendas.map((x, i) => ({
+      id: randomUUID(),
+      proyecto_id: proyecto.id,
+      parent_id: idsGrupo[i],
+      nivel: 2,
+      es_grupo: false,
+      orden: 0,
+      descripcion: 'Obras de la vivienda',
       unidad: 'viv',
       cantidad: 1,
       precio_unitario: precios[i],
@@ -102,11 +131,28 @@ export async function POST(req: Request) {
       avance: 0,
       user_id: ownerId,
     })),
-  )
+  ])
   if (e2) {
     await deshacer()
     return NextResponse.json({ error: 'Error al crear las partidas: ' + e2.message }, { status: 500 })
   }
+
+  // 3b. Ficha de cada vivienda (sql/54). Si la tabla aún no existe, la obra queda creada igual.
+  const { error: eViv } = await supabase.from('viviendas').insert(
+    obra.viviendas.map((x, i) => ({
+      proyecto_id: proyecto.id,
+      partida_id: idsGrupo[i],
+      beneficiario: x.beneficiario,
+      rut: x.rut,
+      direccion: x.direccion,
+      telefono: x.telefono,
+      subsidio_uf: x.subsidioUF,
+      ahorro_uf: x.ahorroUF,
+      postulante_id: x.postulante_id,
+      user_id: ownerId,
+    })),
+  )
+  const sinFichas = !!eViv
 
   // 4. Enlace del grupo con la obra
   const { error: e3 } = await supabase.from('filtro_grupos').update({ proyecto_id: proyecto.id }).eq('id', grupo_id)
@@ -118,5 +164,8 @@ export async function POST(req: Request) {
     }, { status: 500 })
   }
 
-  return NextResponse.json({ ok: true, proyecto_id: proyecto.id, viviendas: obra.viviendas.length, total_uf: obra.totalUF })
+  return NextResponse.json({
+    ok: true, proyecto_id: proyecto.id, viviendas: obra.viviendas.length, total_uf: obra.totalUF,
+    ...(sinFichas ? { aviso: 'La obra se creó, pero sin fichas de vivienda: falta ejecutar sql/54_viviendas.sql.' } : {}),
+  })
 }

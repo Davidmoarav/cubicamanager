@@ -34,6 +34,8 @@ export default function RemuneracionesPage() {
   const [periodo, setPeriodo] = useState(periodoActual())
   // Sin datos del mes anterior mientras carga: mostraría un estado que no es de este mes
   const { data: guardadas, mutate: mutGuardadas } = useSWR<any[]>(`/api/remuneraciones?periodo=${periodo}`, fetcher, { keepPreviousData: false })
+  // Lo que cambia mes a mes: días y horas del parte diario, tratos aprobados y semana corrida
+  const { data: variables } = useSWR<Record<string, any>>(`/api/remuneraciones?periodo=${periodo}&variables=1`, fetcher, { keepPreviousData: false })
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [savingParams, setSavingParams] = useState(false)
   const [msg, setMsg] = useState<{ texto: string; error?: boolean } | null>(null)
@@ -54,16 +56,18 @@ export default function RemuneracionesPage() {
   const liquidaciones = useMemo(() => {
     if (!params) return []
     return filtrarPorObra(empleados as any[], obra).map((emp: any) => {
-      const calculada = calcularLiquidacion(emp, params)
+      const delMes = variables && !(variables as any).error ? variables[emp.id] : null
+      const calculada = calcularLiquidacion(emp, params, delMes)
       const guardada = (Array.isArray(guardadas) ? guardadas : []).find(l => l.empleado_id === emp.id)
       return {
         empleado: emp,
         guardada,
         calc: valoresLiquidacion<typeof calculada>(guardada, calculada),
         estado: estadoLiquidacion(guardada, calculada),
+        delMes,
       }
     })
-  }, [empleados, params, obra, guardadas])
+  }, [empleados, params, obra, guardadas, variables])
 
   const sinGuardar = guardadas ? liquidaciones.filter(l => l.estado === 'sin_guardar') : []
 
@@ -232,11 +236,23 @@ export default function RemuneracionesPage() {
                 </tr>
               </thead>
               <tbody>
-                {liquidaciones.map(({ empleado, calc, guardada, estado }) => (
+                {liquidaciones.map(({ empleado, calc, guardada, estado, delMes }) => (
                   <tr key={empleado.id} className="border-b border-canvas">
                     <td className={tdS}>
                       <div className="font-bold text-[#1a2535]">{empleado.nombre}</div>
                       <div className="text-[10px] text-muted">{empleado.cargo} · {empleado.afp_nombre || 'AFP'} · {empleado.salud_sistema || 'Fonasa'}</div>
+                      {/* Lo variable del mes: de dónde sale el imponible de quien no gana sueldo fijo */}
+                      {(((calc as any).trato_monto || 0) > 0 || ((calc as any).semana_corrida || 0) > 0 || ['diario', 'por_hora'].includes((empleado as any).modalidad)) && (
+                        <div className="text-[10px] text-brand font-semibold">
+                          {[
+                            (empleado as any).modalidad === 'diario' && `${delMes?.dias ?? 0} días`,
+                            (empleado as any).modalidad === 'por_hora' && `${delMes?.horas ?? 0} h`,
+                            `Base ${fmt(calc.sueldo_base)}`,
+                            ((calc as any).trato_monto || 0) > 0 && `Trato ${fmt((calc as any).trato_monto)}`,
+                            ((calc as any).semana_corrida || 0) > 0 && `Semana corrida ${fmt((calc as any).semana_corrida)}`,
+                          ].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
                     </td>
                     <td className={tdNum}>{fmt(calc.total_imponible)}</td>
                     <td className={`${tdNum} text-danger`}>{fmt(calc.desc_afp)}</td>
@@ -325,6 +341,9 @@ export default function RemuneracionesPage() {
               <FormInput label="AFC - empleador (%)" value={params.afc_empleador_pct} onChange={v => updParam('afc_empleador_pct', v)} type="number" />
               <FormInput label="Tope imponible AFC (UF)" value={params.tope_afc_uf ?? 131.9} onChange={v => updParam('tope_afc_uf', v)} type="number" />
               <FormInput label="Jornada semanal (horas)" value={params.jornada_semanal ?? 42} onChange={v => updParam('jornada_semanal', v)} type="number" />
+              <FormInput label="Ingreso mínimo mensual ($)" value={params.ingreso_minimo ?? 539000} onChange={v => updParam('ingreso_minimo', v)} type="number" />
+              <FormSelect label="Días de trabajo por semana" value={String(params.dias_laborales ?? 5)} onChange={v => updParam('dias_laborales', v)}
+                options={[{ value: '5', label: 'Lunes a viernes (5)' }, { value: '6', label: 'Lunes a sábado (6)' }]} />
             </div>
           </div>
 

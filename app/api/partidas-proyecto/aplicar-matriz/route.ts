@@ -7,6 +7,7 @@
 // Al final recalcula el avance de grupos y del proyecto.
 import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
+import { recalcTodo, traerPartidas } from '@/lib/avance-server'
 import { NextResponse } from 'next/server'
 
 interface Fila {
@@ -17,48 +18,6 @@ interface Fila {
   costo_mo_unit?: number
   markup_pct?: number | null
   celdas: Record<string, number>   // benefId -> cantidad
-}
-
-// ─── Recalcular avances (mismo criterio que partidas-proyecto/route.ts) ───
-function valorNodo(nodo: any, hijosDe: (id: string) => any[]): number {
-  const h = hijosDe(nodo.id)
-  if (h.length === 0) return (Number(nodo.cantidad) || 0) * (Number(nodo.precio_unitario) || 0)
-  return h.reduce((s, c) => s + valorNodo(c, hijosDe), 0)
-}
-function avanceNodo(nodo: any, hijosDe: (id: string) => any[]): number {
-  const h = hijosDe(nodo.id)
-  if (h.length === 0) return Number(nodo.avance) || 0
-  const pesos = h.map(c => valorNodo(c, hijosDe))
-  const tot = pesos.reduce((a, b) => a + b, 0)
-  if (tot > 0) return h.reduce((s, c, i) => s + avanceNodo(c, hijosDe) * (pesos[i] / tot), 0)
-  return h.reduce((s, c) => s + avanceNodo(c, hijosDe), 0) / h.length
-}
-async function recalcTodo(supabase: any, proyectoId: string, userId: string) {
-  const { data: todas } = await supabase
-    .from('partidas_proyecto').select('*')
-    .eq('proyecto_id', proyectoId).eq('user_id', userId)
-  if (!todas || todas.length === 0) {
-    await supabase.from('proyectos').update({ avance: 0 }).eq('id', proyectoId).eq('user_id', userId)
-    return
-  }
-  const hijosDe = (id: string) => todas.filter((p: any) => p.parent_id === id)
-  const raices  = todas.filter((p: any) => !p.parent_id)
-  for (const nodo of todas) {
-    if (hijosDe(nodo.id).length > 0) {
-      const av = Math.round(avanceNodo(nodo, hijosDe))
-      if (av !== (Number(nodo.avance) || 0)) {
-        await supabase.from('partidas_proyecto').update({ avance: av }).eq('id', nodo.id).eq('user_id', userId)
-      }
-    }
-  }
-  let totalValor = 0, totalPond = 0
-  for (const r of raices) {
-    const v = valorNodo(r, hijosDe)
-    totalValor += v
-    totalPond  += v * avanceNodo(r, hijosDe) / 100
-  }
-  const avanceProyecto = totalValor > 0 ? Math.round((totalPond / totalValor) * 100) : 0
-  await supabase.from('proyectos').update({ avance: avanceProyecto }).eq('id', proyectoId).eq('user_id', userId)
 }
 
 const norm = (s: any) => String(s ?? '').trim()
@@ -77,21 +36,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Datos inválidos' }, { status: 400 })
   }
 
-  // Estado actual del proyecto
-  const { data: actuales, error: eLoad } = await supabase
-    .from('partidas_proyecto').select('*')
-    .eq('proyecto_id', proyecto_id).eq('user_id', ownerId)
-  if (eLoad) return NextResponse.json({ error: eLoad.message }, { status: 500 })
-
-  const todas = actuales || []
+  // Estado actual del proyecto (por páginas: puede pasar de 1000 partidas)
+  let todas: any[]
+  try {
+    todas = await traerPartidas(supabase, proyecto_id, ownerId, '*')
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Error leyendo las partidas' }, { status: 500 })
+  }
   const rootIds = new Set(todas.filter((p: any) => !p.parent_id).map((p: any) => p.id))
-  const hojasDe = (benefId: string) =>
-    todas.filter((p: any) => p.parent_id === benefId && !p.es_grupo)
-  // Cuántas hojas tiene cada beneficiario (para asignar 'orden' a las nuevas)
+  // Índice beneficiario + partida + categoría → hoja existente (evita recorrer todo por cada celda)
+  const clave = (benefId: string, desc: string, cat: string) => `${benefId}\u0000${desc}\u0000${cat}`
+  const existentes = new Map<string, any>()
   const ordenBase: Record<string, number> = {}
-  for (const id of rootIds) ordenBase[id as string] = hojasDe(id as string).length
+  for (const id of rootIds) ordenBase[id as string] = 0
+  for (const p of todas) {
+    if (!p.parent_id || p.es_grupo || !rootIds.has(p.parent_id)) continue
+    ordenBase[p.parent_id]++
+    const k = clave(p.parent_id, norm(p.descripcion), norm(p.notas))
+    if (!existentes.has(k)) existentes.set(k, p)
+  }
 
   const aInsertar: any[] = []
+  const aActualizar: { id: string; cambios: any }[] = []
   const aBorrar: string[] = []
   let updates = 0, inserts = 0, borrados = 0
 
@@ -110,18 +76,18 @@ export async function POST(req: Request) {
       for (const [benefId, cantRaw] of Object.entries(fila.celdas || {})) {
         if (!rootIds.has(benefId)) continue   // seguridad: solo beneficiarios reales
         const cant = Number(cantRaw) || 0
-        const existente = hojasDe(benefId).find(
-          (l: any) => norm(l.descripcion) === desc && norm(l.notas) === categoria
-        )
+        const existente = existentes.get(clave(benefId, desc, categoria))
         if (cant > 0) {
           if (existente) {
-            const { error } = await supabase.from('partidas_proyecto').update({
+            const cambios = {
               cantidad: cant, unidad,
               costo_material_unit: mat, costo_mo_unit: mo, costo_unitario: costo,
               markup_pct: mk, precio_unitario: precio,
-            }).eq('id', existente.id).eq('user_id', ownerId)
-            if (error) throw error
-            updates++
+            }
+            // Solo se escribe lo que cambió de verdad
+            const igual = Object.entries(cambios).every(([k, v]) =>
+              typeof v === 'number' ? Number(existente[k]) === v : (existente[k] ?? '') === v)
+            if (!igual) aActualizar.push({ id: existente.id, cambios })
           } else {
             aInsertar.push({
               proyecto_id, parent_id: benefId, nivel: 2, es_grupo: false,
@@ -138,9 +104,17 @@ export async function POST(req: Request) {
       }
     }
 
+    // Actualizaciones en paralelo, de a 25
+    for (let i = 0; i < aActualizar.length; i += 25) {
+      const res = await Promise.all(aActualizar.slice(i, i + 25).map(u =>
+        supabase.from('partidas_proyecto').update(u.cambios).eq('id', u.id).eq('user_id', ownerId)))
+      const fallo = res.find(r => r.error)
+      if (fallo) throw fallo.error
+      updates += res.length
+    }
     // Inserciones por lote
-    for (let i = 0; i < aInsertar.length; i += 100) {
-      const lote = aInsertar.slice(i, i + 100)
+    for (let i = 0; i < aInsertar.length; i += 500) {
+      const lote = aInsertar.slice(i, i + 500)
       const { error } = await supabase.from('partidas_proyecto').insert(lote)
       if (error) throw error
       inserts += lote.length

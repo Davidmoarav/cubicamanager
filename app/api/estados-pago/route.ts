@@ -1,20 +1,13 @@
 // app/api/estados-pago/route.ts
 import { createServerSupabase } from '@/lib/supabase-server'
-import { guardEscritura, getOwnerId } from '@/lib/roles'
+import { guardEscritura, getOwnerId, getRolActual } from '@/lib/roles'
+import { traerPartidas } from '@/lib/avance-server'
+import { cargarCostosObras } from '@/lib/costos-server'
+import { aplicarEdicion, cascadaEP, lineasSeriePrecios, lineasSumaAlzada, type LineaEP, type ModalidadContrato } from '@/lib/estado-pago'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const IVA = 0.19
+class ErrorPermiso extends Error {}
 
-// Avance ponderado por valor de subpartida (fallback: promedio simple)
-function avancePartida(padre: any, hijosPadre: any[]): number {
-  if (hijosPadre.length === 0) return Number(padre.avance) || 0
-  const pesos = hijosPadre.map(h => (Number(h.cantidad) || 0) * (Number(h.precio_unitario) || 0))
-  const totalPeso = pesos.reduce((a, b) => a + b, 0)
-  if (totalPeso > 0) {
-    return hijosPadre.reduce((s, h, i) => s + (Number(h.avance) || 0) * (pesos[i] / totalPeso), 0)
-  }
-  return hijosPadre.reduce((s, h) => s + (Number(h.avance) || 0), 0) / hijosPadre.length
-}
 
 // ─── GET: lista EPs de un proyecto, o el "borrador sugerido" ──
 export async function GET(req: NextRequest) {
@@ -54,140 +47,86 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(data ?? [])
 }
 
-// ─── Sugerir EP: avance actual menos lo ya cobrado en EPs previos ──
-async function sugerirEP(supabase: any, proyectoId: string, userId: string, beneficiarioId?: string | null) {
-  // 0. Config de % del proyecto (utilidad, GG, anticipo, retención)
-  const { data: proy } = await supabase
-    .from('proyectos')
-    .select('utilidad_pct, gg_pct, anticipo_pct, retencion_pct')
-    .eq('id', proyectoId)
-    .eq('user_id', userId)
-    .maybeSingle()
+// ─── Base del EP: líneas calculadas en el servidor según la modalidad del contrato ──
+// La usan la sugerencia (GET) y la creación (POST): lo que se guarda nunca sale del navegador.
+async function baseEP(supabase: any, proyectoId: string, userId: string, alcanceTxt?: string | null) {
+  const { data: proy, error: eP } = await supabase
+    .from('proyectos').select('*').eq('id', proyectoId).eq('user_id', userId).maybeSingle()
+  if (eP) throw new Error(eP.message)
+  if (!proy) return null
+  const modalidad: ModalidadContrato = proy.modalidad_contrato ?? 'suma_alzada'
+  const alcance = (alcanceTxt ?? '').split(',').map(s => s.trim()).filter(Boolean)
 
-  const utilidadPct = Number(proy?.utilidad_pct) || 0
-  const ggPct       = Number(proy?.gg_pct) || 0
-  const anticipoPct = Number(proy?.anticipo_pct) || 0
-  const retencionPct = Number(proy?.retencion_pct) || 0
+  // Lo ya comprometido: todo estado de pago que no fue rechazado. Un borrador también cuenta,
+  // para que dos borradores no cobren el mismo avance; si sobra, se elimina.
+  const { data: eps, error: eE } = await supabase
+    .from('estados_pago').select('id, numero, estado, costo_rendido')
+    .eq('proyecto_id', proyectoId).eq('user_id', userId)
+  if (eE) throw new Error(eE.message)
+  const vigentes = (eps ?? []).filter((e: any) => e.estado !== 'rechazado')
+  const numero = (eps ?? []).reduce((m: number, e: any) => Math.max(m, Number(e.numero) || 0), 0) + 1
 
-  // 1. Partidas del proyecto (con su avance actual)
-  const { data: partidas } = await supabase
-    .from('partidas_proyecto')
-    .select('*')
-    .eq('proyecto_id', proyectoId)
-    .eq('user_id', userId)
-
-  let todas = partidas ?? []
-
-  // Alcance por beneficiario: si se indica, quedarse solo con el subárbol de ese
-  // beneficiario (el nodo nivel 1 y todos sus descendientes a cualquier profundidad)
-  if (beneficiarioId) {
-    const hijosDe = (id: string) => todas.filter((p: any) => p.parent_id === id)
-    const incluidos = new Set<string>([beneficiarioId])
-    const pila = [beneficiarioId]
-    while (pila.length) {
-      const actual = pila.pop() as string
-      for (const h of hijosDe(actual)) {
-        if (!incluidos.has(h.id)) { incluidos.add(h.id); pila.push(h.id) }
-      }
-    }
-    todas = todas.filter((p: any) => incluidos.has(p.id))
-  }
-
-  const padres = todas.filter((p: any) => !p.parent_id)
-  const hijos  = todas.filter((p: any) => p.parent_id)
-
-  // 2. EPs anteriores DE ESTE PROYECTO para saber cuánto ya se cobró de cada partida.
-  //    Solo cuentan los EP realmente presentados/aprobados/pagados: un borrador
-  //    no debe bloquear el cobro de ese avance.
-  const { data: epsProyecto } = await supabase
-    .from('estados_pago')
-    .select('id, estado')
-    .eq('user_id', userId)
-    .eq('proyecto_id', proyectoId)
-
-  const idsComprometidos = (epsProyecto ?? [])
-    .filter((e: any) => e.estado !== 'borrador')
-    .map((e: any) => e.id)
-
-  const yaCobrado: Record<string, number> = {}
-  if (idsComprometidos.length > 0) {
-    const { data: epsPrevios } = await supabase
-      .from('estado_pago_detalle')
-      .select('partida_id, avance_actual')
-      .eq('user_id', userId)
-      .in('estado_pago_id', idsComprometidos)
-
-    // avance ya cobrado por partida (el máximo avance_actual registrado)
-    for (const d of (epsPrevios ?? [])) {
-      if (!yaCobrado[d.partida_id] || d.avance_actual > yaCobrado[d.partida_id]) {
-        yaCobrado[d.partida_id] = d.avance_actual
-      }
+  let previos: any[] = []
+  if (vigentes.length > 0) {
+    const ids = vigentes.map((e: any) => e.id)
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error } = await supabase.from('estado_pago_detalle').select('*')
+        .eq('user_id', userId).in('estado_pago_id', ids.slice(i, i + 200))
+      if (error) throw new Error(error.message)
+      previos.push(...(data ?? []))
     }
   }
 
-  // 3. Para cada partida padre, calcular avance actual real y lo nuevo a cobrar
-  const detalle = padres.map((padre: any) => {
-    const valor = (Number(padre.cantidad) || 0) * (Number(padre.precio_unitario) || 0)
-    const hijosPadre = hijos.filter((h: any) => h.parent_id === padre.id)
-    const avanceActual = Math.round(avancePartida(padre, hijosPadre))
-    const avanceAnterior = yaCobrado[padre.id] || 0
-    const avancePeriodo = Math.max(0, avanceActual - avanceAnterior)
-    const monto = Math.round(valor * avancePeriodo / 100)
-    return {
-      partida_id: padre.id,
-      descripcion: padre.descripcion,
-      valor_partida: valor,
-      avance_anterior: avanceAnterior,
-      avance_actual: avanceActual,
-      avance_periodo: avancePeriodo,
-      monto,
-    }
-  })
-
-  const montoNeto = detalle.reduce((s: number, d: any) => s + d.monto, 0)
-
-  // ─── Cascada (suma alzada) ─────────────────────────────
-  // El avance ya viene a precio de contrato (con margen incluido en la partida).
-  // NO se re-suma utilidad/GG: eso duplicaría el margen. Solo se descuentan
-  // amortización de anticipo, retención y (en edición) multas/descuentos.
-  const avanceObra     = montoNeto
-  const bruto          = avanceObra                                // Valor EEPP
-  const anticipoDesc   = Math.round(bruto * anticipoPct / 100)     // amortización de anticipo
-  const retencionMonto = Math.round(bruto * retencionPct / 100)    // retención de garantía
-  const totalNeto      = bruto - anticipoDesc - retencionMonto     // multas/descuentos se restan al editar
-  const iva            = Math.round(totalNeto * IVA)
-  const total          = totalNeto + iva
-
-  // Número del próximo EP
-  const { data: ultimoEp } = await supabase
-    .from('estados_pago')
-    .select('numero')
-    .eq('proyecto_id', proyectoId)
-    .eq('user_id', userId)
-    .order('numero', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-
-  const numero = (ultimoEp?.numero || 0) + 1
-
-  return NextResponse.json({
-    sugerencia: true,
-    numero,
-    // cascada
-    avance_obra: avanceObra,
-    utilidad_pct: 0, utilidad_monto: 0,
-    gg_pct: 0, gg_monto: 0,
-    bruto,
-    anticipo_pct: anticipoPct, anticipo_desc: anticipoDesc,
-    retencion_pct: retencionPct, retencion_monto: retencionMonto,
-    descuentos: 0, multas: 0,
-    total_neto: totalNeto, iva, total,
-    monto_neto: montoNeto,
-    detalle: detalle.filter((d: any) => d.avance_periodo > 0),
-  })
+  let lineas: LineaEP[]
+  if (modalidad === 'administracion') {
+    // El costo real incluye sueldos que el jefe de obra no ve agrupados: rendiría de menos
+    const info = await getRolActual(supabase)
+    if (info?.rol !== 'admin') throw new ErrorPermiso('El estado de pago por administración lo emite el administrador: incluye costos que tu rol no ve')
+    // Costo real de la obra aún no rendido en estados de pago anteriores
+    const [costos] = await cargarCostosObras(supabase, userId, [proy])
+    const rendido = vigentes.reduce((s: number, e: any) => s + (Number(e.costo_rendido) || 0), 0)
+    const pendiente = Math.max(0, Math.round(Number(costos?.gasto_real) || 0) - rendido)
+    lineas = [{
+      partida_id: null, descripcion: 'Costo real de la obra del período',
+      valor_partida: pendiente, avance_anterior: 0, avance_actual: 0, avance_periodo: 0,
+      monto: pendiente, maximo: pendiente,
+    }]
+  } else {
+    const todas = await traerPartidas<any>(supabase, proyectoId, userId,
+      'id, parent_id, descripcion, unidad, cantidad, precio_unitario, avance')
+    lineas = modalidad === 'serie_precios'
+      ? lineasSeriePrecios(todas, previos, alcance)
+      : lineasSumaAlzada(todas, previos, alcance)
+  }
+  return { proy, modalidad, alcance, lineas, numero }
 }
 
-// ─── POST: crear un EP con cascada completa ──
+async function sugerirEP(supabase: any, proyectoId: string, userId: string, alcanceTxt?: string | null) {
+  try {
+    const base = await baseEP(supabase, proyectoId, userId, alcanceTxt)
+    if (!base) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+    const { proy, modalidad, lineas, numero } = base
+    const honorarioPct = modalidad === 'administracion' ? Number(proy.honorario_admin_pct) || 0 : 0
+    const detalle = lineas.filter(l => l.monto > 0 || (modalidad === 'serie_precios' && Number(l.cantidad_presupuestada) > 0))
+    const c = cascadaEP(detalle.reduce((s, l) => s + l.monto, 0), {
+      honorario_pct: honorarioPct, anticipo_pct: proy.anticipo_pct, retencion_pct: proy.retencion_pct,
+    })
+    return NextResponse.json({
+      sugerencia: true, numero, modalidad,
+      honorario_pct: honorarioPct,
+      utilidad_pct: 0, utilidad_monto: 0, gg_pct: 0, gg_monto: 0,
+      anticipo_pct: Number(proy.anticipo_pct) || 0, retencion_pct: Number(proy.retencion_pct) || 0,
+      descuentos: 0, multas: 0,
+      ...c, monto_neto: c.avance_obra,
+      // Infinity no viaja en JSON: sin tope, null
+      detalle: detalle.map(l => ({ ...l, maximo: Number.isFinite(l.maximo) ? l.maximo : null })),
+    })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Error calculando el estado de pago' }, { status: e instanceof ErrorPermiso ? 403 : 500 })
+  }
+}
+
+// ─── POST: crear un EP. Las líneas y la cascada se recalculan aquí ──
 export async function POST(req: Request) {
   const supabase = await createServerSupabase()
   const ro = await guardEscritura(supabase, 'obra')
@@ -196,73 +135,79 @@ export async function POST(req: Request) {
   if (!user) return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
   const ownerId = await getOwnerId(supabase) || user.id
 
-  const body = await req.json()
-  const {
-    proyecto_id, numero, periodo, fecha,
-    avance_obra = 0,
-    descuentos = 0, anticipo_pct = 0, multas = 0, retencion_pct = 0,
-    notas, detalle = [],
-  } = body
+  const body = await req.json().catch(() => null)
+  if (!body?.proyecto_id) return NextResponse.json({ error: 'Falta proyecto_id' }, { status: 400 })
+  const num = (v: any) => Math.max(0, Number(v) || 0)
+  const pct = (v: any) => Math.min(100, num(v))
+  const descuentos = Math.round(num(body.descuentos)), multas = Math.round(num(body.multas))
+  const alcanceTxt = Array.isArray(body.alcance) ? body.alcance.join(',') : (body.alcance ?? '')
 
-  // FK: el proyecto debe pertenecer a ESTA organización
-  if (!proyecto_id) return NextResponse.json({ error: 'Falta proyecto_id' }, { status: 400 })
-  const { data: proyOk } = await supabase
-    .from('proyectos').select('id').eq('id', proyecto_id).eq('user_id', ownerId).maybeSingle()
-  if (!proyOk) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+  let base: Awaited<ReturnType<typeof baseEP>>
+  try {
+    base = await baseEP(supabase, body.proyecto_id, ownerId, alcanceTxt)
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Error calculando el estado de pago' }, { status: e instanceof ErrorPermiso ? 403 : 500 })
+  }
+  if (!base) return NextResponse.json({ error: 'Proyecto no encontrado' }, { status: 404 })
+  const { proy, modalidad, alcance, lineas, numero } = base
 
-  // Recalcular la cascada en el servidor (no confiar en montos del cliente).
-  // CRITERIO ÚNICO (igual que sugerirEP): el avance ya viene a precio de
-  // contrato — el margen está en el precio de cada partida. NO se re-suma
-  // utilidad/GG aquí: hacerlo duplicaría el margen.
-  const utilidad_pct = 0, gg_pct = 0
-  const utilidadMonto  = 0
-  const ggMonto        = 0
-  const bruto          = avance_obra + utilidadMonto + ggMonto
-  const anticipoDesc   = Math.round(bruto * anticipo_pct / 100)
-  const retencionMonto = Math.round(bruto * retencion_pct / 100)
-  const totalNeto      = bruto - descuentos - anticipoDesc - multas - retencionMonto
-  const iva            = Math.round(totalNeto * IVA)
-  const total          = totalNeto + iva
+  const editadas = Array.isArray(body.detalle) ? body.detalle : []
+  const r = aplicarEdicion(modalidad, lineas, editadas.map((d: any) => ({
+    partida_id: d.partida_id ?? null, monto: d.monto, cantidad_actual: d.cantidad_actual,
+  })))
+  if (r.error) return NextResponse.json({ error: r.error }, { status: 400 })
+  if (r.lineas.length === 0) return NextResponse.json({ error: 'No hay nada que cobrar en este estado de pago' }, { status: 400 })
 
-  const { data: ep, error: e1 } = await supabase
-    .from('estados_pago')
-    .insert({
-      proyecto_id, numero, periodo,
-      fecha: fecha || new Date().toISOString().split('T')[0],
-      monto_neto: avance_obra,          // compat: avance de obra del período
-      avance_obra,
-      utilidad_pct, utilidad_monto: utilidadMonto,
-      gg_pct, gg_monto: ggMonto,
-      bruto,
-      descuentos,
-      anticipo_pct, anticipo_desc: anticipoDesc,
-      multas,
-      retencion_pct, retencion_monto: retencionMonto,
-      monto_pagar: totalNeto,           // compat: total neto pre-IVA
-      iva, total,
-      estado: 'borrador',
-      notas: notas || null,
-      user_id: ownerId,
+  const honorario_pct = modalidad === 'administracion' ? Number(proy.honorario_admin_pct) || 0 : 0
+  const anticipo_pct = pct(body.anticipo_pct), retencion_pct = pct(body.retencion_pct)
+  const c = cascadaEP(r.lineas.reduce((s, l) => s + l.monto, 0), { honorario_pct, anticipo_pct, retencion_pct, descuentos, multas })
+  if (c.total_neto < 0) return NextResponse.json({ error: 'Los descuentos y multas superan el valor del estado de pago' }, { status: 400 })
+
+  const fila: Record<string, any> = {
+    proyecto_id: body.proyecto_id, numero,
+    periodo: /^\d{4}-\d{2}$/.test(body.periodo ?? '') ? body.periodo : new Date().toISOString().slice(0, 7),
+    fecha: /^\d{4}-\d{2}-\d{2}$/.test(body.fecha ?? '') ? body.fecha : new Date().toISOString().split('T')[0],
+    monto_neto: c.avance_obra, avance_obra: c.avance_obra,
+    utilidad_pct: 0, utilidad_monto: 0, gg_pct: 0, gg_monto: 0,
+    bruto: c.bruto, descuentos, anticipo_pct, anticipo_desc: c.anticipo_desc, multas,
+    retencion_pct, retencion_monto: c.retencion_monto,
+    monto_pagar: c.total_neto, iva: c.iva, total: c.total,
+    estado: 'borrador', notas: typeof body.notas === 'string' ? body.notas.slice(0, 2000) || null : null,
+    user_id: ownerId,
+  }
+  // Columnas de sql/56: solo viajan si aportan algo (así la obra en suma alzada funciona sin la migración)
+  if (modalidad !== 'suma_alzada' || alcance.length > 0) {
+    Object.assign(fila, {
+      modalidad, alcance: alcance.length > 0 ? alcance : null,
+      costo_rendido: modalidad === 'administracion' ? c.avance_obra : 0,
+      honorario_pct, honorario_monto: c.honorario_monto,
     })
-    .select()
-    .single()
+  }
 
-  if (e1) return NextResponse.json({ error: e1.message }, { status: 500 })
+  const { data: ep, error: e1 } = await supabase.from('estados_pago').insert(fila).select().single()
+  if (e1) {
+    const falta = /modalidad|alcance|costo_rendido|honorario|cantidad_|precio_unitario/.test(e1.message)
+    return NextResponse.json({ error: falta ? 'Falta activar las modalidades de contrato en la base de datos (sql/56_contratos_y_parametros.sql).' : e1.message }, { status: 500 })
+  }
 
-  // Guardar detalle de avance por partida
-  if (detalle.length > 0) {
-    const filas = detalle.map((d: any) => ({
-      estado_pago_id: ep.id,
-      partida_id: d.partida_id,
-      descripcion: d.descripcion,
-      valor_partida: d.valor_partida,
-      avance_anterior: d.avance_anterior,
-      avance_actual: d.avance_actual,
-      avance_periodo: d.avance_periodo,
-      monto: d.monto,
-      user_id: ownerId,
-    }))
-    await supabase.from('estado_pago_detalle').insert(filas)
+  const conCantidad = modalidad === 'serie_precios'
+  const { error: e2 } = await supabase.from('estado_pago_detalle').insert(r.lineas.map(l => ({
+    estado_pago_id: ep.id, partida_id: l.partida_id, descripcion: l.descripcion,
+    valor_partida: l.valor_partida,
+    // Columnas enteras hasta sql/56: se redondean para no fallar antes de ejecutarla
+    avance_anterior: conCantidad ? l.avance_anterior : Math.round(l.avance_anterior),
+    avance_actual: conCantidad ? l.avance_actual : Math.round(l.avance_actual),
+    avance_periodo: conCantidad ? l.avance_periodo : Math.round(l.avance_periodo),
+    monto: l.monto, user_id: ownerId,
+    ...(conCantidad ? {
+      unidad: l.unidad ?? null, precio_unitario: l.precio_unitario,
+      cantidad_anterior: l.cantidad_anterior, cantidad_actual: l.cantidad_actual,
+    } : {}),
+  })))
+  if (e2) {
+    // Sin detalle, el estado de pago no descontaría lo cobrado la próxima vez: no se deja a medias
+    await supabase.from('estados_pago').delete().eq('id', ep.id).eq('user_id', ownerId)
+    return NextResponse.json({ error: 'No se pudo guardar el detalle: ' + e2.message }, { status: 500 })
   }
 
   return NextResponse.json(ep)
@@ -288,6 +233,21 @@ export async function PUT(req: Request) {
     .single()
 
   if (!ep) return NextResponse.json({ error: 'EP no encontrado' }, { status: 404 })
+
+  // Pasos válidos: el estado de pago no salta de borrador a pagado, ni vuelve atrás sin pasar por su paso previo
+  const PASOS: Record<string, string[]> = {
+    borrador: ['presentado', 'rechazado'],
+    presentado: ['aprobado', 'rechazado', 'borrador'],
+    aprobado: ['pagado', 'presentado'],
+    pagado: ['aprobado'],
+    rechazado: ['borrador'],
+  }
+  if (estado && estado !== ep.estado && !(PASOS[ep.estado] ?? []).includes(estado)) {
+    return NextResponse.json({ error: `Un estado de pago ${ep.estado} no puede pasar a ${estado}` }, { status: 400 })
+  }
+  if (generar_factura && !['aprobado', 'pagado'].includes(estado || ep.estado)) {
+    return NextResponse.json({ error: 'Solo se factura un estado de pago aprobado' }, { status: 400 })
+  }
 
   let facturaId = ep.factura_id
 
@@ -348,6 +308,10 @@ export async function DELETE(req: Request) {
   const ownerId = await getOwnerId(supabase) || user.id
 
   const { id } = await req.json()
+  const { data: ep } = await supabase.from('estados_pago').select('estado, factura_id').eq('id', id).eq('user_id', ownerId).maybeSingle()
+  if (!ep) return NextResponse.json({ error: 'EP no encontrado' }, { status: 404 })
+  if (ep.estado === 'pagado') return NextResponse.json({ error: 'Un estado de pago pagado no se puede eliminar' }, { status: 400 })
+  if (ep.factura_id) return NextResponse.json({ error: 'El estado de pago ya tiene factura: anula la factura antes de eliminarlo' }, { status: 400 })
   const { error } = await supabase
     .from('estados_pago')
     .delete()

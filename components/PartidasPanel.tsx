@@ -2,6 +2,7 @@
 // components/PartidasPanel.tsx — v3 con IMPORTAR DEL CATÁLOGO (auto-contenido)
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
 import { Btn, FormInput, FormSelect, Modal } from '@/components/ui'
 import { usePermisos } from '@/lib/usePermisos'
 import SelectorCatalogo from '@/components/SelectorCatalogo'
@@ -16,6 +17,7 @@ import { UNIDADES } from '@/types/cotizaciones'
 import type { PartidaProyecto } from '@/types/partida-proyecto'
 import type { CatalogoPartida } from '@/types/catalogo-partida'
 import { avisar, confirmar } from '@/lib/avisos'
+import Evidencias from '@/components/Evidencias'
 
 const colorAvance = (pct: number) => {
   if (pct === 0) return '#d1d9e6'
@@ -57,18 +59,21 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
   const [savingMat, setSavingMat]   = useState(false)
   const [partidaMatId, setPartidaMatId] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [data, mats] = await Promise.all([
-      fetch(`/api/partidas-proyecto?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/partida-materiales?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-    ])
-    setAllItems(Array.isArray(data) ? data : [])
-    setMateriales(Array.isArray(mats) ? mats : [])
-    setLoading(false)
-  }, [proyectoId])
-
-  useEffect(() => { load() }, [load])
+  // Misma clave que la página de la obra: SWR comparte la respuesta y no la pide dos veces
+  const swrPartidas = useSWR<any[]>(`/api/partidas-proyecto?proyecto_id=${proyectoId}`)
+  const swrMateriales = useSWR<any[]>(`/api/partida-materiales?proyecto_id=${proyectoId}`)
+  useEffect(() => {
+    if (swrPartidas.data !== undefined || swrPartidas.error) setAllItems(Array.isArray(swrPartidas.data) ? swrPartidas.data : [])
+  }, [swrPartidas.data, swrPartidas.error])
+  useEffect(() => {
+    if (swrMateriales.data !== undefined || swrMateriales.error) setMateriales(Array.isArray(swrMateriales.data) ? swrMateriales.data : [])
+  }, [swrMateriales.data, swrMateriales.error])
+  useEffect(() => {
+    setLoading(swrPartidas.data === undefined && !swrPartidas.error)
+  }, [swrPartidas.data, swrPartidas.error])
+  const { mutate: mutPartidas } = swrPartidas
+  const { mutate: mutMateriales } = swrMateriales
+  const load = useCallback(async () => { await Promise.all([mutPartidas(), mutMateriales()]) }, [mutPartidas, mutMateriales])
 
   // ─── Árbol recursivo (N niveles: subproyecto → etapa → partida) ───
   const valorDe = (nodo: any): number => {
@@ -664,6 +669,12 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
             <div className="col-span-full">
               <FormInput label="Notas (opcional)" value={form.notas || ''} onChange={v => upd('notas', v)} />
             </div>
+            {modal.type === 'editar' && form.id && (
+              <div className="col-span-full border-t border-line pt-3">
+                <Evidencias proyectoId={proyectoId} entidadTipo="partida" entidadId={form.id} partidaId={form.id} conEtapas
+                  titulo={form.es_grupo ? 'Fotos y respaldos de la vivienda / grupo' : 'Fotos y respaldos de la partida'} />
+              </div>
+            )}
           </div>
           <div className="flex gap-2 justify-end mt-3.5">
             {modal.type === 'editar' && !form.es_grupo && (

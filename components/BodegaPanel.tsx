@@ -4,6 +4,7 @@
 // Bodega de una obra: stock valorizado y movimientos. Lo comprado ya es gasto al
 // recibirlo: consumir controla el material; traspasar mueve también su costo.
 
+import Evidencias from '@/components/Evidencias'
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -202,12 +203,15 @@ export default function BodegaPanel({ proyectoId }: Props) {
       {movimientos.length > 0 && (
         <>
           <div className="text-[12px] font-bold text-ink mb-2">Últimos movimientos</div>
-          <div className="flex flex-col gap-1.5 max-h-[240px] overflow-y-auto">
+          <div className="flex flex-col gap-1.5 max-h-[360px] overflow-y-auto">
             {movimientos.map(m => (
               <div key={m.id} className="flex items-center justify-between gap-3 py-2 px-3 bg-canvas rounded-lg text-[12px]">
                 <div className="min-w-0">
                   <span className="font-semibold text-ink">{ETIQUETA_MOV[m.tipo] ?? m.tipo} · {m.material}</span>
                   <div className="text-[10px] text-muted truncate">{fmtFecha(m.fecha)}{m.notas ? ` · ${m.notas}` : ''}</div>
+                  <div className="mt-1">
+                    <Evidencias proyectoId={proyectoId} entidadTipo="bodega" entidadId={m.id} partidaId={m.partida_id} titulo="Respaldo" compacto />
+                  </div>
                 </div>
                 <div className={`font-bold tabular-nums whitespace-nowrap ${Number(m.cantidad) < 0 ? 'text-danger' : 'text-success'}`}>
                   {Number(m.cantidad) > 0 ? '+' : ''}{Number(m.cantidad)} {m.unidad}

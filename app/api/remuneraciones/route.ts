@@ -6,6 +6,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { guardModulo, getOwnerId } from '@/lib/roles'
 import { calcularLiquidacion, REM_DEFAULTS } from '@/types/finanzas'
 import { sincronizarGastoSueldo } from '@/lib/imputacion-sueldos'
+import { cargarVariablesMes } from '@/lib/tratos-server'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function GET(req: NextRequest) {
@@ -17,6 +18,20 @@ export async function GET(req: NextRequest) {
   const ownerId = await getOwnerId(supabase) || user.id
 
   const periodo = req.nextUrl.searchParams.get('periodo')
+
+  // variables=1: días, horas, trato y semana corrida del mes por trabajador (lo que cambia mes a mes)
+  if (req.nextUrl.searchParams.get('variables')) {
+    if (!periodo || !/^\d{4}-\d{2}$/.test(periodo)) return NextResponse.json({ error: 'Falta el período' }, { status: 400 })
+    try {
+      const { data: emps, error } = await supabase.from('empleados')
+        .select('id, modalidad, sueldo, valor_dia, valor_hora').eq('user_id', ownerId)
+      // Sin sql/55 no existen valor_dia ni valor_hora: todos quedan con su sueldo de siempre
+      if (error) return NextResponse.json({})
+      return NextResponse.json(await cargarVariablesMes(supabase, ownerId, periodo, emps ?? []))
+    } catch (e: any) {
+      return NextResponse.json({ error: e?.message ?? 'Error leyendo el mes' }, { status: 500 })
+    }
+  }
 
   let query = supabase
     .from('liquidaciones')
@@ -51,19 +66,18 @@ export async function POST(req: Request) {
   ])
   if (!emp) return NextResponse.json({ error: 'Empleado no encontrado' }, { status: 404 })
 
-  const calc = calcularLiquidacion(emp, { ...REM_DEFAULTS, ...(params ?? {}) })
-  const fila = {
-    empleado_id: body.empleado_id,
-    periodo: body.periodo,
-    ...calc,
-    estado: body.estado === 'pagada' ? 'pagada' : 'borrador',
-    user_id: ownerId,
+  // Lo variable del mes: días y horas del parte diario, tratos aprobados y semana corrida
+  let variables = null
+  try {
+    variables = (await cargarVariablesMes(supabase, ownerId, body.periodo, [emp], params ?? null))[emp.id] ?? null
+  } catch (e: any) {
+    return NextResponse.json({ error: `No se pudo leer el mes del trabajador: ${e?.message ?? 'error'}` }, { status: 500 })
   }
 
   // Verificar si ya existe liquidación para ese empleado+periodo
   const { data: existing } = await supabase
     .from('liquidaciones')
-    .select('id, estado')
+    .select('*')
     .eq('empleado_id', body.empleado_id)
     .eq('periodo', body.periodo)
     .eq('user_id', ownerId)
@@ -71,6 +85,19 @@ export async function POST(req: Request) {
 
   if (existing?.estado === 'pagada') {
     return NextResponse.json({ error: 'La liquidación ya está pagada: deshaz el pago antes de modificarla' }, { status: 400 })
+  }
+
+  const { trato_monto, semana_corrida, ...calc } = calcularLiquidacion(emp, { ...REM_DEFAULTS, ...(params ?? {}) }, variables)
+  // trato_monto y semana_corrida son columnas de sql/55: solo viajan si hay algo que guardar
+  // o si la fila ya las tiene (para poder volverlas a cero)
+  const conTrato = trato_monto > 0 || semana_corrida > 0 || (existing && 'trato_monto' in existing)
+  const fila = {
+    empleado_id: body.empleado_id,
+    periodo: body.periodo,
+    ...calc,
+    ...(conTrato ? { trato_monto, semana_corrida } : {}),
+    estado: body.estado === 'pagada' ? 'pagada' : 'borrador',
+    user_id: ownerId,
   }
 
   let result

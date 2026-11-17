@@ -11,7 +11,8 @@ const nextConfig: NextConfig = {
           { key: 'X-Frame-Options',        value: 'DENY' },   // anti-clickjacking
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy',        value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy',     value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Permissions-Policy',     value: 'camera=(), microphone=(), geolocation=(self)' },   // ubicación de las fotos de terreno
+          { key: 'X-Placeholder-Remove', value: ''  },
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
         ],
       },

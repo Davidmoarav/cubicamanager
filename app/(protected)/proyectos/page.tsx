@@ -1,6 +1,7 @@
 'use client'
 // app/(protected)/proyectos/page.tsx — v4 Tailwind moderno
 
+import { MODALIDADES_CONTRATO } from '@/lib/estado-pago'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import useSWR from 'swr'
 import { useRouter } from 'next/navigation'
@@ -75,6 +76,9 @@ export default function ProyectosPage() {
         moneda: (form as any).moneda || 'peso',
         valor_uf: Number((form as any).valor_uf) || 0,
         retencion_pct: Number((form as any).retencion_pct) || 0,
+        // Solo viajan si se tocaron: sin sql/56 la obra se guarda igual
+        ...((form as any).modalidad_contrato ? { modalidad_contrato: (form as any).modalidad_contrato } : {}),
+        ...((form as any).modalidad_contrato === 'administracion' ? { honorario_admin_pct: Number((form as any).honorario_admin_pct) || 0 } : {}),
       }) })
       if (!res.ok) {
         const data = await res.json().catch(() => null)
@@ -299,8 +303,15 @@ export default function ProyectosPage() {
 
             {/* Parámetros de estados de pago */}
             <details className="col-span-2 mt-1">
-              <summary className="text-[12.5px] font-semibold text-brand cursor-pointer mb-2">Condiciones de cobro (opcional): utilidad, gastos generales, anticipo y retención</summary>
+              <summary className="text-[12.5px] font-semibold text-brand cursor-pointer mb-2">Condiciones de cobro (opcional): modalidad del contrato, anticipo y retención</summary>
               <div className="grid grid-cols-2 gap-3">
+            <div className={(form as any).modalidad_contrato === 'administracion' ? '' : 'col-span-2'}>
+              <FormSelect label="Modalidad del contrato" value={(form as any).modalidad_contrato || 'suma_alzada'}
+                onChange={v => upd('modalidad_contrato' as any, v)}
+                options={MODALIDADES_CONTRATO.map(m => ({ value: m.value, label: m.label }))} />
+            </div>
+            {(form as any).modalidad_contrato === 'administracion' &&
+              <FormInput label="Honorario de administración %" value={(form as any).honorario_admin_pct ?? 0} onChange={v => upd('honorario_admin_pct' as any, v)} type="number" />}
             <FormInput label="Utilidad %"        value={(form as any).utilidad_pct ?? 0}  onChange={v => upd('utilidad_pct' as any, v)}  type="number" />
             <FormInput label="Gastos Generales %" value={(form as any).gg_pct ?? 0}        onChange={v => upd('gg_pct' as any, v)}        type="number" />
             <FormInput label="Anticipo carátula %" value={(form as any).anticipo_pct ?? 0} onChange={v => upd('anticipo_pct' as any, v)}  type="number" />

@@ -18,6 +18,38 @@ export interface Proyecto {
   anticipo?: number
   user_id?: string
   created_at?: string
+  // Obra única o programa con viviendas (sql/54)
+  tipo?: 'unica' | 'programa'
+  programa?: string | null
+  codigo_grupo?: string | null
+  entidad_patrocinante?: string | null
+  resolucion?: string | null
+  comuna?: string | null
+}
+
+export type EstadoVivienda = 'pendiente' | 'en_ejecucion' | 'terminada' | 'recepcionada'
+
+export interface Vivienda {
+  id: string
+  proyecto_id: string
+  partida_id: string
+  beneficiario: string
+  rut?: string | null
+  direccion?: string | null
+  rol_avaluo?: string | null
+  telefono?: string | null
+  subsidio_uf?: number | null
+  ahorro_uf?: number | null
+  postulante_id?: string | null
+  estado: EstadoVivienda
+  fecha_inicio?: string | null
+  fecha_termino?: string | null
+  fecha_recepcion?: string | null
+  notas?: string | null
+  // Calculados desde sus partidas
+  valor?: number
+  avance?: number
+  partidas?: number
 }
 
 export interface Empleado {
@@ -29,7 +61,9 @@ export interface Empleado {
   horas_extra: number
   estado: string            // 'activo' | 'vacaciones' | 'inactivo'
   tipo?: string             // 'planta' | 'subcontrato'
-  modalidad?: 'mensual' | 'por_metas'   // forma de pago
+  modalidad?: 'mensual' | 'por_metas' | 'diario' | 'por_hora' | 'trato' | 'mixto'   // forma de pago
+  valor_dia?: number
+  valor_hora?: number
   inicio?: string
   // Campos previsionales (módulo remuneraciones)
   afp_nombre?: string

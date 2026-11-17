@@ -6,6 +6,7 @@
 // exportar a PDF con diseño Cubica.
 
 import { useState, useEffect, useCallback } from 'react'
+import useSWR from 'swr'
 import { MetricCard, Btn } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import DescargarInformeBtn from '@/components/DescargarInformeBtn'
@@ -20,18 +21,17 @@ export default function InformePanel({ proyectoId, proyectoNombre = '' }: Props)
   const [proximo, setProximo] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [inf, sug] = await Promise.all([
-      fetch(`/api/informe?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/estados-pago?proyecto_id=${proyectoId}&sugerir=1`).then(r => r.json()).catch(() => null),
-    ])
-    setData(inf)
-    setProximo(sug && sug.total ? sug : null)
+  const swrInf = useSWR<any>(`/api/informe?proyecto_id=${proyectoId}`)
+  const swrSug = useSWR<any>(`/api/estados-pago?proyecto_id=${proyectoId}&sugerir=1`)
+  const listos = [swrInf, swrSug].every(r => r.data !== undefined || !!r.error)
+  useEffect(() => {
+    if (!listos) return
+    setData(swrInf.data ?? null)
+    setProximo(swrSug.data && swrSug.data.total ? swrSug.data : null)
     setLoading(false)
-  }, [proyectoId])
-
-  useEffect(() => { load() }, [load])
+  }, [listos, swrInf.data, swrSug.data])
+  const { mutate: m1 } = swrInf, { mutate: m2 } = swrSug
+  const load = useCallback(async () => { await Promise.all([m1(), m2()]) }, [m1, m2])
 
   if (loading) return <div className="flex items-center justify-center py-16 text-muted text-[13px]">Cargando informe…</div>
   if (!data?.kpis) return <div className="text-[13px] text-muted py-8 text-center">No hay datos para generar el informe.</div>

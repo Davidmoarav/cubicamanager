@@ -1,6 +1,7 @@
 'use client'
 // app/(protected)/contratos/page.tsx
 
+import Evidencias from '@/components/Evidencias'
 import { useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -86,7 +87,12 @@ export default function ContratosPage() {
               {items.map(c => (
                 <tr key={c.id}>
                   <Td><span className="font-mono font-bold text-brand text-[12px]">{c.numero||'—'}</span></Td>
-                  <Td className="font-semibold">{c.contraparte}</Td>
+                  <Td className="font-semibold">
+                    {c.contraparte}
+                    <div className="font-normal mt-0.5">
+                      <Evidencias proyectoId={(c as any).proyecto_id ?? null} entidadTipo="contrato" entidadId={c.id} titulo="Contrato firmado" compacto />
+                    </div>
+                  </Td>
                   <Td className="text-muted">{c.tipo}</Td>
                   <Td className="font-bold">{fmt(c.valor)}</Td>
                   <Td>

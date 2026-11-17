@@ -1,6 +1,7 @@
 'use client'
 // app/(protected)/rrhh/page.tsx
 
+import { MODALIDADES_PAGO, sueldoMensualEstimado } from '@/lib/tratos'
 import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -46,14 +47,9 @@ export default function RRHHPage() {
 
   // Horas extra: valor hora × 1,5 (misma fórmula que la liquidación real,
   // no un valor fijo: depende del sueldo de cada trabajador)
-  const totalNomina = items.reduce((s, e) => {
-    const base = Number(e.sueldo) || 0
-    // Por metas: se paga el monto pactado (trato), sin horas extra.
-    if (e.modalidad === 'por_metas') return s + base
-    const valorHora = base / 30 / 8
-    const extra = Math.round(valorHora * 1.5 * (Number(e.horas_extra) || 0))
-    return s + base + extra
-  }, 0)
+  // Nómina estimada de un mes normal. Por día, por hora y a trato dependen del mes:
+  // su monto real sale de la liquidación en Remuneraciones.
+  const totalNomina = items.reduce((s, e) => s + sueldoMensualEstimado(e as any), 0)
   const totalHE     = items.reduce((s, e) => s + (e.modalidad === 'por_metas' ? 0 : e.horas_extra), 0)
 
   const initials = (n: string) => n.split(' ').map(x => x[0]).slice(0,2).join('')
@@ -91,7 +87,7 @@ export default function RRHHPage() {
                 </div>
                 <div className="flex-1">
                   <div className="text-[13px] font-semibold">{e.nombre}</div>
-                  <div className="text-[12px] text-muted">{e.cargo} · {e.tipo} · {e.modalidad === 'por_metas' ? 'por metas' : 'mensual'}</div>
+                  <div className="text-[12px] text-muted">{e.cargo} · {e.tipo} · {(MODALIDADES_PAGO.find(m => m.value === (e.modalidad || 'mensual'))?.label ?? 'Mensual').split(' (')[0].toLowerCase()}</div>
                 </div>
                 <Badge estado={e.estado} tipo="empleado" />
                 <div className="flex gap-1">
@@ -110,13 +106,15 @@ export default function RRHHPage() {
               <tbody>
                 {items.map(e => {
                   const porMetas = e.modalidad === 'por_metas'
-                  const he = porMetas ? 0 : e.horas_extra * 14000
+                  const variable = ['diario', 'por_hora', 'trato'].includes(e.modalidad || '')
+                  const total = sueldoMensualEstimado(e as any)
+                  const he = porMetas || variable ? 0 : total - (Number(e.sueldo) || 0)
                   return (
                     <tr key={e.id}>
                       <Td className="font-semibold">{e.nombre.split(' ')[0]} {e.nombre.split(' ')[1]?.[0]}.</Td>
-                      <Td>{fmt(e.sueldo)}{porMetas && <span className="text-[10px] text-muted ml-1">(metas)</span>}</Td>
+                      <Td>{e.modalidad === 'diario' ? `${fmt((e as any).valor_dia || 0)} / día` : e.modalidad === 'por_hora' ? `${fmt((e as any).valor_hora || 0)} / hora` : fmt(e.sueldo)}{porMetas && <span className="text-[10px] text-muted ml-1">(metas)</span>}</Td>
                       <Td className={he > 0 ? 'text-warning' : 'text-[#aaa]'}>{he>0 ? fmt(he):'—'}</Td>
-                      <Td className="font-bold">{fmt(e.sueldo + he)}</Td>
+                      <Td className="font-bold">{fmt(total)}{variable && <span className="text-[10px] text-muted font-normal ml-1">(estimado)</span>}</Td>
                     </tr>
                   )
                 })}
@@ -139,10 +137,22 @@ export default function RRHHPage() {
             <FormInput label="RUT"                value={form.rut||''}          onChange={v=>upd('rut',v)} />
             <FormInput label="Cargo"              value={form.cargo||''}        onChange={v=>upd('cargo',v)} />
             <FormSelect label="Modalidad de pago" value={form.modalidad||'mensual'} onChange={v=>upd('modalidad',v)}
-              options={[{value:'mensual',label:'Mensual (sueldo fijo)'},{value:'por_metas',label:'Por metas (trato / avance)'}]} />
-            <FormInput
-              label={form.modalidad==='por_metas' ? 'Monto por metas (CLP)' : 'Sueldo base (CLP)'}
-              value={form.sueldo||''} onChange={v=>upd('sueldo',v)} type="number" />
+              options={MODALIDADES_PAGO} />
+            {form.modalidad==='diario' &&
+              <FormInput label="Valor día (CLP)" value={form.valor_dia||''} onChange={v=>upd('valor_dia',v)} type="number" />}
+            {form.modalidad==='por_hora' &&
+              <FormInput label="Valor hora (CLP)" value={form.valor_hora||''} onChange={v=>upd('valor_hora',v)} type="number" />}
+            {form.modalidad!=='diario' && form.modalidad!=='por_hora' &&
+              <FormInput
+                label={form.modalidad==='por_metas' ? 'Monto por metas (CLP)' : form.modalidad==='trato' ? 'Mínimo garantizado del mes (CLP)' : 'Sueldo base (CLP)'}
+                value={form.sueldo||''} onChange={v=>upd('sueldo',v)} type="number" />}
+            {(form.modalidad==='diario' || form.modalidad==='por_hora' || form.modalidad==='trato' || form.modalidad==='mixto') &&
+              <p className="col-span-2 text-[11.5px] text-muted -mt-1">
+                {form.modalidad==='diario' && 'Se paga el valor día por cada día con parte diario, más la semana corrida.'}
+                {form.modalidad==='por_hora' && 'Se pagan las horas del parte diario, más la semana corrida.'}
+                {form.modalidad==='trato' && 'Se paga lo aprobado en sus tratos más la semana corrida; si no alcanza el mínimo garantizado (o el ingreso mínimo, si es mayor), se completa. Pensado para jornada completa.'}
+                {form.modalidad==='mixto' && 'Sueldo base fijo más lo aprobado en sus tratos, con semana corrida sobre el trato.'}
+              </p>}
             {form.modalidad!=='por_metas' &&
               <FormInput label="Horas extra / mes"  value={form.horas_extra??0}   onChange={v=>upd('horas_extra',v)} type="number" />}
             <FormSelect label="Tipo"  value={form.tipo||'planta'} onChange={v=>upd('tipo',v)}

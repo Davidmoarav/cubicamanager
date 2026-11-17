@@ -17,6 +17,8 @@ export interface ParametrosRemuneracion {
   sis_pct?: number                   // seguro de invalidez y sobrevivencia
   cotizacion_empleador_pct?: number  // cotización de la reforma de pensiones (Ley 21.735)
   mutual_pct?: number                // tasa de mutual: depende de cada empresa
+  ingreso_minimo?: number            // ingreso mínimo mensual: piso de quien gana a trato (sql/56)
+  dias_laborales?: 5 | 6             // días de trabajo por semana: base de la semana corrida (sql/56)
   gratificacion_tope: number
   colacion_default: number
   movilizacion_default: number
@@ -36,6 +38,8 @@ export const REM_DEFAULTS: ParametrosRemuneracion = {
   sis_pct: 1.78,                // trimestre ago-oct 2026 (cambia cada trimestre)
   cotizacion_empleador_pct: 3.50, // desde agosto 2026 (sube gradualmente cada agosto)
   mutual_pct: 0.93,
+  ingreso_minimo: 539000,       // desde enero 2026 (Ley 21.751): verificar reajustes
+  dias_laborales: 5,
   gratificacion_tope: 209396, colacion_default: 0, movilizacion_default: 0,
 }
 
@@ -119,11 +123,18 @@ export function impuestoUnico(baseTributable: number, utm: number): number {
   return Math.max(0, Math.round((baseUTM * t.factor - t.rebaja) * utm))
 }
 
+// `variables` trae lo que cambia mes a mes (lib/tratos.ts → variablesDelMes): la base de quien
+// gana por día, por hora o a trato, lo aprobado en sus tratos y la semana corrida.
+// Sin `variables` el cálculo es el de siempre (sueldo mensual).
 export function calcularLiquidacion(
   emp: EmpleadoPrevisional,
-  params: ParametrosRemuneracion
+  params: ParametrosRemuneracion,
+  variables?: { sueldo_base?: number; trato_monto?: number; semana_corrida?: number } | null
 ) {
-  const sueldoBase = Number(emp.sueldo) || 0
+  const sueldoBase = Math.round(variables?.sueldo_base ?? (Number(emp.sueldo) || 0))
+  // Trato y semana corrida son remuneración: imponibles y tributables
+  const tratoMonto = Math.round(Number(variables?.trato_monto) || 0)
+  const semanaCorrida = Math.round(Number(variables?.semana_corrida) || 0)
 
   // Horas extra con recargo 50% — fórmula de la Dirección del Trabajo:
   //   factor = (28 / (30 × 4 × jornada)) × 1.5  →  45h: 0,0077778 · 44h: 0,0079545 · 42h: 0,0083333
@@ -134,12 +145,12 @@ export function calcularLiquidacion(
   const bonoImponible = Number(emp.bono_imponible) || 0
 
   // Gratificación legal: 25% de lo devengado con tope
-  const baseGrat = sueldoBase + horasExtraMonto + bonoImponible
+  const baseGrat = sueldoBase + horasExtraMonto + bonoImponible + tratoMonto + semanaCorrida
   const gratificacion = Math.min(Math.round(baseGrat * 0.25), params.gratificacion_tope)
 
   // Renta imponible: bruta (para haber e impuesto) vs con tope (para cotizaciones)
   const topeImponible = Math.round(params.tope_imponible_uf * params.uf_valor)
-  const imponibleBruto = sueldoBase + horasExtraMonto + bonoImponible + gratificacion
+  const imponibleBruto = sueldoBase + horasExtraMonto + bonoImponible + tratoMonto + semanaCorrida + gratificacion
   const totalImponible = Math.min(imponibleBruto, topeImponible)   // base de AFP/salud/AFC
 
   // Descuentos previsionales (sobre la base con tope)
@@ -184,6 +195,8 @@ export function calcularLiquidacion(
 
   return {
     sueldo_base: sueldoBase,
+    trato_monto: tratoMonto,
+    semana_corrida: semanaCorrida,
     horas_extra_monto: horasExtraMonto,
     gratificacion,
     bono_imponible: bonoImponible,

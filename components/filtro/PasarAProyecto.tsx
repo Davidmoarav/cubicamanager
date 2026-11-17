@@ -52,7 +52,7 @@ export function PasarAProyecto({
         throw new Error(j?.error || 'No se pudo crear la obra.');
       }
       recargar();
-      router.push(`/obra/${j.proyecto_id}`);
+      router.push(`/obra/${j.proyecto_id}?tab=viviendas`);
     } catch (e) {
       setError((e as Error).message);
       setCreando(false);
@@ -64,8 +64,8 @@ export function PasarAProyecto({
   return (
     <Modal titulo="Pasar a proyecto" onCerrar={onCerrar} ancho="max-w-2xl">
       <p className="text-[13px] text-muted">
-        Se crea una obra en UF con las {obra.viviendas.length} viviendas incluidas. Cada vivienda queda como una partida,
-        para llevar el avance casa por casa. El monto de cada vivienda es su costo de
+        Se crea una obra en UF con las {obra.viviendas.length} viviendas incluidas. Cada vivienda queda con su ficha
+        de beneficiario y sus partidas, para llevar avance, cobro y fotos casa por casa. El monto de cada vivienda es su costo de
         proyecto si está cargado; si no, su subsidio.
       </p>
 

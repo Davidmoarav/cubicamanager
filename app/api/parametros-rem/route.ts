@@ -35,12 +35,18 @@ export async function PUT(req: Request) {
   const body = await req.json()
   const { id, created_at, user_id, ...payload } = body
 
-  const { data, error } = await supabase
+  const guardar = (fila: any) => supabase
     .from('parametros_remuneracion')
-    .upsert({ ...payload, user_id: ownerId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
+    .upsert({ ...fila, user_id: ownerId, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
     .select()
     .single()
 
+  let { data, error } = await guardar(payload)
+  // Sin sql/56 aún no existen ingreso_minimo ni dias_laborales: se guarda el resto
+  if (error && /ingreso_minimo|dias_laborales/.test(error.message)) {
+    const { ingreso_minimo, dias_laborales, ...resto } = payload
+    ;({ data, error } = await guardar(resto))
+  }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }

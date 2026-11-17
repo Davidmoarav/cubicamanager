@@ -60,3 +60,20 @@ describe('Pasar un grupo a obra', () => {
     expect(obraDesdeGrupo(grupo, llamado, nadie).viviendas).toEqual([]);
   });
 });
+
+describe('Ficha de la vivienda al pasar a obra', () => {
+  const evaluados = evaluarTodos(
+    [persona('p1', 'Rosa Soto', { direccion: ' Pasaje 1 #120 ', telefono: '+56 9 1111 1111', ahorro_uf: 3 })],
+    [grupo], [llamado],
+  );
+  const [v] = obraDesdeGrupo(grupo, llamado, evaluados).viviendas;
+
+  it('lleva los datos del beneficiario y el subsidio calculado', () => {
+    expect(v.beneficiario).toBe('Rosa Soto');
+    expect(v.rut).toBe('11.111.111-1');
+    expect(v.direccion).toBe('Pasaje 1 #120');
+    expect(v.telefono).toBe('+56 9 1111 1111');
+    expect(v.ahorroUF).toBe(3);
+    expect(v.subsidioUF).toBe(evaluados[0].calculo.subsidioUF);
+  });
+});

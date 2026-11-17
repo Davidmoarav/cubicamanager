@@ -4,6 +4,7 @@
 // Recepción por línea de una orden de compra: lo recibido entra a la bodega de la
 // obra y se vuelve gasto. Cada recepción se puede revertir.
 
+import Evidencias from '@/components/Evidencias'
 import { useCallback, useEffect, useState } from 'react'
 import { Btn, FormInput, Modal } from '@/components/ui'
 import { fmt, fmtFecha } from '@/lib/format'
@@ -141,6 +142,9 @@ export default function RecepcionOC({ ordenId, onClose, onCambio }: Props) {
                     <div className="min-w-0">
                       <span className="font-semibold text-ink">{Number(r.cantidad)} · {nombreLinea(r.linea_id)}</span>
                       <div className="text-[10px] text-muted">{fmtFecha(r.fecha)}{r.documento ? ` · ${r.documento}` : ''}</div>
+                      <div className="mt-1">
+                        <Evidencias proyectoId={oc?.proyecto_id ?? null} entidadTipo="recepcion_oc" entidadId={r.id} titulo="Guía y fotos" compacto />
+                      </div>
                     </div>
                     {puedeEditar && (<button onClick={() => revertir(r)} className="text-[11px] font-semibold text-danger whitespace-nowrap hover:underline">Revertir</button>)}
                   </div>

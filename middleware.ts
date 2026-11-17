@@ -5,6 +5,10 @@ import { NextResponse, type NextRequest } from 'next/server'
 type CookieToSet = { name: string; value: string; options?: CookieOptions }
 
 export async function middleware(request: NextRequest) {
+  // Las rutas /api validan la sesión por su cuenta (y responden 401, no una redirección):
+  // validarla también aquí era un viaje más al servidor de sesiones en cada llamada.
+  if (request.nextUrl.pathname.startsWith('/api/')) return NextResponse.next({ request })
+
   // Si Supabase no autoriza la dirección pedida, el link del correo cae en la raíz.
   // Con el verificador en este navegador, el código todavía se puede canjear.
   if (request.nextUrl.pathname === '/' && request.nextUrl.searchParams.has('code')

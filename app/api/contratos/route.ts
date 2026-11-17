@@ -29,6 +29,21 @@ export async function GET() {
   return NextResponse.json(result)
 }
 
+// El tipo del contrato con el mandante define cómo se cobra la obra enlazada (sql/56).
+// Solo si la obra aún no tiene estados de pago; si falla (sin la migración), no impide guardar.
+const MODALIDAD_POR_TIPO: Record<string, string> = {
+  'Suma alzada': 'suma_alzada', 'Serie de precios': 'serie_precios', 'Administración delegada': 'administracion',
+}
+async function pasarModalidad(supabase: any, ownerId: string, contrato: any) {
+  const modalidad = MODALIDAD_POR_TIPO[contrato?.tipo]
+  if (!contrato?.proyecto_id || !modalidad) return
+  const { data: eps } = await supabase.from('estados_pago').select('id')
+    .eq('proyecto_id', contrato.proyecto_id).eq('user_id', ownerId).neq('estado', 'rechazado').limit(1)
+  if ((eps ?? []).length > 0) return
+  await supabase.from('proyectos').update({ modalidad_contrato: modalidad })
+    .eq('id', contrato.proyecto_id).eq('user_id', ownerId)
+}
+
 export async function POST(req: Request) {
   const supabase = await createServerSupabase()
   const ro = await guardEscritura(supabase, 'obra')
@@ -40,6 +55,7 @@ export async function POST(req: Request) {
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
   const { data, error } = await supabase.from('contratos').insert({ ...v.data, user_id: ownerId }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await pasarModalidad(supabase, ownerId, data).catch(() => {})
   return NextResponse.json(data)
 }
 
@@ -56,6 +72,7 @@ export async function PUT(req: Request) {
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
   const { data, error } = await supabase.from('contratos').update(v.data).eq('id', body.id).eq('user_id', ownerId).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await pasarModalidad(supabase, ownerId, data).catch(() => {})
   return NextResponse.json(data)
 }
 

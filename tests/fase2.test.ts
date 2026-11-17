@@ -247,3 +247,41 @@ describe('aplicarGastos', () => {
     expect(filas.find((g: any) => g.partida_id === null).monto).toBe(7)
   })
 })
+
+// ─── Subcontratos por modalidad ───────────────────────────
+import { calcularEPSub, montoContratoSub } from '../lib/subcontratos'
+
+describe('subcontrato por modalidad', () => {
+  const pu = {
+    modalidad: 'precios_unitarios', monto_contrato: 0, retencion_pct: 5, anticipo: 100000,
+    items: [
+      { id: 'a', descripcion: 'Excavación', unidad: 'm3', cantidad: 100, precio_unitario: 8000 },
+      { id: 'b', descripcion: 'Relleno', unidad: 'm3', cantidad: 50, precio_unitario: 4000 },
+    ],
+  }
+  it('precios unitarios: contrato = suma de ítems; se paga la diferencia de cantidad', () => {
+    expect(montoContratoSub(pu)).toBe(1000000)
+    const r: any = calcularEPSub(pu, [], { cantidades: { a: 60 } })
+    expect(r).toMatchObject({ bruto: 480000, retencion: 24000, anticipo_desc: 48000, avance_acumulado: 48, cantidades: { a: 60, b: 0 } })
+    const r2: any = calcularEPSub(pu, [{ ...r }], { cantidades: { a: 110, b: 50 } })
+    expect(r2.bruto).toBe(400000 + 200000)
+    // Se midió más que lo presupuestado: el avance pasa de 100 y el anticipo no se amortiza de más
+    expect(r2.avance_acumulado).toBe(108)
+    expect(r.anticipo_desc + r2.anticipo_desc).toBe(100000)
+  })
+  it('precios unitarios: no deja bajar una cantidad', () => {
+    expect(calcularEPSub(pu, [{ avance_acumulado: 48, bruto: 480000, retencion: 0, anticipo_desc: 0, neto: 0, cantidades: { a: 60 } }], { cantidades: { a: 50 } }))
+      .toEqual({ error: '"Excavación": la cantidad acumulada no puede bajar de 60' })
+  })
+  it('por tiempo: tarifa × horas del período', () => {
+    expect(calcularEPSub({ modalidad: 'por_tiempo', tarifa: 25000, unidad_tiempo: 'hora', monto_contrato: 0 }, [], { cantidad: 12 }))
+      .toMatchObject({ bruto: 300000, cantidad: 12, avance_acumulado: 0 })
+  })
+  it('administración: costo + honorario', () => {
+    expect(calcularEPSub({ modalidad: 'administracion', honorario_pct: 15, monto_contrato: 0 }, [], { costo: 1000000 }))
+      .toMatchObject({ bruto: 1150000, costo: 1000000 })
+  })
+  it('suma alzada sigue igual', () => {
+    expect(calcularEPSub({ monto_contrato: 1000000 }, [], { avance_acumulado: 30 })).toMatchObject({ bruto: 300000 })
+  })
+})

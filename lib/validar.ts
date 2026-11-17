@@ -35,6 +35,58 @@ export const ProyectoSchema = z.object({
   retencion_pct: pct.optional(),
   cliente_id:   uuid.nullish(),
   cotizacion_id: uuid.nullish(),
+  // Obra única o programa con viviendas (sql/54)
+  tipo:         z.enum(['unica', 'programa']).optional(),
+  programa:     texto.nullish(),
+  codigo_grupo: texto.nullish(),
+  entidad_patrocinante: texto.nullish(),
+  resolucion:   texto.nullish(),
+  comuna:       texto.nullish(),
+  // Modalidad del contrato con el mandante (sql/56)
+  modalidad_contrato:  z.enum(['suma_alzada', 'serie_precios', 'administracion']).optional(),
+  honorario_admin_pct: pct.optional(),
+}).strip()
+
+// Partida de obra: campos que se pueden editar (PUT parcial)
+export const PartidaSchema = z.object({
+  proyecto_id:         uuid.optional(),
+  parent_id:           uuid.nullish(),
+  orden:               z.coerce.number().int().min(0).max(1_000_000).optional(),
+  descripcion:         texto.min(1, 'Falta la descripción').optional(),
+  unidad:              z.string().trim().max(20).optional(),
+  cantidad:            z.coerce.number().min(0).max(999_999_999).optional(),
+  precio_unitario:     z.coerce.number().min(0).max(999_999_999_999).transform(Math.round).optional(),
+  costo_unitario:      z.coerce.number().min(0).max(999_999_999_999).transform(Math.round).optional(),
+  costo_material_unit: z.coerce.number().min(0).max(999_999_999_999).transform(Math.round).optional(),
+  costo_mo_unit:       z.coerce.number().min(0).max(999_999_999_999).transform(Math.round).optional(),
+  markup_pct:          z.coerce.number().min(-100).max(1000).nullish(),
+  avance:              z.coerce.number().min(0).max(100).transform(Math.round).optional(),
+  notas:               textoLargo.nullish(),
+  es_grupo:            z.boolean().optional(),
+  nivel:               z.coerce.number().int().min(1).max(10).optional(),
+  fecha_inicio:        fechaOpc.optional(),
+  fecha_fin:           fechaOpc.optional(),
+  responsable:         texto.nullish(),
+  rendimiento_dia:     z.coerce.number().min(0).max(999_999_999).nullish(),
+}).strip()
+
+export const ESTADOS_VIVIENDA = ['pendiente', 'en_ejecucion', 'terminada', 'recepcionada'] as const
+const uf = z.coerce.number().finite().min(0).max(99_999_999)
+
+export const ViviendaSchema = z.object({
+  proyecto_id:     uuid,
+  beneficiario:    texto.min(1, 'Falta el nombre del beneficiario'),
+  rut:             texto.nullish(),
+  direccion:       texto.nullish(),
+  rol_avaluo:      texto.nullish(),
+  telefono:        texto.nullish(),
+  subsidio_uf:     uf.nullish(),
+  ahorro_uf:       uf.nullish(),
+  estado:          z.enum(ESTADOS_VIVIENDA).optional(),
+  fecha_inicio:    fechaOpc,
+  fecha_termino:   fechaOpc,
+  fecha_recepcion: fechaOpc,
+  notas:           textoLargo.nullish(),
 }).strip()
 
 export const ContratoSchema = z.object({
@@ -80,7 +132,9 @@ export const EmpleadoSchema = z.object({
   horas_extra: z.coerce.number().int().min(0).max(200).optional(),
   estado:      z.enum(['activo', 'vacaciones', 'inactivo']).optional(),
   tipo:        z.enum(['planta', 'subcontrato']).optional(),
-  modalidad:   z.enum(['mensual', 'por_metas']).optional(),
+  modalidad:   z.enum(['mensual', 'por_metas', 'diario', 'por_hora', 'trato', 'mixto']).optional(),
+  valor_dia:   z.coerce.number().int().min(0).max(999_999_999).optional(),
+  valor_hora:  z.coerce.number().int().min(0).max(999_999_999).optional(),
   inicio:      fechaOpc,
   proyecto_id: uuid.nullish(),
   // Previsional
@@ -96,8 +150,32 @@ export const EmpleadoSchema = z.object({
   otros_descuentos: dinero.optional(),
 }).strip()
 
+// Registros que pueden llevar evidencia, y la tabla donde viven
+export const TABLA_EVIDENCIA = {
+  partida:        'partidas_proyecto',
+  estado_pago:    'estados_pago',
+  parte_diario:   'parte_diario',
+  recepcion_oc:   'recepciones_oc',
+  subcontrato:    'subcontratos',
+  subcontrato_ep: 'subcontrato_eps',
+  bodega:         'bodega_movimientos',
+  equipo_uso:     'equipo_usos',
+  gasto:          'gastos_obra',
+  contrato:       'contratos',
+  factura:        'facturas',
+  orden_compra:   'ordenes_compra',
+  trato:          'tratos',
+  trato_avance:   'trato_avances',
+  // Sin tabla propia: agrupa la evidencia del parte de un día (id de lib/evidencia-ids.ts)
+  parte_dia:      null,
+} as const satisfies Record<string, string | null>
+export type EntidadEvidencia = keyof typeof TABLA_EVIDENCIA
+// Evidencia que puede no ser de una obra: un contrato, una factura, una orden de compra
+export const EVIDENCIA_SIN_OBRA: EntidadEvidencia[] = ['contrato', 'factura', 'orden_compra', 'recepcion_oc']
+const ENTIDADES_EVIDENCIA = Object.keys(TABLA_EVIDENCIA) as [EntidadEvidencia, ...EntidadEvidencia[]]
+
 export const DocumentoSchema = z.object({
-  proyecto_id:  uuid,
+  proyecto_id:  uuid.nullish(),
   nombre:       texto.min(1),
   descripcion:  textoLargo.nullish(),
   categoria:    z.enum(['plano', 'foto', 'contrato', 'permiso', 'especificacion', 'presupuesto', 'general']).optional(),
@@ -106,7 +184,17 @@ export const DocumentoSchema = z.object({
   archivo_size: z.coerce.number().int().min(0).optional(),
   libro_id:     uuid.nullish(),
   prevencion_id: uuid.nullish(),
+  // Evidencia de cualquier registro de la obra (sql/53)
+  entidad_tipo: z.enum(ENTIDADES_EVIDENCIA).optional(),
+  entidad_id:   uuid.optional(),
+  partida_id:   uuid.optional(),
+  etapa:        z.enum(['antes', 'durante', 'despues']).optional(),
+  tomada_en:    z.string().datetime({ offset: true }).optional(),
+  lat:          z.coerce.number().min(-90).max(90).optional(),
+  lng:          z.coerce.number().min(-180).max(180).optional(),
 }).strip()
+  .refine(d => !d.entidad_tipo === !d.entidad_id, { message: 'La evidencia necesita el tipo y el registro' })
+  .refine(d => !!d.proyecto_id || (!!d.entidad_tipo && EVIDENCIA_SIN_OBRA.includes(d.entidad_tipo)), { message: 'Falta la obra' })
 
 export const FacturaSchema = z.object({
   numero:      texto.nullish(),
@@ -183,6 +271,42 @@ export const MovimientoBodegaSchema = z.object({
   notas:          texto.nullish(),
 }).strip()
 
+// ─── Tratos de mano de obra (sql/55) ──────────────────────
+const entero = z.coerce.number().int().min(0).max(999_999_999_999)
+
+export const TratoSchema = z.object({
+  proyecto_id:      uuid,
+  partida_id:       uuid.nullish(),
+  descripcion:      texto.min(1, 'Falta la descripción del trato'),
+  tipo:             z.enum(['unidad', 'suma_alzada', 'vivienda', 'por_hora', 'por_dia']),
+  ejecutor:         z.enum(['trabajador', 'cuadrilla', 'tercero']),
+  tercero_nombre:   texto.nullish(),
+  proveedor_id:     uuid.nullish(),
+  documento:        z.enum(['boleta_honorarios', 'factura']).nullish(),
+  unidad:           texto.nullish(),
+  precio_unitario:  entero.optional(),
+  cantidad_pactada: z.coerce.number().min(0).max(999_999_999).optional(),
+  monto_fijo:       entero.optional(),
+  retencion_pct:    pct.optional(),
+  reparto:          z.enum(['iguales', 'porcentaje', 'dias']).optional(),
+  fecha_inicio:     fechaOpc,
+  fecha_fin:        fechaOpc,
+  estado:           z.enum(['vigente', 'terminado', 'anulado']).optional(),
+  notas:            textoLargo.nullish(),
+}).strip()
+
+export const ParticipantesTratoSchema = z.array(z.object({
+  empleado_id: uuid,
+  porcentaje:  pct.optional(),
+}).strip()).max(100)
+
+export const AvanceTratoSchema = z.object({
+  trato_id: uuid,
+  cantidad: z.coerce.number().positive('La cantidad debe ser mayor que cero').max(999_999_999),
+  fecha,
+  notas:    texto.nullish(),
+}).strip()
+
 export const SubcontratoSchema = z.object({
   proyecto_id:        uuid,
   proveedor_id:       uuid.nullish(),
@@ -197,11 +321,27 @@ export const SubcontratoSchema = z.object({
   fecha_fin:          fechaOpc,
   estado:             z.enum(['vigente', 'terminado', 'anulado']).optional(),
   notas:              texto.nullish(),
+  // Modalidad (sql/56)
+  modalidad:          z.enum(['suma_alzada', 'precios_unitarios', 'por_tiempo', 'administracion']).optional(),
+  items:              z.array(z.object({
+    id:              z.string().trim().min(1).max(60),
+    descripcion:     texto.min(1, 'Falta la descripción del ítem'),
+    unidad:          texto.nullish(),
+    cantidad:        z.coerce.number().min(0).max(999_999_999),
+    precio_unitario: z.coerce.number().int().min(0).max(999_999_999_999),
+  }).strip()).max(300).optional(),
+  tarifa:             z.coerce.number().int().min(0).max(999_999_999).optional(),
+  unidad_tiempo:      z.enum(['hora', 'dia']).optional(),
+  honorario_pct:      pct.optional(),
 }).strip()
 
 export const EPSubcontratoSchema = z.object({
   subcontrato_id:   uuid,
-  avance_acumulado: pct,
+  // Según la modalidad del subcontrato: % acumulado, horas o días, cantidades por ítem o costo rendido
+  avance_acumulado: pct.optional(),
+  cantidad:         z.coerce.number().min(0).max(999_999).optional(),
+  cantidades:       z.record(z.string(), z.coerce.number().min(0).max(999_999_999)).optional(),
+  costo:            z.coerce.number().int().min(0).max(999_999_999_999).optional(),
   fecha,
   notas:            texto.nullish(),
 }).strip()

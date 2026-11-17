@@ -109,11 +109,29 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
   const items = detalle.length ? detalle : (ep.detalle || [])
 
   // Derivar las 4 columnas por partida a partir del avance guardado
+  // Serie de precios: lo medido manda (cantidad × precio); en suma alzada, el % sobre el valor
+  const serie = (ep as any).modalidad === 'serie_precios'
+  const admin = (ep as any).modalidad === 'administracion'
+  const num = (v: number) => v.toLocaleString('es-CL', { maximumFractionDigits: 2 })
   const filas = items.map(d => {
     const valor = Number(d.valor_partida) || 0
     const aAnt = Number(d.avance_anterior) || 0
     const aAct = Number(d.avance_actual) || 0
     const aPer = Number(d.avance_periodo) || 0
+    const x = d as any
+    if (serie && x.cantidad_actual != null) {
+      const pu = Number(x.precio_unitario) || 0
+      return {
+        desc: d.descripcion || '',
+        unidad: x.unidad || 'un',
+        totalContrato: valor,
+        ejecTotal: Math.round(Number(x.cantidad_actual) * pu),
+        pagoAnterior: Math.round(Number(x.cantidad_anterior || 0) * pu),
+        pagoActual: Number(d.monto) || 0,
+        aAct, aAnt,
+        medida: `${num(Number(x.cantidad_actual))} × ${fmtCL(pu)}` as string | null,
+      }
+    }
     return {
       desc: d.descripcion || '',
       unidad: (d as any).unidad || 'GL',
@@ -122,6 +140,7 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
       pagoAnterior: Math.round(valor * aAnt / 100),
       pagoActual: Number(d.monto) || Math.round(valor * aPer / 100),
       aAct, aAnt,
+      medida: null as string | null,
     }
   })
 
@@ -186,7 +205,7 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
           <Text style={[st.th, st.cDesc, { textAlign: 'left' }]}>Actividad</Text>
           <Text style={[st.th, st.cUnid]}>Un.</Text>
           <Text style={[st.th, st.cMoney]}>Total</Text>
-          <Text style={[st.th, st.cMoney]}>%</Text>
+          <Text style={[st.th, st.cMoney]}>{serie ? 'Medido' : '%'}</Text>
           <Text style={[st.th, st.cMoney]}>Total</Text>
           <Text style={[st.th, st.cMoney]}>Total</Text>
           <Text style={[st.th, st.cMoney]}>Total</Text>
@@ -198,7 +217,7 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
             <Text style={[st.td, st.cDesc, st.tdName]}>{f.desc}</Text>
             <Text style={[st.td, st.cUnid]}>{f.unidad}</Text>
             <Text style={[st.td, st.cMoney]}>{fmtCL(f.totalContrato)}</Text>
-            <Text style={[st.td, st.cMoney]}>{pct(f.aAct)}</Text>
+            <Text style={[st.td, st.cMoney]}>{f.medida ?? (admin ? '—' : pct(f.aAct))}</Text>
             <Text style={[st.td, st.cMoney]}>{fmtCL(f.ejecTotal)}</Text>
             <Text style={[st.td, st.cMoney]}>{fmtCL(f.pagoAnterior)}</Text>
             <Text style={[st.td, st.cMoney]}>{fmtCL(f.pagoActual)}</Text>
@@ -220,7 +239,8 @@ export function EstadoPagoPDF({ ep, proyecto, empresa, logoUrl, detalle = [] }: 
         {/* CASCADA DE DEDUCCIONES */}
         <View style={st.cascadaWrap}>
           <View style={st.cascada}>
-            <View style={st.cascRow}><Text style={st.cascLbl}>Avance de obra del período</Text><Text style={st.cascVal}>{fmtCL(ep.avance_obra)}</Text></View>
+            <View style={st.cascRow}><Text style={st.cascLbl}>{admin ? 'Costo rendido del período' : 'Avance de obra del período'}</Text><Text style={st.cascVal}>{fmtCL(ep.avance_obra)}</Text></View>
+            {Number((ep as any).honorario_monto) > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Honorario de administración ({pct((ep as any).honorario_pct)})</Text><Text style={st.cascVal}>{fmtCL((ep as any).honorario_monto)}</Text></View>}
             {ep.utilidad_monto > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Utilidad ({pct(ep.utilidad_pct)})</Text><Text style={st.cascVal}>{fmtCL(ep.utilidad_monto)}</Text></View>}
             {ep.gg_monto > 0 && <View style={st.cascRow}><Text style={st.cascLbl}>Gastos Generales ({pct(ep.gg_pct)})</Text><Text style={st.cascVal}>{fmtCL(ep.gg_monto)}</Text></View>}
             <View style={st.cascRow}><Text style={[st.cascLbl, { fontFamily: 'Helvetica-Bold' }]}>Valor del avance (bruto)</Text><Text style={st.cascVal}>{fmtCL(ep.bruto)}</Text></View>

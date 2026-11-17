@@ -5,6 +5,8 @@
 // Con estas horas se reparte el sueldo de cada trabajador entre las obras.
 // Se guarda en la cola de Terreno: sin señal queda en el teléfono y se envía después.
 
+import Evidencias from '@/components/Evidencias'
+import { idParteDia } from '@/lib/evidencia-ids'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -162,6 +164,9 @@ export default function ParteDiarioPanel({ proyectoId }: Props) {
         </div>
         <input type="date" value={fecha} onChange={e => e.target.value && setFecha(e.target.value)}
           aria-label="Fecha del parte" className="input-base !mb-0 !py-1.5 w-[160px]" />
+      </div>
+      <div className="mb-3">
+        <Evidencias proyectoId={proyectoId} entidadTipo="parte_dia" entidadId={idParteDia(proyectoId, fecha)} titulo={`Fotos y respaldos del ${fmtFecha(fecha)}`} compacto />
       </div>
 
       {msg && (

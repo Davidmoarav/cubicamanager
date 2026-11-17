@@ -4,10 +4,19 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
 import { SubcontratoSchema, validar, validarParcial } from '@/lib/validar'
 import { partidaEsDeProyecto } from '@/lib/costos-server'
-import { resumenSubcontrato } from '@/lib/subcontratos'
+import { montoContratoSub, resumenSubcontrato } from '@/lib/subcontratos'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const CAMPOS_FIJOS = ['monto_contrato', 'retencion_pct', 'anticipo'] as const
+const CAMPOS_FIJOS = ['monto_contrato', 'retencion_pct', 'anticipo', 'tarifa', 'honorario_pct'] as const
+
+// Lo que define cada modalidad
+function revisarModalidad(s: any): string | null {
+  const m = s.modalidad || 'suma_alzada'
+  if (m === 'suma_alzada' && !(Number(s.monto_contrato) > 0)) return 'Falta el monto del contrato'
+  if (m === 'precios_unitarios' && !(Array.isArray(s.items) && s.items.length > 0)) return 'Agrega al menos un ítem con su precio unitario'
+  if (m === 'por_tiempo' && !(Number(s.tarifa) > 0)) return 'Falta la tarifa por hora o día'
+  return null
+}
 
 export async function GET(req: NextRequest) {
   const supabase = await createServerSupabase()
@@ -43,6 +52,10 @@ export async function POST(req: Request) {
 
   const v = validar(SubcontratoSchema, await req.json())
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
+  const falla = revisarModalidad(v.data)
+  if (falla) return NextResponse.json({ error: falla }, { status: 400 })
+  // Precios unitarios: el monto del contrato es la suma de sus ítems
+  if (v.data.modalidad === 'precios_unitarios') v.data.monto_contrato = montoContratoSub(v.data as any)
 
   const { data: proy } = await supabase
     .from('proyectos').select('id').eq('id', v.data.proyecto_id).eq('user_id', ownerId).maybeSingle()
@@ -77,9 +90,28 @@ export async function PUT(req: Request) {
     .from('subcontrato_eps').select('*').eq('subcontrato_id', body.id).eq('user_id', ownerId)
 
   // Los EP ya calculados dependen de estos valores
-  if ((eps ?? []).length > 0 && CAMPOS_FIJOS.some(c => cambios[c] !== undefined && Number(cambios[c]) !== Number(actual[c]))) {
-    return NextResponse.json({ error: 'Ya hay estados de pago: no se puede cambiar el monto, la retención ni el anticipo' }, { status: 400 })
+  const conEPs = (eps ?? []).length > 0
+  if (conEPs && CAMPOS_FIJOS.some(c => cambios[c] !== undefined && Number(cambios[c]) !== Number(actual[c] ?? 0))) {
+    return NextResponse.json({ error: 'Ya hay estados de pago: no se puede cambiar el monto, la tarifa, el honorario, la retención ni el anticipo' }, { status: 400 })
   }
+  if (conEPs && cambios.modalidad && cambios.modalidad !== (actual.modalidad ?? 'suma_alzada')) {
+    return NextResponse.json({ error: 'Ya hay estados de pago: no se puede cambiar la modalidad' }, { status: 400 })
+  }
+  // Ítems: con estados de pago se pueden agregar o subir cantidades, no quitar ni cambiar precios
+  if (cambios.items && conEPs) {
+    const previos = new Map<string, any>((actual.items ?? []).map((i: any) => [i.id, i]))
+    for (const [id, it] of previos) {
+      const nuevo = cambios.items.find((x: any) => x.id === id)
+      if (!nuevo) return NextResponse.json({ error: `Ya hay estados de pago: no se puede quitar el ítem "${it.descripcion}"` }, { status: 400 })
+      if (Number(nuevo.precio_unitario) !== Number(it.precio_unitario)) {
+        return NextResponse.json({ error: `Ya hay estados de pago: no se puede cambiar el precio de "${it.descripcion}"` }, { status: 400 })
+      }
+    }
+  }
+  const resultado = { ...actual, ...cambios }
+  const fallaMod = revisarModalidad(resultado)
+  if (fallaMod) return NextResponse.json({ error: fallaMod }, { status: 400 })
+  if (cambios.items && resultado.modalidad === 'precios_unitarios') cambios.monto_contrato = montoContratoSub(resultado)
   if (cambios.partida_id && !(await partidaEsDeProyecto(supabase, ownerId, cambios.partida_id, actual.proyecto_id))) {
     return NextResponse.json({ error: 'La partida no pertenece a esta obra' }, { status: 400 })
   }

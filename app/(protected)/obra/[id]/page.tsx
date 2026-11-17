@@ -2,6 +2,7 @@
 // app/(protected)/obra/[id]/page.tsx — Workspace de proyecto estilo ObraMaestra (Fase 0)
 
 import useSWR from 'swr'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
@@ -11,29 +12,36 @@ import type { PartidaProyecto } from '@/types/partida-proyecto'
 import type { EstadoPago } from '@/types/estado-pago'
 import { fmt } from '@/lib/format'
 import { contratoBruto } from '@/lib/informe'
+import { armarArbol } from '@/lib/avance'
 import { EstadoBadge } from '@/components/obra/ui-obra'
 import ResumenObra from '@/components/obra/ResumenObra'
 import { usePermisos } from '@/lib/usePermisos'
 import CopilotoBar from '@/components/obra/CopilotoBar'
-import ClienteTab from '@/components/obra/ClienteTab'
-import ComprasTab from '@/components/obra/ComprasTab'
-import GanttTab from '@/components/obra/GanttTab'
-import ComentariosTab from '@/components/obra/ComentariosTab'
 import { DescargarPresupuestoPDFBtn, ExportarExcelBtn } from '@/components/obra/ExportarBtns'
 import CompartirPanel from '@/components/obra/CompartirPanel'
-import DocumentosPanel from '@/components/DocumentosPanel'
-import PartidasPanel from '@/components/PartidasPanel'
-import PresupuestoPanel from '@/components/PresupuestoPanel'
-import ManoObraPanel from '@/components/ManoObraPanel'
-import InformePanel from '@/components/InformePanel'
-import ParteDiarioPanel from '@/components/ParteDiarioPanel'
-import LibroObraPanel from '@/components/LibroObraPanel'
-import PrevencionPanel from '@/components/PrevencionPanel'
-import ApuPanel from '@/components/ApuPanel'
-import FlujoCajaPanel from '@/components/FlujoCajaPanel'
-import BodegaPanel from '@/components/BodegaPanel'
-import SubcontratosPanel from '@/components/SubcontratosPanel'
-import EquiposPanel from '@/components/EquiposPanel'
+
+// Cada pestaña se descarga al abrirla: la obra abre con el resumen y el presupuesto,
+// sin traer el código de las otras 17 pestañas.
+const Cargando = () => <div className="py-10 text-center text-[13px] text-muted">Cargando…</div>
+const ClienteTab = dynamic(() => import('@/components/obra/ClienteTab'), { loading: Cargando })
+const ComprasTab = dynamic(() => import('@/components/obra/ComprasTab'), { loading: Cargando })
+const GanttTab = dynamic(() => import('@/components/obra/GanttTab'), { loading: Cargando })
+const ComentariosTab = dynamic(() => import('@/components/obra/ComentariosTab'), { loading: Cargando })
+const DocumentosPanel = dynamic(() => import('@/components/DocumentosPanel'), { loading: Cargando })
+const PartidasPanel = dynamic(() => import('@/components/PartidasPanel'), { loading: Cargando })
+const PresupuestoPanel = dynamic(() => import('@/components/PresupuestoPanel'), { loading: Cargando })
+const ManoObraPanel = dynamic(() => import('@/components/ManoObraPanel'), { loading: Cargando })
+const InformePanel = dynamic(() => import('@/components/InformePanel'), { loading: Cargando })
+const ParteDiarioPanel = dynamic(() => import('@/components/ParteDiarioPanel'), { loading: Cargando })
+const LibroObraPanel = dynamic(() => import('@/components/LibroObraPanel'), { loading: Cargando })
+const PrevencionPanel = dynamic(() => import('@/components/PrevencionPanel'), { loading: Cargando })
+const ApuPanel = dynamic(() => import('@/components/ApuPanel'), { loading: Cargando })
+const FlujoCajaPanel = dynamic(() => import('@/components/FlujoCajaPanel'), { loading: Cargando })
+const BodegaPanel = dynamic(() => import('@/components/BodegaPanel'), { loading: Cargando })
+const SubcontratosPanel = dynamic(() => import('@/components/SubcontratosPanel'), { loading: Cargando })
+const EquiposPanel = dynamic(() => import('@/components/EquiposPanel'), { loading: Cargando })
+const TratosPanel = dynamic(() => import('@/components/TratosPanel'), { loading: Cargando })
+const ViviendasPanel = dynamic(() => import('@/components/ViviendasPanel'), { loading: Cargando })
 
 const IVA = 0.19
 
@@ -42,6 +50,11 @@ const GRUPOS = [
   {
     id: 'resumen', label: 'Resumen',
     tabs: [{ id: 'resumen', label: 'Resumen' }],
+  },
+  {
+    // Solo en programas (SERVIU y similares) o en obras con grupos que pueden pasar a viviendas
+    id: 'viviendas', label: 'Viviendas',
+    tabs: [{ id: 'viviendas', label: 'Viviendas' }],
   },
   {
     id: 'presupuesto', label: 'Presupuesto',
@@ -66,6 +79,7 @@ const GRUPOS = [
       { id: 'gantt',        label: 'Carta Gantt' },
       { id: 'parte',        label: 'Parte diario' },
       { id: 'mano_obra',    label: 'Mano de obra' },
+      { id: 'tratos',       label: 'Tratos' },
       { id: 'bodega',       label: 'Bodega' },
       { id: 'subcontratos', label: 'Subcontratos' },
       { id: 'equipos',      label: 'Equipos' },
@@ -152,16 +166,14 @@ export default function ObraProyecto() {
 
   // ─── Árbol de partidas (grupos nivel 1 + hojas) ───
   const arbol = useMemo(() => {
-    const todas = Array.isArray(partidas) ? partidas : []
-    const hijosDe = (pid: string) => todas.filter(p => p.parent_id === pid).sort((a, b) => a.orden - b.orden)
-    const valor = (n: PartidaProyecto): number => {
-      const h = hijosDe(n.id)
-      if (h.length === 0) return (Number(n.cantidad) || 0) * (Number(n.precio_unitario) || 0)
-      return h.reduce((s, c) => s + valor(c), 0)
-    }
-    const raices = todas.filter(p => !p.parent_id).sort((a, b) => a.orden - b.orden)
-    return { raices, hijosDe, valor }
+    // La API ya entrega las partidas por orden; el árbol se arma en una pasada
+    const a = armarArbol(Array.isArray(partidas) ? partidas : [])
+    return { raices: a.raices, hijosDe: a.hijosDe, valor: (n: PartidaProyecto) => a.valor(n.id) }
   }, [partidas])
+
+  // La obra única no muestra la pestaña Viviendas
+  const conViviendas = proyecto?.tipo === 'programa' || arbol.raices.some(r => r.es_grupo)
+  const grupos = conViviendas ? GRUPOS : GRUPOS.filter(g => g.id !== 'viviendas')
 
   const neto = arbol.raices.reduce((s, r) => s + arbol.valor(r), 0)
   const iva = Math.round(neto * IVA)
@@ -196,7 +208,7 @@ export default function ObraProyecto() {
 
       {/* ─── Secciones y pestañas ─── */}
       <div className="mt-3 flex gap-1 overflow-x-auto no-scrollbar">
-        {GRUPOS.map(g => (
+        {grupos.map(g => (
           <button
             key={g.id}
             onClick={() => setTab(g.tabs[0].id)}
@@ -292,6 +304,10 @@ export default function ObraProyecto() {
             </div>
           )}
 
+          {proyecto && tab === 'viviendas' && (
+            <PanelObra><ViviendasPanel proyecto={proyecto} onCambio={() => { mutPartidas(); mutProyectos() }} /></PanelObra>
+          )}
+
           {proyecto && tab === 'control' && (
             <PanelObra>
               <PartidasPanel proyectoId={proyecto.id} proyectoNombre={proyecto.nombre}
@@ -324,6 +340,8 @@ export default function ObraProyecto() {
           {proyecto && tab === 'mano_obra' && (
             <PanelObra><ManoObraPanel proyectoId={proyecto.id} proyectoNombre={proyecto.nombre} /></PanelObra>
           )}
+
+          {id && tab === 'tratos' && <PanelObra><TratosPanel proyectoId={id} /></PanelObra>}
 
           {id && tab === 'libro' && <PanelObra><LibroObraPanel proyectoId={id} /></PanelObra>}
 

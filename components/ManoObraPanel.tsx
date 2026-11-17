@@ -6,6 +6,7 @@
 // Modelo híbrido: sugiere desde empleados reales asignados, luego editable.
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
 import { Btn } from '@/components/ui'
 import { fmt } from '@/lib/format'
 import { moRealPorMes } from '@/lib/costos'
@@ -41,20 +42,20 @@ export default function ManoObraPanel({ proyectoId, proyectoNombre = '' }: Props
   const [gastos, setGastos]   = useState<any[]>([])
   const [horasMes, setHorasMes] = useState<any[]>([])
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [data, gastosData, horasData] = await Promise.all([
-      fetch(`/api/proyeccion-mo?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => null),
-      fetch(`/api/gastos-obra?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/parte-diario?proyecto_id=${proyectoId}&resumen=1`).then(r => r.json()).catch(() => []),
-    ])
-    setFilas(Array.isArray(data?.filas) ? data.filas : [])
-    setGastos(Array.isArray(gastosData) ? gastosData : [])
-    setHorasMes(Array.isArray(horasData) ? horasData : [])
+  // Con caché: los gastos de la obra comparten clave con la pestaña de gastos y cobros
+  const swrProy   = useSWR<any>(`/api/proyeccion-mo?proyecto_id=${proyectoId}`)
+  const swrGastos = useSWR<any>(`/api/gastos-obra?proyecto_id=${proyectoId}`)
+  const swrHoras  = useSWR<any>(`/api/parte-diario?proyecto_id=${proyectoId}&resumen=1`)
+  const listos = [swrProy, swrGastos, swrHoras].every(r => r.data !== undefined || !!r.error)
+  useEffect(() => {
+    if (!listos) return
+    setFilas(Array.isArray(swrProy.data?.filas) ? swrProy.data.filas : [])
+    setGastos(Array.isArray(swrGastos.data) ? swrGastos.data : [])
+    setHorasMes(Array.isArray(swrHoras.data) ? swrHoras.data : [])
     setLoading(false)
-  }, [proyectoId])
-
-  useEffect(() => { load() }, [load])
+  }, [listos, swrProy.data, swrGastos.data, swrHoras.data])
+  const { mutate: m1 } = swrProy, { mutate: m2 } = swrGastos, { mutate: m3 } = swrHoras
+  const load = useCallback(async () => { await Promise.all([m1(), m2(), m3()]) }, [m1, m2, m3])
 
   const sugerir = async () => {
     const sug = await fetch(`/api/proyeccion-mo?proyecto_id=${proyectoId}&sugerir=1`).then(r => r.json()).catch(() => null)

@@ -1,5 +1,6 @@
 // Módulo Filtro DS27 Cap. IV: pasar un grupo terminado a una obra de Cubica Manager.
-// La obra queda en UF y cada vivienda incluida es una partida, para llevar el avance casa por casa.
+// La obra queda en UF como programa: cada vivienda incluida es un grupo con su ficha de beneficiario
+// y una partida debajo (se puede desglosar después), para llevar avance, cobro y fotos casa por casa.
 import type { Evaluado } from './evaluacion';
 import { TIPOS_PROYECTO } from './reglas';
 import type { Grupo, Llamado } from './tipos';
@@ -11,6 +12,13 @@ export interface ViviendaObra {
   descripcion: string;
   /** Monto de obra de la vivienda: el costo del proyecto si está cargado; si no, el subsidio. */
   montoUF: number;
+  /** Ficha del beneficiario, para la vivienda de la obra. */
+  beneficiario: string;
+  rut: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  subsidioUF: number;
+  ahorroUF: number | null;
 }
 
 export interface ObraDesdeGrupo {
@@ -33,6 +41,12 @@ export function obraDesdeGrupo(grupo: Grupo, llamado: Llamado, evaluados: Evalua
     postulante_id: e.id,
     descripcion: [`Vivienda ${e.nombre}`, e.direccion?.trim()].filter(Boolean).join(' – '),
     montoUF: redondearUF(e.costo_proyecto_uf ?? e.calculo.subsidioUF),
+    beneficiario: e.nombre,
+    rut: e.rut?.trim() || null,
+    direccion: e.direccion?.trim() || null,
+    telefono: e.telefono?.trim() || null,
+    subsidioUF: redondearUF(e.calculo.subsidioUF),
+    ahorroUF: e.ahorro_uf ?? null,
   }));
   const totalUF = redondearUF(viviendas.reduce((s, v) => s + v.montoUF, 0));
   const subsidioUF = redondearUF(incluidos.reduce((s, e) => s + e.calculo.subsidioUF, 0));

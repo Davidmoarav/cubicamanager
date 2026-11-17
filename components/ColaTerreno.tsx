@@ -3,7 +3,7 @@
 // Envía lo que quedó guardado en el teléfono y muestra lo que falta. Si no hay nada
 // pendiente no se ve. También deja la app lista para abrirse sin señal.
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import useSWR from 'swr'
 import { Btn } from '@/components/ui'
 import { avisar, confirmar } from '@/lib/avisos'
@@ -11,6 +11,8 @@ import {
   descartarDeCola, enviarIgualDeCola, fijarUsuarioCola, sincronizar, suscribirEnvios, type ItemCola,
 } from '@/lib/cola-terreno'
 import { prepararSinConexion } from '@/lib/sin-conexion'
+import { createClient } from '@/lib/supabase'
+import { cantidadFotos, descartarFoto, enviarFotos, listarFotos, suscribirFotos, type FotoPendiente } from '@/lib/fotos-pendientes'
 import { useColaTerreno, useEnLinea, useEstadoEnvio } from '@/lib/useColaTerreno'
 
 const CADA = 30000
@@ -34,7 +36,9 @@ export default function ColaTerreno({ usuario }: { usuario?: string }) {
     prepararSinConexion(usuario)
     sincronizar()
 
-    const intentar = () => { if (document.visibilityState === 'visible') sincronizar() }
+    const subirFotos = () => { if (usuario) enviarFotos(createClient(), usuario).catch(() => {}) }
+    subirFotos()
+    const intentar = () => { if (document.visibilityState === 'visible') { sincronizar(); subirFotos() } }
     window.addEventListener('online', intentar)
     document.addEventListener('visibilitychange', intentar)
     // navigator.onLine no siempre avisa cuando vuelve la señal
@@ -49,12 +53,38 @@ export default function ColaTerreno({ usuario }: { usuario?: string }) {
   // Lo que se envió sin nadie mirando: si el servidor dejó un aviso, debe verse
   useEffect(() => suscribirEnvios((item, aviso) => { if (aviso) avisar(`${item.titulo}: ${aviso}`, 'info') }), [])
 
+  const fotos = useSyncExternalStore(suscribirFotos, cantidadFotos, () => 0)
+  const [listaFotos, setListaFotos] = useState<FotoPendiente[]>([])
+  useEffect(() => { if (fotos > 0) listarFotos().then(setListaFotos); else setListaFotos([]) }, [fotos])
+  const fotosRechazadas = listaFotos.filter(f => f.error)
+
   const nombreObra = useMemo(() => {
     const lista = Array.isArray(proyectos) ? proyectos : []
     return (item: ItemCola) => lista.find(p => p.id === item.cuerpo.proyecto_id)?.nombre
   }, [proyectos])
 
-  if (cola.length === 0) return null
+  if (cola.length === 0 && fotos === 0) return null
+  if (cola.length === 0) {
+    return (
+      <div role="status" className="mb-4 rounded-lg bg-warning-bg px-3.5 py-3 text-[12.5px] text-warning">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="font-bold">{fotos === 1 ? '1 foto sin subir' : `${fotos} fotos sin subir`}</div>
+            <div className="font-semibold">{enLinea ? 'Subiendo…' : 'Quedaron en este teléfono y se subirán solas cuando vuelva la señal.'}</div>
+            {fotosRechazadas.map(f => (
+              <div key={f.id} className="text-ink mt-1">
+                {f.nombre}: <span className="text-danger font-semibold">{f.error}</span>{' '}
+                <button className="font-bold text-danger underline" onClick={async () => {
+                  if (await confirmar(`¿Descartar "${f.nombre}"? Se borrará de este teléfono.`)) await descartarFoto(f.id)
+                }}>Descartar</button>
+              </div>
+            ))}
+          </div>
+          <Btn onClick={() => usuario && enviarFotos(createClient(), usuario)}>Subir ahora</Btn>
+        </div>
+      </div>
+    )
+  }
 
   const pendientes = cola.filter(i => i.estado === 'pendiente')
   const porResolver = cola.filter(i => i.estado !== 'pendiente')
@@ -115,6 +145,12 @@ export default function ColaTerreno({ usuario }: { usuario?: string }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {fotos > 0 && (
+        <div className="mt-3 pt-3 border-t border-warning/30 font-semibold">
+          {fotos === 1 ? '1 foto sin subir' : `${fotos} fotos sin subir`}: se subirán solas cuando vuelva la señal.
         </div>
       )}
     </div>

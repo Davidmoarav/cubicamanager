@@ -4,7 +4,7 @@ import { createServerSupabase } from '@/lib/supabase-server'
 import { guardEscritura, getOwnerId } from '@/lib/roles'
 import { EPSubcontratoSchema, validar } from '@/lib/validar'
 import { atribuirFactura, sincronizarGastoEP } from '@/lib/gastos-server'
-import { calcularEP } from '@/lib/subcontratos'
+import { calcularEPSub } from '@/lib/subcontratos'
 import { NextResponse } from 'next/server'
 
 const ESTADOS = ['borrador', 'aprobado', 'pagado']
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
 
   const v = validar(EPSubcontratoSchema, await req.json())
   if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
-  const { subcontrato_id, avance_acumulado, fecha, notas } = v.data
+  const { subcontrato_id, fecha, notas, ...entrada } = v.data
 
   const sub = await cargarSubcontrato(supabase, ownerId, subcontrato_id)
   if (!sub) return NextResponse.json({ error: 'Subcontrato no encontrado' }, { status: 404 })
@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     .from('subcontrato_eps').select('*').eq('subcontrato_id', subcontrato_id).eq('user_id', ownerId).order('numero')
   if (eP) return NextResponse.json({ error: eP.message }, { status: 500 })
 
-  const calc = calcularEP(sub, previos ?? [], avance_acumulado)
+  const calc = calcularEPSub(sub, previos ?? [], entrada)
   if ('error' in calc) return NextResponse.json({ error: calc.error }, { status: 400 })
 
   const numero = (previos ?? []).reduce((m: number, e: any) => Math.max(m, e.numero), 0) + 1

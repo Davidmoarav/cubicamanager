@@ -4,6 +4,8 @@
 // Subcontratos de una obra: contrato, estados de pago, retenciones y avance propios.
 // El bruto de cada estado de pago aprobado o pagado es gasto real de la obra.
 
+import Evidencias from '@/components/Evidencias'
+import { MODALIDADES_SUBCONTRATO, montoContratoSub } from '@/lib/subcontratos'
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -29,7 +31,8 @@ const hoyLocal = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-const VACIO = { subcontratista: '', proveedor_id: '', descripcion: '', partida_id: '', monto_contrato: '', retencion_pct: '5', anticipo: '', fecha_inicio: '', fecha_fin: '' }
+const VACIO = { subcontratista: '', proveedor_id: '', descripcion: '', partida_id: '', monto_contrato: '', retencion_pct: '5', anticipo: '', fecha_inicio: '', fecha_fin: '', modalidad: 'suma_alzada', items: [] as any[], tarifa: '', unidad_tiempo: 'hora', honorario_pct: '' }
+const nuevoItem = () => ({ id: Math.random().toString(36).slice(2, 10), descripcion: '', unidad: 'm3', cantidad: '', precio_unitario: '' })
 
 export default function SubcontratosPanel({ proyectoId }: Props) {
   const { puedeEditar } = usePermisos('obra')
@@ -41,7 +44,7 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg]       = useState('')
   const [abierto, setAbierto] = useState<string | null>(null)
-  const [epForm, setEpForm] = useState<{ avance: string; fecha: string }>({ avance: '', fecha: hoyLocal() })
+  const [epForm, setEpForm] = useState<{ avance: string; fecha: string; cantidad: string; costo: string; cantidades: Record<string, string> }>({ avance: '', fecha: hoyLocal(), cantidad: '', costo: '', cantidades: {} })
 
   const subs: any[] = Array.isArray(data) ? data : []
   const opciones = useMemo(() => [{ value: '', label: '— Sin partida —' }, ...opcionesPartida(partidas)], [partidas])
@@ -59,6 +62,7 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
 
   const crear = async () => {
     setSaving(true)
+    const m = form.modalidad || 'suma_alzada'
     const ok = await pedir('/api/subcontratos', 'POST', {
       ...form,
       proyecto_id: proyectoId,
@@ -67,6 +71,16 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
       monto_contrato: Number(form.monto_contrato) || 0,
       retencion_pct: Number(form.retencion_pct) || 0,
       anticipo: Number(form.anticipo) || 0,
+      // Las columnas de modalidad (sql/56) solo viajan si no es suma alzada
+      ...(m === 'suma_alzada' ? { modalidad: undefined, items: undefined, tarifa: undefined, unidad_tiempo: undefined, honorario_pct: undefined } : {
+        modalidad: m,
+        items: m === 'precios_unitarios' ? form.items.filter((i: any) => String(i.descripcion).trim()).map((i: any) => ({
+          ...i, cantidad: Number(i.cantidad) || 0, precio_unitario: Math.round(Number(i.precio_unitario) || 0),
+        })) : [],
+        tarifa: m === 'por_tiempo' ? Math.round(Number(form.tarifa) || 0) : 0,
+        unidad_tiempo: form.unidad_tiempo || 'hora',
+        honorario_pct: m === 'administracion' ? Number(form.honorario_pct) || 0 : 0,
+      }),
     })
     setSaving(false)
     if (ok) setForm(null)
@@ -74,11 +88,18 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
 
   const crearEP = async (sub: any) => {
     setSaving(true)
+    const m = sub.modalidad || 'suma_alzada'
     const ok = await pedir('/api/subcontratos/ep', 'POST', {
-      subcontrato_id: sub.id, avance_acumulado: Number(epForm.avance), fecha: epForm.fecha,
+      subcontrato_id: sub.id, fecha: epForm.fecha,
+      ...(m === 'suma_alzada' ? { avance_acumulado: Number(epForm.avance) } : {}),
+      ...(m === 'por_tiempo' ? { cantidad: Number(epForm.cantidad) } : {}),
+      ...(m === 'administracion' ? { costo: Math.round(Number(epForm.costo) || 0) } : {}),
+      ...(m === 'precios_unitarios' ? {
+        cantidades: Object.fromEntries(Object.entries(epForm.cantidades).filter(([, v]) => v !== '').map(([k, v]) => [k, Number(v)])),
+      } : {}),
     })
     setSaving(false)
-    if (ok) setEpForm({ avance: '', fecha: hoyLocal() })
+    if (ok) setEpForm({ avance: '', fecha: hoyLocal(), cantidad: '', costo: '', cantidades: {} })
   }
 
   const devolverRetencion = async (sub: any) => {
@@ -130,7 +151,46 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
             <FormInput label="Subcontratista *" value={form.subcontratista} onChange={v => setForm((f: any) => ({ ...f, subcontratista: v }))} />
             <FormInput label="Trabajo contratado" value={form.descripcion} onChange={v => setForm((f: any) => ({ ...f, descripcion: v }))} />
             <FormSelect label="Partida (a qué se imputa)" value={form.partida_id} onChange={v => setForm((f: any) => ({ ...f, partida_id: v }))} options={opciones} />
-            <FormInput label="Monto del contrato, neto ($) *" type="number" value={form.monto_contrato} onChange={v => setForm((f: any) => ({ ...f, monto_contrato: v }))} />
+            <div className="sm:col-span-2">
+              <FormSelect label="Modalidad" value={form.modalidad} onChange={v => setForm((f: any) => ({ ...f, modalidad: v, items: v === 'precios_unitarios' && f.items.length === 0 ? [nuevoItem()] : f.items }))}
+                options={MODALIDADES_SUBCONTRATO.map(m => ({ value: m.value, label: m.label }))} />
+              <p className="text-[11.5px] text-muted -mt-2 mb-3">{MODALIDADES_SUBCONTRATO.find(m => m.value === form.modalidad)?.ayuda}.</p>
+            </div>
+            {form.modalidad === 'precios_unitarios' && (
+              <div className="sm:col-span-2 mb-3">
+                <div className="label-base">Ítems</div>
+                {form.items.map((it: any, idx: number) => (
+                  <div key={it.id} className="grid grid-cols-[1fr_70px_90px_110px_24px] gap-1.5 mb-1.5 items-center">
+                    {(['descripcion', 'unidad', 'cantidad', 'precio_unitario'] as const).map(k => (
+                      <input key={k} value={it[k]} type={k === 'cantidad' || k === 'precio_unitario' ? 'number' : 'text'}
+                        placeholder={{ descripcion: 'Ítem', unidad: 'Unidad', cantidad: 'Cantidad', precio_unitario: 'Precio unit.' }[k]}
+                        aria-label={`${k} del ítem ${idx + 1}`}
+                        onChange={e => setForm((f: any) => ({ ...f, items: f.items.map((x: any, i: number) => i === idx ? { ...x, [k]: e.target.value } : x) }))}
+                        className="px-2 py-1.5 border border-line2 rounded-md text-[12.5px] bg-white" />
+                    ))}
+                    <button type="button" aria-label={`Quitar ítem ${idx + 1}`} className="text-danger text-[13px]"
+                      onClick={() => setForm((f: any) => ({ ...f, items: f.items.filter((_: any, i: number) => i !== idx) }))}>✕</button>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center text-[12px]">
+                  <button type="button" className="font-semibold text-brand" onClick={() => setForm((f: any) => ({ ...f, items: [...f.items, nuevoItem()] }))}>+ Ítem</button>
+                  <span className="text-muted">Total {fmt(montoContratoSub({ modalidad: 'precios_unitarios', monto_contrato: 0, items: form.items.map((i: any) => ({ ...i, cantidad: Number(i.cantidad) || 0, precio_unitario: Number(i.precio_unitario) || 0 })) }))}</span>
+                </div>
+              </div>
+            )}
+            {form.modalidad === 'por_tiempo' && (
+              <div className="grid grid-cols-2 gap-x-3">
+                <FormInput label="Tarifa ($) *" type="number" value={form.tarifa} onChange={v => setForm((f: any) => ({ ...f, tarifa: v }))} />
+                <FormSelect label="Por" value={form.unidad_tiempo} onChange={v => setForm((f: any) => ({ ...f, unidad_tiempo: v }))}
+                  options={[{ value: 'hora', label: 'Hora' }, { value: 'dia', label: 'Día' }]} />
+              </div>
+            )}
+            {form.modalidad === 'administracion' && (
+              <FormInput label="Honorario sobre el costo (%)" type="number" value={form.honorario_pct} onChange={v => setForm((f: any) => ({ ...f, honorario_pct: v }))} />
+            )}
+            {form.modalidad !== 'precios_unitarios' && (
+              <FormInput label={form.modalidad === 'suma_alzada' ? 'Monto del contrato, neto ($) *' : 'Monto estimado ($, opcional)'} type="number" value={form.monto_contrato} onChange={v => setForm((f: any) => ({ ...f, monto_contrato: v }))} />
+            )}
             <div className="grid grid-cols-2 gap-x-3">
               <FormInput label="Retención (%)" type="number" value={form.retencion_pct} onChange={v => setForm((f: any) => ({ ...f, retencion_pct: v }))} />
               <FormInput label="Anticipo ($)" type="number" value={form.anticipo} onChange={v => setForm((f: any) => ({ ...f, anticipo: v }))} />
@@ -171,7 +231,10 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
                   </div>
                   <div className="text-right">
                     <div className="text-[13px] font-extrabold text-ink tabular-nums">{fmt(s.resumen.ejecutado)} / {fmt(Number(s.monto_contrato) || 0)}</div>
-                    <div className="text-[11px] text-muted">Avance {s.resumen.avance}%</div>
+                    <div className="text-[11px] text-muted">
+                      {MODALIDADES_SUBCONTRATO.find(m => m.value === (s.modalidad || 'suma_alzada'))?.label}
+                      {s.modalidad === 'por_tiempo' ? ` · ${fmt(s.tarifa)} / ${s.unidad_tiempo === 'dia' ? 'día' : 'hora'}` : ` · avance ${s.resumen.avance}%`}
+                    </div>
                   </div>
                 </div>
                 <div className="h-1.5 bg-[#EDE7E0] rounded-full overflow-hidden mt-2">
@@ -181,6 +244,10 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
 
               {abierto === s.id && (
                 <div className="px-4 pb-4 border-t border-line">
+                  <div className="pt-3">
+                    <Evidencias proyectoId={proyectoId} entidadTipo="subcontrato" entidadId={s.id} partidaId={s.partida_id}
+                      titulo="Contrato y respaldos" />
+                  </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted py-3">
                     <span>Por pagar: <strong className="text-ink">{fmt(s.resumen.por_pagar)}</strong></span>
                     <span>Retenido: <strong className="text-ink">{fmt(s.resumen.retenido)}</strong></span>
@@ -198,7 +265,12 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div>
                               <span className="font-bold text-ink">Estado de pago N°{ep.numero}</span>
-                              <span className="text-muted"> · {fmtFecha(ep.fecha)} · acumulado {Number(ep.avance_acumulado)}%</span>
+                              <span className="text-muted"> · {fmtFecha(ep.fecha)}
+                                {(s.modalidad || 'suma_alzada') === 'suma_alzada' && ` · acumulado ${Number(ep.avance_acumulado)}%`}
+                                {s.modalidad === 'por_tiempo' && ` · ${Number(ep.cantidad) || 0} ${s.unidad_tiempo === 'dia' ? 'días' : 'h'}`}
+                                {s.modalidad === 'administracion' && ` · costo rendido ${fmt(ep.costo || 0)}`}
+                                {s.modalidad === 'precios_unitarios' && ` · ${Number(ep.avance_acumulado)}% del contrato`}
+                              </span>
                             </div>
                             <div className="flex items-center gap-2">
                               <select value={ep.estado} disabled={!puedeEditar} aria-label={`Estado del estado de pago N°${ep.numero}`}
@@ -232,9 +304,28 @@ export default function SubcontratosPanel({ proyectoId }: Props) {
                     </div>
                   )}
 
-                  {puedeEditar && s.estado === 'vigente' && s.resumen.avance < 100 && (
+                  {puedeEditar && s.estado === 'vigente' && s.modalidad === 'precios_unitarios' && (
+                    <div className="mb-2">
+                      <div className="text-[11px] font-bold text-ink mb-1">Cantidad medida acumulada por ítem</div>
+                      {(s.items ?? []).map((it: any) => {
+                        const previa = (s.eps ?? []).reduce((m: number, e: any) => Math.max(m, Number(e.cantidades?.[it.id]) || 0), 0)
+                        return (
+                          <div key={it.id} className="grid grid-cols-[1fr_110px] gap-2 items-center text-[12px] mb-1">
+                            <span className="text-ink truncate">{it.descripcion} <span className="text-muted">· {Number(it.cantidad)} {it.unidad} × {fmt(it.precio_unitario)} · cobrado {previa}</span></span>
+                            <input type="number" min={previa} placeholder={String(previa)} value={epForm.cantidades[it.id] ?? ''} aria-label={`Cantidad acumulada de ${it.descripcion}`}
+                              onChange={e => setEpForm(f => ({ ...f, cantidades: { ...f.cantidades, [it.id]: e.target.value } }))}
+                              className="px-2 py-1 border border-line2 rounded-md text-right" />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {puedeEditar && s.estado === 'vigente' && ((s.modalidad || 'suma_alzada') !== 'suma_alzada' || s.resumen.avance < 100) && (
                     <div className="grid grid-cols-[1fr_1fr] sm:grid-cols-[160px_160px_auto] gap-2 items-end">
-                      <FormInput label="Avance acumulado (%)" type="number" value={epForm.avance} onChange={v => setEpForm(f => ({ ...f, avance: v }))} />
+                      {(s.modalidad || 'suma_alzada') === 'suma_alzada' && <FormInput label="Avance acumulado (%)" type="number" value={epForm.avance} onChange={v => setEpForm(f => ({ ...f, avance: v }))} />}
+                      {s.modalidad === 'por_tiempo' && <FormInput label={s.unidad_tiempo === 'dia' ? 'Días del período' : 'Horas del período'} type="number" value={epForm.cantidad} onChange={v => setEpForm(f => ({ ...f, cantidad: v }))} />}
+                      {s.modalidad === 'administracion' && <FormInput label="Costo rendido ($)" type="number" value={epForm.costo} onChange={v => setEpForm(f => ({ ...f, costo: v }))} />}
+                      {s.modalidad === 'precios_unitarios' && <span />}
                       <FormInput label="Fecha" type="date" value={epForm.fecha} onChange={v => setEpForm(f => ({ ...f, fecha: v }))} />
                       <div className="mb-3 col-span-2 sm:col-span-1">
                         <Btn variant="primary" onClick={() => crearEP(s)} disabled={saving}>Crear estado de pago</Btn>

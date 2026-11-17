@@ -7,6 +7,8 @@
 //   Sin horas en el mes → va completo a la obra asignada al empleado.
 import { aportesEmpleador, REM_DEFAULTS } from '../types/finanzas'
 import { aplicarGastos } from './gastos-server'
+import { separarCostoTratos, unirTramos } from './tratos'
+import { tratosDelMes } from './tratos-server'
 
 export interface HorasObra {
   proyecto_id: string
@@ -126,7 +128,15 @@ export async function sincronizarGastoSueldo(supabase: any, ownerId: string, liq
 
   const aportes = aportesEmpleador(liq, emp.data?.contrato_tipo, { ...REM_DEFAULTS, ...(params.data ?? {}) })
   const costo = (Number(liq.total_haberes) || 0) + aportes.total
-  const tramos = repartirCosto(costo, horas.data ?? [], emp.data?.proyecto_id)
+  // Lo ganado a trato va a la partida de cada trato; el resto se reparte por horas
+  const tratos = Number(liq.trato_monto) > 0
+    ? await tratosDelMes(supabase, ownerId, liq.periodo, liq.empleado_id)
+    : []
+  const deTratos = separarCostoTratos(costo, Number(liq.total_haberes) || 0, tratos)
+  const tramos = unirTramos([
+    ...deTratos.tramos,
+    ...repartirCosto(deTratos.resto, horas.data ?? [], emp.data?.proyecto_id),
+  ])
 
   await aplicarGastos(supabase, ownerId, 'liquidacion_id', liq.id, tramos.map(t => ({
     proyecto_id: t.proyecto_id,

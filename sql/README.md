@@ -19,6 +19,10 @@ Ejecutar los archivos **en orden numérico** en Supabase > SQL Editor. Los hueco
 | **42** | **Costo real Fase 2: recepción por línea, bodega, subcontratos y equipos** | Igual que la 41: trae su propia RLS y triggers. Registra como recibidas las órdenes que ya estaban en ese estado |
 | **43** | **Gestión de obra Fase 3: dependencias de Gantt, libro de obra, prevención y APU** | Igual que la 41: trae su propia RLS y triggers |
 | **44** | **Fase 4: registro de emisiones de DTE** | Igual que la 41: trae su propia RLS y triggers |
+| **53** | **Evidencias: un documento o foto puede colgar de cualquier registro (partida, vivienda, estado de pago, subcontrato…)** | Solo agrega columnas a `documentos` |
+| **54** | **Viviendas: tipo de obra (única / programa), ficha por beneficiario, y conversión de las obras que vinieron del Filtro DS27** | Ejecutar completo. Mueve el detalle de estados de pago ya emitidos al grupo de cada vivienda. Trae su propia RLS y triggers |
+| **55** | **Tratos y formas de pago: trabajador por día, por hora, a trato o mixto; tratos con avances y aprobación; trato y semana corrida en la liquidación** | Amplía el check de `empleados.modalidad`. Trae su propia RLS y triggers |
+| **56** | **Modalidad de contrato (suma alzada, serie de precios, administración), alcance y cantidades del estado de pago, subcontratos por precios unitarios / tiempo / administración, ingreso mínimo y días laborales** | Cambia a decimales los % del detalle de estados de pago. Ejecutar después de la 55 |
 | 45 | Opcional: marca como pagadas las facturas de estados de pago ya pagados | Solo corrige datos históricos; revisa la consulta del encabezado antes de ejecutarla |
 
 Reglas: nunca ejecutar 25/29 a medias (reescriben políticas); después de agregar una tabla nueva con `user_id`, agregarla al array de la 25 (RLS + trigger) y de la 26 (auditoría) y re-ejecutarlas — son idempotentes.

@@ -6,12 +6,14 @@
 // Soporta: drag-and-drop, categorización, preview de imágenes, descarga directa.
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import useSWR from 'swr'
 import { createClient } from '@/lib/supabase'
 import { Btn, FormInput, FormSelect, Modal, SectionTitle } from '@/components/ui'
 import { CATEGORIAS_DOC, type Documento, type CategoriaDocumento } from '@/types/documento'
 import { avisar, confirmar } from '@/lib/avisos'
 import { usePermisos } from '@/lib/usePermisos'
 import { esNativo, guardarArchivo } from '@/lib/nativo'
+import { subirVarios } from '@/lib/subir-documento'
 
 const MAX_SIZE = 20 * 1024 * 1024 // 20 MB
 
@@ -58,29 +60,34 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
   const [dragging, setDragging]   = useState(false)
 
   // Form para categoría/descripción al subir
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  // Varios a la vez: comparten categoría y descripción
+  const [pendientes, setPendientes] = useState<File[]>([])
+  const pendingFile = pendientes[0] ?? null
   const [uploadForm, setUploadForm]  = useState<{ categoria: CategoriaDocumento; descripcion: string }>({ categoria: 'general', descripcion: '' })
 
   // ─── Cargar documentos ────────────────────────────────────
-  const load = useCallback(async () => {
-    setLoading(true)
-    const res  = await fetch(`/api/documentos?proyecto_id=${proyectoId}`)
-    const data = await res.json()
-    setDocs(Array.isArray(data) ? data : [])
-    setLoading(false)
-  }, [proyectoId])
-
-  useEffect(() => { load() }, [load])
+  // En caché: volver a la pestaña no vuelve a esperar la lista
+  const swrDocs = useSWR<Documento[]>(`/api/documentos?proyecto_id=${proyectoId}`)
+  useEffect(() => {
+    if (swrDocs.data !== undefined || swrDocs.error) setDocs(Array.isArray(swrDocs.data) ? swrDocs.data : [])
+    setLoading(swrDocs.data === undefined && !swrDocs.error)
+  }, [swrDocs.data, swrDocs.error])
+  const { mutate: mutDocs } = swrDocs
+  const load = useCallback(async () => { await mutDocs() }, [mutDocs])
 
   // ─── Subir archivo ────────────────────────────────────────
-  const handleFileSelect = (file: File) => {
-    if (file.size > MAX_SIZE) {
-      avisar(`Archivo demasiado grande (${fmtSize(file.size)}). Máximo 20 MB.`)
-      return
-    }
+  const handleFileSelect = (lista: FileList | File[] | null | undefined) => {
+    const files = Array.from(lista ?? [])
+    if (files.length === 0) return
+    // Las imágenes se achican antes de subir: solo se rechaza de entrada lo que no es imagen y pasa el máximo
+    const grandes = files.filter(f => f.size > MAX_SIZE && !f.type.startsWith('image/'))
+    if (grandes.length) avisar(`${grandes.map(f => f.name).join(', ')}: supera los 20 MB y no se subirá.`)
+    const validos = files.filter(f => !grandes.includes(f))
+    if (validos.length === 0) return
     // Abrir mini-modal para categoría
-    setPendingFile(file)
-    setUploadForm({ categoria: guessCategoria(file), descripcion: '' })
+    setPendientes(validos)
+    const cats = new Set(validos.map(guessCategoria))
+    setUploadForm({ categoria: cats.size === 1 ? [...cats][0] : 'general', descripcion: '' })
   }
 
   const guessCategoria = (file: File): CategoriaDocumento => {
@@ -96,71 +103,14 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
   }
 
   const doUpload = async () => {
-    if (!pendingFile) return
+    if (pendientes.length === 0) return
     setUploading(true)
-    setProgress('Subiendo archivo...')
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setUploading(false); return }
-
-    // Carpeta del DUEÑO de la organización (no del miembro que sube):
-    // así todos los miembros pueden ver/descargar el archivo.
-    let ownerId = user.id
-    try {
-      const rol = await (await fetch('/api/mi-rol')).json()
-      if (rol?.owner_id) ownerId = rol.owner_id
-    } catch {}
-
-    // Path: {owner_id}/{proyecto_id}/{timestamp}_{filename}
-    const ts   = Date.now()
-    const safe = pendingFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-    const path = `${ownerId}/${proyectoId}/${ts}_${safe}`
-
-    // ArrayBuffer + contentType: evita "No content provided" con File directo
-    const buffer = await pendingFile.arrayBuffer()
-    if (buffer.byteLength === 0) {
-      avisar('El archivo está vacío o no se pudo leer. Intenta con otro.')
-      setUploading(false)
-      setProgress(null)
-      return
-    }
-
-    const { error: upErr } = await supabase.storage
-      .from('proyecto-docs')
-      .upload(path, buffer, { cacheControl: '3600', contentType: pendingFile.type || 'application/octet-stream' })
-
-    if (upErr) {
-      avisar('Error al subir: ' + upErr.message)
-      setUploading(false)
-      setProgress(null)
-      return
-    }
-
-    setProgress('Registrando documento...')
-
-    // Registrar en BD
-    const res = await fetch('/api/documentos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        proyecto_id:  proyectoId,
-        nombre:       pendingFile.name,
-        descripcion:  uploadForm.descripcion || null,
-        categoria:    uploadForm.categoria,
-        archivo_path: path,
-        archivo_tipo: pendingFile.type || 'application/octet-stream',
-        archivo_size: pendingFile.size,
-      }),
-    })
-
-    if (!res.ok) {
-      const { error } = await res.json()
-      avisar('Error al registrar: ' + error)
-      // Limpiar archivo huérfano
-      await supabase.storage.from('proyecto-docs').remove([path])
-    }
-
-    setPendingFile(null)
+    setProgress(`Subiendo 0 de ${pendientes.length}…`)
+    const fallidos = await subirVarios(supabase, proyectoId, pendientes,
+      { categoria: uploadForm.categoria, descripcion: uploadForm.descripcion || null },
+      (listos, total) => setProgress(`Subiendo ${listos} de ${total}…`))
+    if (fallidos.length) avisar(`No se subieron ${fallidos.length}: ${fallidos.map(f => `${f.archivo} (${f.error})`).join('; ')}`)
+    setPendientes([])
     setUploading(false)
     setProgress(null)
     await load()
@@ -214,8 +164,7 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) handleFileSelect(file)
+    handleFileSelect(e.dataTransfer.files)
   }
 
   // ─── Filtrado ─────────────────────────────────────────────
@@ -236,13 +185,13 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
             : 'border-[#d1d9e6] bg-[#f8fafc]'
         }`}
       >
-        <input ref={fileRef} type="file" className="hidden"
+        <input ref={fileRef} type="file" className="hidden" multiple
           accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.zip,.rar"
-          onChange={e => { if (e.target.files?.[0]) handleFileSelect(e.target.files[0]); e.target.value = '' }}
+          onChange={e => { handleFileSelect(e.target.files); e.target.value = '' }}
         />
         <div className="text-[28px] mb-1.5"></div>
         <div className="text-[13px] font-semibold text-[#1a2535]">
-          {dragging ? 'Suelta el archivo aquí' : 'Arrastra un archivo o haz clic para subir'}
+          {dragging ? 'Suelta los archivos aquí' : 'Arrastra archivos o haz clic para subir'}
         </div>
         <div className="text-[11px] text-muted mt-1">
           PDF, DWG, imágenes, Word, Excel, ZIP — Máximo 20 MB
@@ -343,12 +292,14 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
 
       {/* ─── MODAL DE UPLOAD (categoría + descripción) ─── */}
       {pendingFile && (
-        <Modal title="Subir documento" onClose={() => { setPendingFile(null) }}>
+        <Modal title={pendientes.length === 1 ? 'Subir documento' : `Subir ${pendientes.length} documentos`} onClose={() => { if (!uploading) setPendientes([]) }}>
           <div className="bg-canvas rounded-lg px-4 py-3 mb-3.5 flex items-center gap-2.5">
             <span className="text-[22px]">{fileIcon(pendingFile.type)}</span>
-            <div>
-              <div className="text-[13px] font-semibold text-[#1a2535]">{pendingFile.name}</div>
-              <div className="text-[11px] text-muted">{fmtSize(pendingFile.size)}</div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-semibold text-[#1a2535] truncate">
+                {pendientes.length === 1 ? pendingFile.name : `${pendingFile.name} y ${pendientes.length - 1} más`}
+              </div>
+              <div className="text-[11px] text-muted">{fmtSize(pendientes.reduce((t, f) => t + f.size, 0))}{pendientes.some(f => f.type.startsWith('image/')) ? ' · las fotos se achican antes de subir' : ''}</div>
             </div>
           </div>
 
@@ -371,9 +322,9 @@ export default function DocumentosPanel({ proyectoId, proyectoNombre }: Props) {
           )}
 
           <div className="flex gap-2 justify-end mt-3.5">
-            <Btn onClick={() => setPendingFile(null)} disabled={uploading}>Cancelar</Btn>
+            <Btn onClick={() => setPendientes([])} disabled={uploading}>Cancelar</Btn>
             <Btn variant="primary" onClick={doUpload} disabled={uploading}>
-              {uploading ? 'Subiendo...' : 'Subir documento'}
+              {uploading ? 'Subiendo...' : pendientes.length === 1 ? 'Subir documento' : `Subir ${pendientes.length}`}
             </Btn>
           </div>
         </Modal>

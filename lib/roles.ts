@@ -27,7 +27,23 @@ export function rolPermiteModulo(rol: Rol, modulo: string): boolean {
 // Devuelve { userId, email, rol, ownerId } del usuario actual.
 // Si tiene membresía activa → usa su rol y el dueño de esa organización.
 // Si no → es dueño de su propia organización (admin).
-export async function getRolActual(supabase: any) {
+type InfoRol = { userId: string; email: string | undefined; rol: Rol; ownerId: string }
+
+// Una consulta por petición: guardEscritura, guardModulo y getOwnerId comparten el resultado
+// (el cliente de Supabase del servidor se crea una vez por petición).
+const rolPorCliente = new WeakMap<object, Promise<InfoRol | null>>()
+
+export function getRolActual(supabase: any): Promise<InfoRol | null> {
+  const ya = rolPorCliente.get(supabase)
+  if (ya) return ya
+  const consulta = leerRolActual(supabase)
+  rolPorCliente.set(supabase, consulta)
+  // Un fallo de red no debe quedar guardado
+  consulta.catch(() => rolPorCliente.delete(supabase))
+  return consulta
+}
+
+async function leerRolActual(supabase: any): Promise<InfoRol | null> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   // Determinista: si existieran varias membresías activas (no debería, hay

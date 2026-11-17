@@ -13,6 +13,7 @@ import { usePermisos } from '@/lib/usePermisos'
 import ParteDiarioPanel from '@/components/ParteDiarioPanel'
 import LibroObraPanel from '@/components/LibroObraPanel'
 import BodegaPanel from '@/components/BodegaPanel'
+import Evidencias from '@/components/Evidencias'
 import { claveAvance, itemAvance, registrar } from '@/lib/cola-terreno'
 import { precargarObras } from '@/lib/sin-conexion'
 import { useColaTerreno, useEnLinea } from '@/lib/useColaTerreno'
@@ -105,6 +106,9 @@ function AvanceRapido({ proyectoId }: { proyectoId: string }) {
                   <div className="h-full bg-brand rounded-full" style={{ width: `${Math.min(100, vigente)}%` }} />
                 </div>
                 {pendiente !== null && <div className="text-[11px] font-semibold text-warning mt-0.5">Sin enviar</div>}
+                <div className="mt-1.5">
+                  <Evidencias proyectoId={proyectoId} entidadTipo="partida" entidadId={p.id} partidaId={p.id} conEtapas titulo="Fotos" compacto />
+                </div>
               </div>
               <input type="number" inputMode="numeric" min="0" max="100" disabled={!puedeEditar}
                 aria-label={`Avance de ${p.descripcion}, en porcentaje`}

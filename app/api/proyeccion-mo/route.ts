@@ -6,6 +6,8 @@ import { guardEscritura, getOwnerId, getRolActual } from '@/lib/roles'
 import { NextResponse, type NextRequest } from 'next/server'
 import { lectorSueldos } from '@/lib/supabase-admin'
 import { MINIMO_PERSONAS } from '@/lib/imputacion-sueldos'
+import { sueldoMensualEstimado } from '@/lib/tratos'
+import { REM_DEFAULTS } from '@/types/finanzas'
 
 // Factor imposiciones patronales por defecto (SIS, mutual, cesantía ≈ +5%)
 const FACTOR_IMPOSICIONES = 0.05
@@ -61,15 +63,23 @@ export async function GET(req: NextRequest) {
 
   // ─── Modo sugerir: arma curva desde empleados reales ───
   if (sugerir) {
-    const [{ data: proy }, { data: emps }] = await Promise.all([
+    const [{ data: proy }, empsRes, { data: params }] = await Promise.all([
       supabase.from('proyectos').select('inicio, fin').eq('id', proyectoId).maybeSingle(),
-      lectorSueldos(supabase).from('empleados').select('sueldo, estado').eq('proyecto_id', proyectoId).eq('user_id', ownerId),
+      // valor_dia y valor_hora llegan con sql/55: sin ellos, se lee lo de antes
+      lectorSueldos(supabase).from('empleados').select('sueldo, estado, modalidad, valor_dia, valor_hora, horas_extra').eq('proyecto_id', proyectoId).eq('user_id', ownerId),
+      lectorSueldos(supabase).from('parametros_remuneracion').select('*').eq('user_id', ownerId).maybeSingle(),
     ])
+    let emps = empsRes.data
+    if (empsRes.error) {
+      const r = await lectorSueldos(supabase).from('empleados').select('sueldo, estado').eq('proyecto_id', proyectoId).eq('user_id', ownerId)
+      emps = r.data
+    }
 
     const activos = (emps ?? []).filter((e: any) => e.estado === 'activo')
     const dotInicial = activos.length
+    // Quien gana por día, por hora o a trato también cuenta: con su mes normal estimado
     const sueldoProm = dotInicial > 0
-      ? activos.reduce((s: number, e: any) => s + (e.sueldo || 0), 0) / dotInicial
+      ? activos.reduce((s: number, e: any) => s + sueldoMensualEstimado(e, { ...REM_DEFAULTS, ...(params ?? {}) }), 0) / dotInicial
       : 0
     // Con pocas personas, el promedio deja ver sueldos: el jefe de obra no lo recibe
     const info = await getRolActual(supabase)

@@ -4,6 +4,7 @@
 // Equipos y maquinaria en una obra: cada uso (cantidad × tarifa) es gasto real.
 // Si el arriendo trae factura, se asocia al uso para no contarlo dos veces.
 
+import Evidencias from '@/components/Evidencias'
 import { useMemo, useState } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -195,6 +196,9 @@ export default function EquiposPanel({ proyectoId }: Props) {
                   <div className="text-[10px] text-muted truncate">
                     {fmtFecha(u.fecha_desde)}{u.fecha_hasta ? ` a ${fmtFecha(u.fecha_hasta)}` : ''} · {Number(u.cantidad)} {e ? UNIDAD_PLURAL[e.unidad_cobro] : ''} × {fmt(u.tarifa)}
                     {u.factura_id ? ' · con factura' : ''}
+                  </div>
+                  <div className="mt-1">
+                    <Evidencias proyectoId={proyectoId} entidadTipo="equipo_uso" entidadId={u.id} partidaId={u.partida_id} titulo="Respaldo" compacto />
                   </div>
                 </div>
                 <div className={`font-bold tabular-nums whitespace-nowrap ${u.factura_id ? 'text-muted' : 'text-ink'}`}>{fmt(u.monto)}</div>

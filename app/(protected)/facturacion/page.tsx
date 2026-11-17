@@ -1,6 +1,7 @@
 'use client'
 // app/(protected)/facturacion/page.tsx — v3 con tipo venta/compra + neto/IVA + importador SII
 
+import Evidencias from '@/components/Evidencias'
 import { useState, useEffect, useCallback } from 'react'
 import useSWR from 'swr'
 import { fetcher } from '@/lib/fetcher'
@@ -368,6 +369,9 @@ export default function FacturacionPage() {
                   <Td>
                     <span className="font-semibold">{f.cliente}</span>
                     {f.proyecto && <div className="text-[10px] text-muted">{f.proyecto}</div>}
+                    <div className="mt-0.5">
+                      <Evidencias proyectoId={f.proyecto_id ?? null} entidadTipo="factura" entidadId={f.id} partidaId={f.partida_id} titulo="Documento" compacto editable />
+                    </div>
                     {asignable(f) && (
                       <button
                         onClick={() => setAsignacion({ ids: [f.id], proyecto_id: f.proyecto_id || '', partida_id: f.partida_id || '' })}

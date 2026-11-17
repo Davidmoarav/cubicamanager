@@ -6,6 +6,7 @@
 // - Estados de pago: cortes mensuales de avance, editables, con factura
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import useSWR from 'swr'
 import { Btn, FormInput, Modal } from '@/components/ui'
 import { usePermisos } from '@/lib/usePermisos'
 import { fmt, fmtFecha, fmtPeriodo } from '@/lib/format'
@@ -14,6 +15,10 @@ import DescargarEPBtn from '@/components/DescargarEPBtn'
 import AvisosPagoPanel from '@/components/AvisosPagoPanel'
 import { contratoNeto, pctCobrado } from '@/lib/informe'
 import { avisar, confirmar } from '@/lib/avisos'
+import { createClient } from '@/lib/supabase'
+import { subirArchivo } from '@/lib/subir-documento'
+import Evidencias from '@/components/Evidencias'
+import { esNativo, guardarArchivo } from '@/lib/nativo'
 
 interface Props {
   anticipoRecibido?: number
@@ -28,6 +33,9 @@ interface Props {
 }
 
 const IVA = 0.19
+const ACEPTA_COMPROBANTE = 'image/*,application/pdf'
+// Gasto registrado a mano: los automáticos llevan el comprobante en su documento de origen
+const esGastoManual = (g: any) => !g.agregado && !g.orden_compra_id && !g.liquidacion_id && !g.subcontrato_ep_id && !g.equipo_uso_id && !g.traspaso_id
 
 export default function PresupuestoPanel({ proyectoId, valorContrato, montoContrato, moneda, valorUf, anticipoRecibido = 0, proyectoNombre = '', proyectoCliente = '', proyectoDireccion = '' }: Props) {
   const { soloLectura } = usePermisos('obra')
@@ -41,12 +49,17 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
   const [modalGasto, setModalGasto] = useState(false)
   const [gastoForm, setGastoForm]   = useState<any>({})
   const [savingGasto, setSavingGasto] = useState(false)
+  const [gastoArchivo, setGastoArchivo] = useState<File | null>(null)
+  const [adjuntandoId, setAdjuntandoId] = useState<string | null>(null)
 
   // Modal nuevo EP — cascada completa
   const [modal, setModal]       = useState(false)
   const [sugerencia, setSugerencia] = useState<any>(null)
   const [beneficiarios, setBeneficiarios] = useState<any[]>([])
-  const [beneficiarioEP, setBeneficiarioEP] = useState<string>('')
+  // Alcance del cobro: obra completa (vacío) o una o varias viviendas
+  const [alcanceEP, setAlcanceEP] = useState<string[]>([])
+  const [estadoViv, setEstadoViv] = useState<Record<string, string>>({})
+  const [verAlcance, setVerAlcance] = useState(false)
   const [detalleEdit, setDetalleEdit] = useState<any[]>([])
   const [utilidadPct, setUtilidadPct] = useState(0)
   const [ggPct, setGgPct]           = useState(0)
@@ -64,15 +77,19 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
   const [devForm, setDevForm]       = useState<{ tipo: string; monto: number; fecha: string; glosa: string }>({ tipo: 'retencion', monto: 0, fecha: '', glosa: '' })
   const [savingDev, setSavingDev]   = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const [epData, presData, gastosData, partData, devData] = await Promise.all([
-      fetch(`/api/estados-pago?proyecto_id=${proyectoId}`).then(r => r.json()),
-      fetch(`/api/presupuesto?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/gastos-obra?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/partidas-proyecto?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-      fetch(`/api/devoluciones?proyecto_id=${proyectoId}`).then(r => r.json()).catch(() => []),
-    ])
+  // Con caché (SWR): las claves de estados de pago y partidas son las mismas que usa la página
+  // de la obra, así que no se piden dos veces; volver a esta pestaña es inmediato.
+  const swrEp     = useSWR<any>(`/api/estados-pago?proyecto_id=${proyectoId}`)
+  const swrPres   = useSWR<any>(`/api/presupuesto?proyecto_id=${proyectoId}`)
+  const swrGastos = useSWR<any>(`/api/gastos-obra?proyecto_id=${proyectoId}`)
+  const swrPart   = useSWR<any>(`/api/partidas-proyecto?proyecto_id=${proyectoId}`)
+  const swrDev    = useSWR<any>(`/api/devoluciones?proyecto_id=${proyectoId}`)
+  const listo = (r: { data?: any; error?: any }) => r.data !== undefined || !!r.error
+  const todoListo = [swrEp, swrPres, swrGastos, swrPart, swrDev].every(listo)
+
+  useEffect(() => {
+    if (!todoListo) return
+    const epData = swrEp.data, presData = swrPres.data, gastosData = swrGastos.data, partData = swrPart.data, devData = swrDev.data
     const epList = Array.isArray(epData) ? epData : []
     setEps(epList)
     setGastos(Array.isArray(gastosData) ? gastosData : [])
@@ -117,9 +134,14 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
       detalle_partidas: p?.detalle_partidas || [],
     })
     setLoading(false)
-  }, [proyectoId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todoListo, swrEp.data, swrPres.data, swrGastos.data, swrPart.data, swrDev.data, proyectoId])
 
-  useEffect(() => { load() }, [load])
+  const mutadores = [swrEp.mutate, swrPres.mutate, swrGastos.mutate, swrPart.mutate, swrDev.mutate]
+  const load = useCallback(async () => { await Promise.all(mutadores.map(m => m())) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    mutadores)
+
 
   // Cargar la lista de beneficiarios (subproyectos nivel 1) para el alcance del EP
   useEffect(() => {
@@ -127,11 +149,17 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
       .then(r => r.json())
       .then(d => setBeneficiarios(Array.isArray(d) ? d : []))
       .catch(() => setBeneficiarios([]))
+    // Estado de cada vivienda, para cobrar de una vez las terminadas (sin sql/54 no hay fichas)
+    fetch(`/api/viviendas?proyecto_id=${proyectoId}`)
+      .then(r => r.json())
+      .then(d => setEstadoViv(Object.fromEntries((d?.viviendas ?? []).map((v: any) => [v.partida_id, v.estado]))))
+      .catch(() => setEstadoViv({}))
   }, [proyectoId])
 
   // ─── Gastos reales ───────────────────────────────────────
   const openNuevoGasto = () => {
     setGastoForm({ categoria: 'materiales', fecha: new Date().toISOString().split('T')[0], partida_id: '', descripcion: '', monto: 0, proveedor: '', documento: '' })
+    setGastoArchivo(null)
     setModalGasto(true)
   }
   const updGasto = (k: string, v: any) => setGastoForm((f: any) => ({ ...f, [k]: v }))
@@ -139,17 +167,75 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
     if (!gastoForm.descripcion) { avisar('Describe el gasto'); return }
     if (!gastoForm.monto || Number(gastoForm.monto) <= 0) { avisar('El monto debe ser mayor a cero'); return }
     setSavingGasto(true)
+    const supabase = createClient()
+    let archivo: { archivo_path: string; archivo_nombre: string; archivo_tipo: string } | null = null
+    if (gastoArchivo) {
+      try {
+        const path = await subirArchivo(supabase, proyectoId, gastoArchivo, 'gastos')
+        archivo = { archivo_path: path, archivo_nombre: gastoArchivo.name, archivo_tipo: gastoArchivo.type || 'application/octet-stream' }
+      } catch (e: any) {
+        setSavingGasto(false)
+        avisar('No se pudo subir el comprobante: ' + (e?.message || 'error'))
+        return
+      }
+    }
     const res = await fetch('/api/gastos-obra', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...gastoForm, proyecto_id: proyectoId, monto: Number(gastoForm.monto), partida_id: gastoForm.partida_id || null }),
+      body: JSON.stringify({ ...gastoForm, ...archivo, proyecto_id: proyectoId, monto: Number(gastoForm.monto), partida_id: gastoForm.partida_id || null }),
     })
     setSavingGasto(false)
     if (!res.ok) {
+      if (archivo) await supabase.storage.from('proyecto-docs').remove([archivo.archivo_path])
       const err = await res.json().catch(() => ({}))
       avisar('No se pudo guardar el gasto: ' + (err.error || 'error'))
       return
     }
-    await load(); setModalGasto(false)
+    await load(); setModalGasto(false); setGastoArchivo(null)
+  }
+
+  // ─── Comprobante (factura/boleta) del gasto ──────────────
+  const verComprobante = async (g: any) => {
+    const supabase = createClient()
+    const { data, error } = await supabase.storage.from('proyecto-docs').createSignedUrl(g.archivo_path, 60)
+    if (error || !data?.signedUrl) { avisar('No se pudo abrir el comprobante'); return }
+    const nombre = g.archivo_nombre || 'comprobante'
+    if (esNativo()) {
+      try {
+        const r = await fetch(data.signedUrl)
+        if (!r.ok) throw new Error()
+        await guardarArchivo(await r.blob(), nombre)
+      } catch { avisar('No se pudo descargar el comprobante') }
+      return
+    }
+    window.open(data.signedUrl, '_blank', 'noopener')
+  }
+  const adjuntarComprobante = async (g: any, file: File) => {
+    setAdjuntandoId(g.id)
+    const supabase = createClient()
+    let path = ''
+    try {
+      path = await subirArchivo(supabase, proyectoId, file, 'gastos')
+      const res = await fetch('/api/gastos-obra', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: g.id, archivo_path: path, archivo_nombre: file.name, archivo_tipo: file.type || 'application/octet-stream' }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'error')
+      await load()
+    } catch (e: any) {
+      if (path) await supabase.storage.from('proyecto-docs').remove([path])
+      avisar('No se pudo adjuntar el comprobante: ' + (e?.message || 'error'))
+    } finally {
+      setAdjuntandoId(null)
+    }
+  }
+  const quitarComprobante = async (g: any) => {
+    if (!(await confirmar('¿Quitar el comprobante de este gasto?'))) return
+    const res = await fetch('/api/gastos-obra', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: g.id, archivo_path: null }),
+    })
+    if (!res.ok) { avisar('No se pudo quitar el comprobante'); return }
+    await load()
   }
   const delGasto = async (id: string) => {
     if (!(await confirmar('¿Eliminar este gasto?'))) return
@@ -163,13 +249,14 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
   }
 
   // ─── Abrir modal: pedir sugerencia de EP (trae % del proyecto) ──
-  const openNuevoEP = async (beneficiarioId?: string) => {
+  const openNuevoEP = async (alcance: string[] = []) => {
     const url = `/api/estados-pago?proyecto_id=${proyectoId}&sugerir=1` +
-      (beneficiarioId ? `&beneficiario_id=${beneficiarioId}` : '')
+      (alcance.length ? `&beneficiario_id=${alcance.join(',')}` : '')
     const res = await fetch(url)
     const sug = await res.json()
+    if (!res.ok) { avisar(sug?.error ?? 'No se pudo calcular el estado de pago'); return }
     setSugerencia(sug)
-    setBeneficiarioEP(beneficiarioId || '')
+    setVerAlcance(false)
     setDetalleEdit((sug.detalle || []).map((d: any) => ({ ...d })))
     setUtilidadPct(Number(sug.utilidad_pct) || 0)
     setGgPct(Number(sug.gg_pct) || 0)
@@ -181,17 +268,25 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
     setModal(true)
   }
 
-  // Permite editar el monto de cada línea
+  // Permite editar el monto (suma alzada, administración) o la cantidad medida (serie de precios)
   const updDetalle = (idx: number, monto: number) => {
     setDetalleEdit(prev => prev.map((d, i) => i === idx ? { ...d, monto } : d))
   }
+  const updCantidad = (idx: number, cantidad: number) => {
+    setDetalleEdit(prev => prev.map((d, i) => i === idx
+      ? { ...d, cantidad_actual: cantidad, monto: Math.max(0, Math.round((cantidad - (Number(d.cantidad_anterior) || 0)) * (Number(d.precio_unitario) || 0))) }
+      : d))
+  }
+  const modalidadEP: string = sugerencia?.modalidad || 'suma_alzada'
+  const honorarioPctEP = Number(sugerencia?.honorario_pct) || 0
 
   // ─── Cascada en vivo (suma alzada: el margen ya está en el precio de la partida) ──
   const avanceObra = useMemo(
     () => detalleEdit.reduce((s, d) => s + (Number(d.monto) || 0), 0),
     [detalleEdit]
   )
-  const bruto          = avanceObra                                // Valor EEPP (a precio de contrato)
+  const honorarioMonto = Math.round(avanceObra * honorarioPctEP / 100)   // solo en administración
+  const bruto          = avanceObra + honorarioMonto                     // Valor EEPP
   const anticipoDesc   = Math.round(bruto * anticipoPct / 100)
   const retencionMonto = Math.round(bruto * retencionPct / 100)
   const totalNeto      = bruto - descuentos - anticipoDesc - multas - retencionMonto
@@ -201,10 +296,10 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
   const guardarEP = async () => {
     if (avanceObra <= 0) { avisar('El avance de obra del período debe ser mayor a cero'); return }
     setSaving(true)
-    // Si el EP es de un beneficiario específico, dejarlo trazado en las notas
-    const nombreBenef = beneficiarioEP ? (beneficiarios.find(b => b.id === beneficiarioEP)?.descripcion || '') : ''
-    const notasFinal = nombreBenef ? `[${nombreBenef}] ${notas}`.trim() : notas
-    await fetch('/api/estados-pago', {
+    // El alcance queda guardado; en las notas, legible para el PDF
+    const nombres = alcanceEP.map(id => beneficiarios.find(b => b.id === id)?.descripcion).filter(Boolean)
+    const notasFinal = nombres.length ? `[${nombres.length > 3 ? `${nombres.length} viviendas` : nombres.join(', ')}] ${notas}`.trim() : notas
+    const res = await fetch('/api/estados-pago', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         proyecto_id: proyectoId,
@@ -219,10 +314,14 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
         multas,
         retencion_pct: retencionPct,
         notas: notasFinal,
-        detalle: detalleEdit,
+        alcance: alcanceEP,
+        detalle: detalleEdit.map(d => ({ partida_id: d.partida_id, monto: d.monto, cantidad_actual: d.cantidad_actual })),
       }),
     })
-    await load(); setSaving(false); setModal(false)
+    const j = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) { avisar(j?.error ?? 'No se pudo crear el estado de pago'); return }
+    await load(); setModal(false)
   }
 
   // ─── Control de retenciones (acumulados + devoluciones + saldo) ──
@@ -270,17 +369,19 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: ep.id, estado, generar_factura: generarFactura }),
     })
-    const data = await res.json()
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) { avisar(data?.error ?? 'No se pudo cambiar el estado'); return }
     if (data.factura_generada) avisar('Factura generada en el módulo de Facturación', 'ok')
     await load()
   }
 
   const delEP = async (id: string) => {
     if (!(await confirmar('¿Eliminar este estado de pago?'))) return
-    await fetch('/api/estados-pago', {
+    const res = await fetch('/api/estados-pago', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id }),
     })
+    if (!res.ok) { avisar((await res.json().catch(() => ({})))?.error ?? 'No se pudo eliminar'); return }
     await load()
   }
 
@@ -453,6 +554,20 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
                       {g.proveedor && ` · ${g.proveedor}`}
                     </div>
                   </div>
+                  {g.archivo_path ? (
+                    <span className="flex items-center gap-1 mr-3">
+                      <button onClick={() => verComprobante(g)} title={g.archivo_nombre || 'Comprobante'} className="text-[11px] font-semibold text-brand hover:underline">📎 Ver</button>
+                      {!soloLectura && esGastoManual(g) && (
+                        <button onClick={() => quitarComprobante(g)} aria-label={`Quitar comprobante de ${g.descripcion}`} className="text-[11px] text-muted hover:text-danger">quitar</button>
+                      )}
+                    </span>
+                  ) : !soloLectura && esGastoManual(g) && (
+                    <label className={`text-[11px] font-semibold text-muted hover:text-brand mr-3 ${adjuntandoId === g.id ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}>
+                      {adjuntandoId === g.id ? 'Subiendo...' : '📎 Adjuntar'}
+                      <input type="file" accept={ACEPTA_COMPROBANTE} className="hidden"
+                        onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) adjuntarComprobante(g, f) }} />
+                    </label>
+                  )}
                   <div className="font-bold text-danger tabular-nums mr-3">{fmt(g.monto)}</div>
                   {!g.agregado && <button onClick={() => delGasto(g.id)} aria-label={`Eliminar ${g.descripcion}`} className="text-danger text-[14px] hover:opacity-70">✕</button>}
                 </div>
@@ -491,17 +606,35 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
         </div>
         {!soloLectura && (
           beneficiarios.length > 0 ? (
-            <div className="flex items-center gap-2">
-              <select
-                value={beneficiarioEP}
-                onChange={e => e.target.value !== '__crear__' && setBeneficiarioEP(e.target.value)}
+            <div className="flex items-center gap-2 relative">
+              <button type="button" onClick={() => setVerAlcance(v => !v)} aria-expanded={verAlcance}
                 className="text-[12px] border border-line rounded-md px-2 py-[5px] bg-white">
-                <option value="">Obra completa</option>
-                {beneficiarios.map(b => <option key={b.id} value={b.id}>{b.descripcion}</option>)}
-              </select>
-              <Btn variant="primary" onClick={() => openNuevoEP(beneficiarioEP || undefined)} className="!text-[12px] !px-3 !py-[5px]">
+                {alcanceEP.length === 0 ? 'Obra completa' : `${alcanceEP.length} ${alcanceEP.length === 1 ? 'vivienda' : 'viviendas'}`} ▾
+              </button>
+              <Btn variant="primary" onClick={() => openNuevoEP(alcanceEP)} className="!text-[12px] !px-3 !py-[5px]">
                 + Nuevo estado de pago
               </Btn>
+              {verAlcance && (
+                <div className="absolute right-0 top-full mt-1 z-20 w-[300px] bg-white border border-line rounded-lg shadow-pop p-2">
+                  <div className="flex flex-wrap gap-1.5 mb-2 text-[11px]">
+                    <button type="button" onClick={() => setAlcanceEP([])} className="px-2 py-1 rounded border border-line2 font-semibold">Obra completa</button>
+                    {Object.keys(estadoViv).length > 0 && (
+                      <button type="button" onClick={() => setAlcanceEP(beneficiarios.filter(b => ['terminada', 'recepcionada'].includes(estadoViv[b.id])).map(b => b.id))}
+                        className="px-2 py-1 rounded border border-line2 font-semibold">Terminadas y recepcionadas</button>
+                    )}
+                  </div>
+                  <div className="max-h-[240px] overflow-y-auto">
+                    {beneficiarios.map(b => (
+                      <label key={b.id} className="flex items-center gap-2 px-1.5 py-1 text-[12px] cursor-pointer hover:bg-canvas rounded">
+                        <input type="checkbox" checked={alcanceEP.includes(b.id)}
+                          onChange={() => setAlcanceEP(a => a.includes(b.id) ? a.filter(x => x !== b.id) : [...a, b.id])} />
+                        <span className="flex-1 truncate">{b.descripcion}</span>
+                        {estadoViv[b.id] && <span className="text-[10px] text-muted">{estadoViv[b.id].replace('_', ' ')}</span>}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <Btn variant="primary" onClick={() => openNuevoEP()} className="!text-[12px] !px-3 !py-[5px]">
@@ -512,7 +645,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
       </div>
       {beneficiarios.length > 0 && (
         <p className="text-[11px] text-muted mb-3 -mt-1">
-          Elige el <strong>alcance</strong>: cobra la obra completa o solo un beneficiario específico.
+          Elige el <strong>alcance</strong>: cobra la obra completa, una vivienda o varias (por ejemplo, las terminadas).
         </p>
       )}
 
@@ -561,6 +694,11 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
                     </div>
                   )}
 
+                  {/* Respaldos del cobro: carátula firmada, fotos de avance, recepción */}
+                  <div className="mt-2 pt-2 border-t border-[#F1ECE6]">
+                    <Evidencias proyectoId={proyectoId} entidadTipo="estado_pago" entidadId={ep.id} titulo="Respaldos" compacto />
+                  </div>
+
                   {/* Acciones por estado */}
                   <div className="flex gap-1.5 mt-2.5 flex-wrap">
                     {ep.estado === 'borrador' && (
@@ -579,6 +717,9 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
                         )}
                         <Btn onClick={() => cambiarEstado(ep, 'pagado')} className="!text-[11px] !px-[10px] !py-1 !bg-success-bg !border-[#b9e0c9] !text-success">Marcar pagado</Btn>
                       </>
+                    )}
+                    {ep.estado === 'rechazado' && (
+                      <Btn onClick={() => cambiarEstado(ep, 'borrador')} className="!text-[11px] !px-[10px] !py-1">Volver a borrador</Btn>
                     )}
                     {ep.estado !== 'pagado' && (
                       <button onClick={() => delEP(ep.id)} className="text-[11px] px-2.5 py-1 bg-transparent border-none text-danger cursor-pointer ml-auto">Eliminar</button>
@@ -684,7 +825,9 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
             : (
               <>
                 <p className="text-[12px] text-muted mb-3.5">
-                  Avance a cobrar por partida (sugerido desde el control de obra, editable).
+                  {modalidadEP === 'serie_precios' ? 'Serie de precios: indica la cantidad medida acumulada de cada partida; se cobra la diferencia con lo ya cobrado.'
+                    : modalidadEP === 'administracion' ? `Administración: costo real de la obra aún no rendido, más honorario de ${honorarioPctEP}%. Puedes rendir menos.`
+                    : 'Suma alzada: avance a cobrar por partida, sugerido desde el control de obra. Puedes cobrar menos, no más que el avance.'}
                 </p>
 
                 <div className="flex flex-col gap-2 max-h-[280px] overflow-y-auto mb-4">
@@ -692,16 +835,35 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
                     <div key={d.partida_id} className="bg-canvas border border-line rounded-lg p-3">
                       <div className="text-[13px] font-semibold text-ink mb-1.5">{d.descripcion}</div>
                       <div className="flex justify-between items-center gap-3">
-                        <div className="text-[11px] text-muted">
-                          {d.avance_anterior}% → {d.avance_actual}% <span className="text-success font-bold">(+{d.avance_periodo}%)</span>
-                          <br/>de {fmt(d.valor_partida)}
-                        </div>
-                        <div className="w-[150px]">
-                          <label className="text-[10px] text-muted block mb-0.5">Monto a cobrar</label>
-                          <input type="number" value={d.monto}
-                            onChange={e => updDetalle(idx, Number(e.target.value))}
-                            className="w-full px-2 py-1.5 border border-line2 rounded-md text-[13px] text-right font-bold" />
-                        </div>
+                        {modalidadEP === 'serie_precios' ? (
+                          <>
+                            <div className="text-[11px] text-muted">
+                              Presupuesto {Number(d.cantidad_presupuestada)} {d.unidad || ''} × {fmt(d.precio_unitario)}
+                              <br/>Ya cobrado: {Number(d.cantidad_anterior)} {d.unidad || ''} · Este estado: <span className="text-success font-bold">{fmt(d.monto)}</span>
+                            </div>
+                            <div className="w-[150px]">
+                              <label className="text-[10px] text-muted block mb-0.5">Cantidad acumulada medida</label>
+                              <input type="number" value={d.cantidad_actual} min={d.cantidad_anterior}
+                                onChange={e => updCantidad(idx, Number(e.target.value))}
+                                className="w-full px-2 py-1.5 border border-line2 rounded-md text-[13px] text-right font-bold" />
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-[11px] text-muted">
+                              {modalidadEP === 'administracion' ? 'Gastos, compras y sueldos imputados a la obra' : (
+                                <>{d.avance_anterior}% → {d.avance_actual}% <span className="text-success font-bold">(+{d.avance_periodo}%)</span></>
+                              )}
+                              <br/>{modalidadEP === 'administracion' ? 'Pendiente de rendir' : 'Hasta'} {fmt(d.maximo ?? d.monto)}
+                            </div>
+                            <div className="w-[150px]">
+                              <label className="text-[10px] text-muted block mb-0.5">{modalidadEP === 'administracion' ? 'Costo a rendir' : 'Monto a cobrar'}</label>
+                              <input type="number" value={d.monto} max={d.maximo ?? undefined}
+                                onChange={e => updDetalle(idx, Number(e.target.value))}
+                                className="w-full px-2 py-1.5 border border-line2 rounded-md text-[13px] text-right font-bold" />
+                            </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -724,6 +886,8 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
                       Contrato en UF (UF = {fmt(ufVal)}). Se presenta en UF; en gris, el equivalente en pesos para control interno.
                     </div>
                   )}
+                  {honorarioMonto > 0 && <Row label="Costo rendido" valor={fmtMoneda(avanceObra)} sub={fmtPesos(avanceObra)} />}
+                  {honorarioMonto > 0 && <Row label={`Honorario ${honorarioPctEP}%`} valor={fmtMoneda(honorarioMonto)} sub={fmtPesos(honorarioMonto)} />}
                   <Row label="Valor del avance del período" valor={fmtMoneda(bruto)} sub={fmtPesos(bruto)} bold />
                   {descuentos > 0 && <Row label="Descuentos" valor={`− ${fmtMoneda(descuentos)}`} sub={fmtPesos(descuentos)} danger />}
                   {anticipoDesc > 0 && <Row label={`Anticipo carátula ${anticipoPct}%`} valor={`− ${fmtMoneda(anticipoDesc)}`} sub={fmtPesos(anticipoDesc)} danger />}
@@ -744,7 +908,7 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
 
                 <div className="flex gap-2 justify-end">
                   <Btn onClick={() => setModal(false)}>Cancelar</Btn>
-                  <Btn variant="primary" onClick={guardarEP} disabled={saving}>{saving ? 'Guardando...' : (beneficiarioEP ? 'Crear estado de pago del beneficiario' : 'Crear estado de pago')}</Btn>
+                  <Btn variant="primary" onClick={guardarEP} disabled={saving}>{saving ? 'Guardando...' : (alcanceEP.length ? `Crear estado de pago (${alcanceEP.length} ${alcanceEP.length === 1 ? 'vivienda' : 'viviendas'})` : 'Crear estado de pago')}</Btn>
                 </div>
               </>
             )}
@@ -792,6 +956,19 @@ export default function PresupuestoPanel({ proyectoId, valorContrato, montoContr
             <div>
               <label className="label-base">N° documento (opcional)</label>
               <input className="input-base" value={gastoForm.documento || ''} onChange={e => updGasto('documento', e.target.value)} placeholder="Boleta/factura/vale" />
+            </div>
+            <div className="col-span-2">
+              <label className="label-base">Factura o boleta (opcional)</label>
+              {gastoArchivo ? (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 bg-canvas rounded-lg text-[12px]">
+                  <span className="truncate text-ink">📎 {gastoArchivo.name}</span>
+                  <button type="button" onClick={() => setGastoArchivo(null)} className="text-muted hover:text-danger shrink-0">Quitar</button>
+                </div>
+              ) : (
+                <input type="file" accept={ACEPTA_COMPROBANTE} className="input-base cursor-pointer"
+                  onChange={e => setGastoArchivo(e.target.files?.[0] ?? null)} />
+              )}
+              <div className="text-[10px] text-muted mt-1">Foto o PDF, hasta 20 MB.</div>
             </div>
           </div>
           <div className="flex gap-2 justify-end mt-4">

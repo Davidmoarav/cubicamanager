@@ -110,5 +110,11 @@ export function calcularAvances(todas: NodoAvance[]): ResultadoAvance {
     totalValor += v
     totalPond += v * arbol.avance(r.id) / 100
   }
-  return { cambios, avanceProyecto: totalValor > 0 ? Math.round((totalPond / totalValor) * 100) : 0 }
+  // Partidas sin precio (valor 0): promedio simple, para que el avance igual se vea
+  const avanceProyecto = totalValor > 0
+    ? Math.round((totalPond / totalValor) * 100)
+    : arbol.raices.length > 0
+      ? Math.round(arbol.raices.reduce((s, r) => s + arbol.avance(r.id), 0) / arbol.raices.length)
+      : 0
+  return { cambios, avanceProyecto }
 }

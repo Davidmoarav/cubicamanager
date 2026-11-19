@@ -76,3 +76,13 @@ describe('tres niveles y casos borde', () => {
     expect(Date.now() - t).toBeLessThan(200)
   })
 })
+
+describe('partidas sin precio', () => {
+  it('el avance de la obra es el promedio simple, no 0', () => {
+    const r = calcularAvances([
+      { id: 'a', parent_id: null, cantidad: 1, precio_unitario: 0, avance: 100 },
+      { id: 'b', parent_id: null, cantidad: 1, precio_unitario: 0, avance: 50 },
+    ])
+    expect(r.avanceProyecto).toBe(75)
+  })
+})

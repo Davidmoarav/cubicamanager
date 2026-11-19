@@ -150,7 +150,10 @@ export default function PartidasPanel({ proyectoId, markupGlobal = 20, onAvanceC
       totalValor += v
       totalPond += v * avanceDe(p) / 100
     }
-    return totalValor > 0 ? Math.round((totalPond / totalValor) * 100) : 0
+    // Sin precios cargados (valor 0): promedio simple, igual que el servidor
+    return totalValor > 0
+      ? Math.round((totalPond / totalValor) * 100)
+      : Math.round(padres.reduce((s, p) => s + avanceDe(p), 0) / padres.length)
   }, [padres])
 
   const upd = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }))
